@@ -92,6 +92,12 @@ msg := <- client.OnMessage
 fmt.Println("Receive binary message from", msg.Src + ":", string(msg.Payload))
 ```
 
+Listen for new blocks mined:
+```go
+block := <- client.OnBlock
+fmt.Println("New block mined:", block.Header.Height)
+```
+
 ## Contributing
 
 **Can I submit a bug, suggestion or feature request?**
