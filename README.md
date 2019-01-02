@@ -67,10 +67,22 @@ Listen for connection established:
 fmt.Println("Connection opened.")
 ```
 
-Send byte array to other clients:
+Send text message to other clients:
+
+```go
+client.Send([]string{"another client address"}, []byte("hello world!"), 0)
+```
+
+You can also send byte array directly:
 
 ```go
 client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5}, 0)
+```
+
+Or publish text message to a topic (subscribe is done through [nkn-wallet-js](https://github.com/nknorg/nkn-wallet-js)):
+
+```go
+client.Publish("topic", []byte("hello world!"), 0)
 ```
 
 Receive data from other clients:
