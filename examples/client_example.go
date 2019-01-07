@@ -12,7 +12,6 @@ import (
 
 func main() {
 	err := func () error {
-
 		Init()
 
 		privateKey, _ := common.HexStringToBytes("cd5fa29ed5b0e951f3d1bce5997458706186320f1dd89156a73d54ed752a7f37")

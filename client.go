@@ -5,10 +5,8 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"github.com/nknorg/nkn/api/common"
-	"github.com/nknorg/nkn/api/httpjson/client"
 	. "github.com/nknorg/nkn/api/websocket/client"
 	"github.com/nknorg/nkn/core/ledger"
-	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/nknorg/nkn/vault"
 	"github.com/pkg/errors"
@@ -17,7 +15,6 @@ import (
 	"time"
 )
 
-var SeedRPCServerAddr = "http://testnet-seed-0001.nkn.org:30003"
 var ReconnectInterval time.Duration = 1
 
 type Client struct {
@@ -30,24 +27,6 @@ type Client struct {
 	OnBlock   chan *ledger.Block
 }
 
-func Init() {
-	crypto.SetAlg("")
-}
-
-func call(action string, params map[string]interface{}) (interface{}, error) {
-	data, err := client.Call(SeedRPCServerAddr, action, 0, params)
-	resp := make(map[string]interface{})
-	err = json.Unmarshal(data, &resp)
-	if err != nil {
-		return nil, err
-	}
-	if resp["error"] != nil {
-		return nil, errors.New(resp["error"].(map[string]interface{})["message"].(string))
-	}
-
-	return resp["result"], nil
-}
-
 func (c *Client) connect(account *vault.Account, identifier string, force bool) error {
 	if force {
 		pubKey, err := account.PubKey().EncodePoint(true)
@@ -55,11 +34,11 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 			return err
 		}
 		c.Address = address.MakeAddressString(pubKey, identifier)
-		result, err := call("getwsaddr", map[string]interface{}{"address": c.Address})
+		var host string
+		err = call("getwsaddr", map[string]interface{}{"address": c.Address}, &host)
 		if err != nil {
 			return err
 		}
-		host := result.(string)
 		c.urlString = (&url.URL{Scheme: "ws", Host: host}).String()
 	}
 
@@ -185,17 +164,10 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds uint32) 
 }
 
 func (c *Client) Publish(topic string, payload []byte, MaxHoldingSeconds uint32) error {
-	result, err := call("getsubscribers", map[string]interface{}{"topic": topic})
+	var dests []string
+	err := call("getsubscribers", map[string]interface{}{"topic": topic}, &dests)
 	if err != nil {
 		return err
-	}
-	subscribers := result.([]interface{})
-	if len(subscribers) == 0 {
-		return nil
-	}
-	dests := make([]string, len(subscribers))
-	for i, v := range subscribers {
-		dests[i] = v.(string)
 	}
 	return c.Send(dests, payload, MaxHoldingSeconds)
 }

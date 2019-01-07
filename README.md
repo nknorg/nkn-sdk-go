@@ -1,18 +1,18 @@
-# nkn-client-go
+# nkn-sdk-go
 
-Go implementation of NKN client.
-
-Send and receive data between any NKN clients without setting up a server.
-
-Note: This is a **client** version of the NKN protocol, which can send and
-receive data but **not** relay data (mining). For **node** implementation which
-can mine NKN token by relaying data, please refer to
-[nkn](https://github.com/nknorg/nkn/).
+Go implementation of NKN SDK.
 
 **Note: This repository is in the early development stage and may not have all
 functions working properly. It should be used only for testing now.**
 
 ## Usage
+
+Before you use SDK please call:
+```go
+Init()
+```
+
+## Client Usage
 
 Create a client with a generated key pair:
 
@@ -79,7 +79,7 @@ You can also send byte array directly:
 client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5}, 0)
 ```
 
-Or publish text message to a topic (subscribe is done through [nkn-wallet-js](https://github.com/nknorg/nkn-wallet-js)):
+Or publish text message to a topic:
 
 ```go
 client.Publish("topic", []byte("hello world!"), 0)
@@ -96,6 +96,65 @@ Listen for new blocks mined:
 ```go
 block := <- client.OnBlock
 fmt.Println("New block mined:", block.Header.Height)
+```
+
+## Wallet Usage
+
+Create wallet SDK:
+```go
+account, _ := vault.NewAccount()
+w := NewWalletSDK(account)
+```
+
+Query asset balance for this wallet:
+```go
+balance, err := w.Balance()
+if err == nil {
+    log.Println("asset balance for this wallet is:", balance.String())
+} else {
+    log.Println("query balance fail:", err)
+}
+```
+
+Transfer asset to some address:
+```go
+address, _ := account.ProgramHash.ToAddress()
+txid, err := w.Transfer(address, "100")
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
+```
+
+Register name for this wallet (only a-z and length 8-12):
+```go
+txid, err = w.RegisterName("somename")
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
+```
+
+Delete name for this wallet:
+```go
+txid, err = w.DeleteName()
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
+```
+
+Subscribe to topic for this wallet for next 10 blocks:
+```go
+txid, err = w.Subscribe("identifier", "topic", 10)
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
 ```
 
 ## Contributing
