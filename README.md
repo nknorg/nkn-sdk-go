@@ -82,7 +82,7 @@ client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5}, 0)
 Or publish text message to a topic:
 
 ```go
-client.Publish("topic", []byte("hello world!"), 0)
+client.Publish("topic", 0, []byte("hello world!"), 0)
 ```
 
 Receive data from other clients:
@@ -147,9 +147,9 @@ if err == nil {
 }
 ```
 
-Subscribe to topic for this wallet for next 10 blocks:
+Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks:
 ```go
-txid, err = w.Subscribe("identifier", "topic", 10)
+txid, err = w.Subscribe("identifier", "topic", 0, 10)
 if err == nil {
     log.Println("success:", txid)
 } else {

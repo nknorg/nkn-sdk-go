@@ -195,12 +195,12 @@ func (w *WalletSDK) DeleteName() (string, error) {
 	return w.sendRawTransaction(tx)
 }
 
-func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32) (string, error) {
+func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32) (string, error) {
 	subscriber, err := w.account.PublicKey.EncodePoint(true)
 	if err != nil {
 		return "", err
 	}
-	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, duration)
+	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, bucket, duration)
 	if err != nil {
 		return "", err
 	}

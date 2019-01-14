@@ -163,9 +163,8 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds uint32) 
 	return err
 }
 
-func (c *Client) Publish(topic string, payload []byte, MaxHoldingSeconds uint32) error {
-	var dests []string
-	err := call("getsubscribers", map[string]interface{}{"topic": topic}, &dests)
+func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHoldingSeconds uint32) error {
+	dests, err := GetSubscribers(topic, bucket)
 	if err != nil {
 		return err
 	}

@@ -54,8 +54,8 @@ func main() {
 		}
 		log.Println("success:", txid)
 
-		// Subscribe to topic for this wallet for next 10 blocks
-		txid, err = w.Subscribe("identifier", "topic", 10)
+		// Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks
+		txid, err = w.Subscribe("identifier", "topic", 0, 10)
 		if err != nil {
 			return err
 		}
