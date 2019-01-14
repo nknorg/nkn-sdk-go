@@ -99,7 +99,7 @@ You can also send byte array directly:
 client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5}, 0)
 ```
 
-Or publish text message to a topic:
+Or publish text message to a bucket 0 of specified topic:
 
 ```go
 client.Publish("topic", 0, []byte("hello world!"), 0)
