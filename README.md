@@ -12,6 +12,26 @@ Before you use SDK please call:
 Init()
 ```
 
+Resolve name to wallet address:
+```go
+address, _ := GetAddressByName("somename")
+```
+
+Get subscribers of bucket 0 of specified topic:
+```go
+subscribers, _ := GetSubscribers("topic", 0)
+```
+
+Get free bucket of specified topic:
+```go
+bucket, _ := GetFreeTopicBucket("topic")
+```
+
+Get buckets count of specified topic:
+```go
+bucket, _ := GetTopicBucketsCount("topic")
+```
+
 ## Client Usage
 
 Create a client with a generated key pair:
