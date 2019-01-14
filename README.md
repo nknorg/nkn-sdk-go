@@ -22,9 +22,9 @@ Get subscribers of bucket 0 of specified topic:
 subscribers, _ := GetSubscribers("topic", 0)
 ```
 
-Get free bucket of specified topic:
+Get first available bucket of specified topic:
 ```go
-bucket, _ := GetFreeTopicBucket("topic")
+bucket, _ := GetFirstAvailableTopicBucket("topic")
 ```
 
 Get buckets count of specified topic:
@@ -170,6 +170,16 @@ if err == nil {
 Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks:
 ```go
 txid, err = w.Subscribe("identifier", "topic", 0, 10)
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
+```
+
+Subscribe to first available bucket of specified topic for this wallet for next 10 blocks:
+```go
+txid, err = w.SubscribeToFirstAvailableBucket("identifier", "topic", 10)
 if err == nil {
     log.Println("success:", txid)
 } else {
