@@ -17,3 +17,21 @@ func GetSubscribers(topic string, bucket uint32) ([]string, error) {
 	}
 	return dests, nil
 }
+
+func GetFreeTopicBucket(topic string) (int, error) {
+	var bucket int
+	err := call("getfreetopicbucket", map[string]interface{}{"topic": topic}, &bucket)
+	if err != nil {
+		return -1, err
+	}
+	return bucket, nil
+}
+
+func GetTopicBucketsCount(topic string) (uint32, error) {
+	var bucket uint32
+	err := call("gettopicbucketscount", map[string]interface{}{"topic": topic}, &bucket)
+	if err != nil {
+		return 0, err
+	}
+	return bucket, nil
+}
