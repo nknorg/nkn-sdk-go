@@ -1,12 +1,12 @@
 package nkn_sdk_go
 
 import (
-	"errors"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/core/contract"
 	"github.com/nknorg/nkn/core/signature"
 	"github.com/nknorg/nkn/core/transaction"
 	"github.com/nknorg/nkn/vault"
+	"github.com/pkg/errors"
 	"math"
 	"sort"
 )
@@ -51,23 +51,23 @@ func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
 	return nil
 }
 
-func (w *WalletSDK) sendRawTransaction(tx *transaction.Transaction) (string, error) {
+func (w *WalletSDK) sendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
 	err := w.signTransaction(tx)
 	if err != nil {
-		return "", err
+		return "", err, -1
 	}
 
 	var txid string
-	err = call("sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txid)
+	err, code := call("sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txid)
 	if err != nil {
-		return "", err
+		return "", err, code
 	}
-	return txid, nil
+	return txid, nil, 0
 }
 
 func getUTXO(address string) ([]*transaction.UTXOUnspent, error) {
 	var utxoInfoList []utxoUnspentInfo
-	err := call("getunspendoutput", map[string]interface{}{"address": address, "assetid": AssetId.ToHexString()}, &utxoInfoList)
+	err, _ := call("getunspendoutput", map[string]interface{}{"address": address, "assetid": AssetId.ToHexString()}, &utxoInfoList)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,8 @@ func (w *WalletSDK) Transfer(address string, value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return w.sendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
+	return id, err
 }
 
 func (w *WalletSDK) RegisterName(name string) (string, error) {
@@ -180,7 +181,8 @@ func (w *WalletSDK) RegisterName(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return w.sendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
+	return id, err
 }
 
 func (w *WalletSDK) DeleteName() (string, error) {
@@ -192,17 +194,40 @@ func (w *WalletSDK) DeleteName() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	id, err, _ := w.sendRawTransaction(tx)
+	return id, err
+}
+
+func (w *WalletSDK) subscribe(identifier string, topic string, bucket uint32, duration uint32) (string, error, int32) {
+	subscriber, err := w.account.PublicKey.EncodePoint(true)
+	if err != nil {
+		return "", err, -1
+	}
+	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, bucket, duration)
+	if err != nil {
+		return "", err, -1
+	}
 	return w.sendRawTransaction(tx)
 }
 
 func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32) (string, error) {
-	subscriber, err := w.account.PublicKey.EncodePoint(true)
-	if err != nil {
-		return "", err
+	id, err, _ := w.subscribe(identifier, topic, bucket, duration)
+	return id, err
+}
+
+func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32) (string, error) {
+	for {
+		bucket, err := GetFirstAvailableTopicBucket(topic)
+		if err != nil {
+			return "", err
+		}
+		if bucket == -1 {
+			return "", errors.New("No more free buckets")
+		}
+		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration)
+		if err != nil && code == 45018 {
+			continue
+		}
+		return id, err
 	}
-	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, bucket, duration)
-	if err != nil {
-		return "", err
-	}
-	return w.sendRawTransaction(tx)
 }

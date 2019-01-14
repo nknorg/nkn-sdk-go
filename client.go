@@ -35,7 +35,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 		}
 		c.Address = address.MakeAddressString(pubKey, identifier)
 		var host string
-		err = call("getwsaddr", map[string]interface{}{"address": c.Address}, &host)
+		err, _ = call("getwsaddr", map[string]interface{}{"address": c.Address}, &host)
 		if err != nil {
 			return err
 		}
