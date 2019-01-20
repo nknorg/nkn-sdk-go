@@ -1,14 +1,15 @@
 package nkn_sdk_go
 
 import (
+	"math"
+	"sort"
+
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/core/contract"
 	"github.com/nknorg/nkn/core/signature"
 	"github.com/nknorg/nkn/core/transaction"
 	"github.com/nknorg/nkn/vault"
 	"github.com/pkg/errors"
-	"math"
-	"sort"
 )
 
 type WalletSDK struct {
@@ -84,7 +85,7 @@ func getUTXO(address string) ([]*transaction.UTXOUnspent, error) {
 		}
 		val := common.Fixed64(v.Value * math.Pow(10, 8))
 		utxoList[i] = &transaction.UTXOUnspent{
-			Txid: txid,
+			Txid:  txid,
 			Index: v.Index,
 			Value: val,
 		}
@@ -185,12 +186,12 @@ func (w *WalletSDK) RegisterName(name string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) DeleteName() (string, error) {
+func (w *WalletSDK) DeleteName(name string) (string, error) {
 	registrant, err := w.account.PublicKey.EncodePoint(true)
 	if err != nil {
 		return "", err
 	}
-	tx, err := transaction.NewDeleteNameTransaction(registrant)
+	tx, err := transaction.NewDeleteNameTransaction(registrant, name)
 	if err != nil {
 		return "", err
 	}

@@ -1,5 +1,5 @@
 hash: 5702f537e5149ee5886d934931d667af412a6ae5f35bd7dcaeb05f541abd5894
-updated: 2018-12-30T07:57:24.3001289+07:00
+updated: 2019-01-21T00:04:43.0259799+03:00
 imports:
 - name: github.com/gogo/protobuf
   version: 636bf0302bc95575d69441b25a2603156ffdddf1
@@ -8,7 +8,7 @@ imports:
   - proto
   - protoc-gen-gogo/descriptor
 - name: github.com/golang/crypto
-  version: 4d3f4d9ffa16a13f451c3b2999e9c49e9750bf06
+  version: ff983b9c42bc9fbf91556e191cc8efb585c16908
   subpackages:
   - ripemd160
   - ssh/terminal
@@ -29,8 +29,10 @@ imports:
   - scpd
   - soap
   - ssdp
+- name: github.com/imdario/mergo
+  version: 9f23e2d6bd2a77f959b2bf6acdbefd708a83a4a4
 - name: github.com/itchyny/base58-go
-  version: 56d50cf40874c738595ef72ee2445a4de104d27d
+  version: fab293004121aca58c909390f8d4dbd872f448a6
 - name: github.com/jackpal/gateway
   version: cbcf4e3f3baee7952fc386c8b2534af4d267c875
 - name: github.com/jackpal/go-nat-pmp
@@ -38,9 +40,9 @@ imports:
 - name: github.com/jpillora/backoff
   version: 3050d21c67d7c46b07ca1b5e1be0b26669c8d04c
 - name: github.com/klauspost/cpuid
-  version: e7e905edc00ea8827e58662220139109efea09db
+  version: 0da02118eaa37aa89aea6776b464a4ad00990af1
 - name: github.com/klauspost/reedsolomon
-  version: 925cb01d65108f2c935e02fdb79ff4a055a4a20d
+  version: 8885f3a1c73882e6f11b766242c69a1eb8f44b28
 - name: github.com/nknorg/go-nat
   version: 6339479af9cce1e6c4f5efe96c0306fb6149397c
 - name: github.com/nknorg/go-portscanner
@@ -48,14 +50,11 @@ imports:
 - name: github.com/nknorg/gopass
   version: 9ddc09fe41c891b7987acd1bf75f9067a56c17f5
 - name: github.com/nknorg/nkn
-  version: 146625b1d3dff73e22c03454f23e1ec0ddbdadca
+  version: 45af9914cb9aed618015d10d0f9bccc2da029293
   subpackages:
-  - api/common
   - api/httpjson/client
-  - api/websocket/client
   - common
   - common/serialization
-  - core/account
   - core/asset
   - core/contract
   - core/contract/program
@@ -63,17 +62,14 @@ imports:
   - core/signature
   - core/transaction
   - core/transaction/payload
-  - core/transaction/pool
   - core/validation
   - crypto
   - crypto/p256r1
   - crypto/util
   - errors
   - events
-  - net/common
-  - net/protocol
+  - pb
   - por
-  - protobuf
   - util/address
   - util/config
   - util/log
@@ -85,17 +81,30 @@ imports:
   - vm/types
   - vm/utils
 - name: github.com/nknorg/nnet
-  version: ae33039c242f1d2a4e13cd690d98b7a8f4f0cfa6
+  version: 5e7a25cc73ae6a6652238ba84f4d17a5cb655d72
   subpackages:
+  - cache
+  - common
+  - config
+  - log
+  - message
+  - node
+  - overlay
+  - overlay/chord
+  - overlay/routing
+  - protobuf
   - transport
+  - util
+- name: github.com/op/go-logging
+  version: 970db520ece77730c7e4724c61121037378659d9
 - name: github.com/patrickmn/go-cache
   version: a3647f8e31d79543b2d0f0ae2fe5c379d72cedc0
 - name: github.com/pkg/errors
-  version: 059132a15dd08d6704c67711dae0cf35ab991756
+  version: ffb6e22f01932bf7ac35e0bad9be11f01d1c8685
 - name: github.com/rdegges/go-ipify
   version: 2d94a6a86c4055118cc30fae2aaed47ec01f2210
 - name: github.com/syndtr/goleveldb
-  version: 6b91fda63f2e36186f1c9d0e48578defb69c5d43
+  version: b001fa50d6b27f3f0bb175a87d0cb55426d0a0ae
   subpackages:
   - leveldb
   - leveldb/cache
@@ -120,7 +129,7 @@ imports:
 - name: github.com/xtaci/kcp-go
   version: f48db19e7a48fe347571d6bfc52a7585a53c5315
 - name: golang.org/x/crypto
-  version: 4d3f4d9ffa16a13f451c3b2999e9c49e9750bf06
+  version: ff983b9c42bc9fbf91556e191cc8efb585c16908
   repo: https://github.com/golang/crypto
   vcs: git
   subpackages:
@@ -134,7 +143,7 @@ imports:
   - twofish
   - xtea
 - name: golang.org/x/net
-  version: c10e9556a7bc0e7c942242b606f0acf024ad5d6a
+  version: 915654e7eabcea33ae277abbecf52f0d8b7a9fdc
   repo: https://github.com/golang/net
   vcs: git
   subpackages:
@@ -146,14 +155,14 @@ imports:
   - internal/socket
   - ipv4
 - name: golang.org/x/sys
-  version: 9b800f95dbbc54abff0acf7ee32d88ba4e328c89
+  version: 11f53e03133963fb11ae0588e08b5e0b85be8be5
   repo: https://github.com/golang/sys
   vcs: git
   subpackages:
   - unix
   - windows
 - name: golang.org/x/text
-  version: 6f44c5a2ea40ee3593d98cdcc905cc1fdaa660e2
+  version: e6919f6577db79269a6443b9dc46d18f2238fb5d
   subpackages:
   - encoding
   - encoding/charmap

@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
+
 	. "github.com/nknorg/nkn-sdk-go"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/vault"
-	"log"
 )
 
 func main() {

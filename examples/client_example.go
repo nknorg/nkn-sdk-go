@@ -3,11 +3,12 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	"log"
+	"time"
+
 	. "github.com/nknorg/nkn-sdk-go"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/vault"
-	"log"
-	"time"
 )
 
 func main() {

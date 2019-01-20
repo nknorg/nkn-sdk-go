@@ -2,17 +2,18 @@ package nkn_sdk_go
 
 import (
 	"encoding/json"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gorilla/websocket"
-	"github.com/nknorg/nkn/api/common"
-	. "github.com/nknorg/nkn/api/websocket/client"
-	"github.com/nknorg/nkn/core/ledger"
-	"github.com/nknorg/nkn/util/address"
-	"github.com/nknorg/nkn/vault"
-	"github.com/pkg/errors"
 	"log"
 	"net/url"
 	"time"
+
+	"github.com/gogo/protobuf/proto"
+	"github.com/gorilla/websocket"
+	"github.com/nknorg/nkn/api/common"
+	"github.com/nknorg/nkn/core/ledger"
+	"github.com/nknorg/nkn/pb"
+	"github.com/nknorg/nkn/util/address"
+	"github.com/nknorg/nkn/vault"
+	"github.com/pkg/errors"
 )
 
 var ReconnectInterval time.Duration = 1
@@ -23,7 +24,7 @@ type Client struct {
 	conn      *websocket.Conn
 	closed    bool
 	OnConnect chan struct{}
-	OnMessage chan *InboundMessage
+	OnMessage chan *pb.InboundMessage
 	OnBlock   chan *ledger.Block
 }
 
@@ -48,7 +49,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 	}
 	c.conn = conn
 	c.OnConnect = make(chan struct{})
-	c.OnMessage = make(chan *InboundMessage)
+	c.OnMessage = make(chan *pb.InboundMessage)
 	c.OnBlock = make(chan *ledger.Block)
 
 	go func() {
@@ -114,7 +115,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 						c.OnBlock <- block
 					}
 				case websocket.BinaryMessage:
-					msg := &InboundMessage{}
+					msg := &pb.InboundMessage{}
 					err := proto.Unmarshal(data, msg)
 					if err != nil {
 						return err
@@ -153,9 +154,9 @@ func NewClient(account *vault.Account, identifier string) (*Client, error) {
 }
 
 func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds uint32) error {
-	msg := &OutboundMessage{
-		Payload: payload,
-		Dests: dests,
+	msg := &pb.OutboundMessage{
+		Payload:           payload,
+		Dests:             dests,
 		MaxHoldingSeconds: MaxHoldingSeconds,
 	}
 	data, err := proto.Marshal(msg)

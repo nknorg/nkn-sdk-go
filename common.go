@@ -3,6 +3,7 @@ package nkn_sdk_go
 import (
 	"bytes"
 	"encoding/json"
+
 	"github.com/nknorg/nkn/api/httpjson/client"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/crypto"
