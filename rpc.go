@@ -9,8 +9,8 @@ func GetAddressByName(name string) (string, error) {
 	return address, nil
 }
 
-func GetSubscribers(topic string, bucket uint32) ([]string, error) {
-	var dests []string
+func GetSubscribers(topic string, bucket uint32) (map[string]string, error) {
+	var dests map[string]string
 	err, _ := call("getsubscribers", map[string]interface{}{"topic": topic, "bucket": bucket}, &dests)
 	if err != nil {
 		return nil, err

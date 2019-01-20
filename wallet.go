@@ -199,24 +199,24 @@ func (w *WalletSDK) DeleteName(name string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) subscribe(identifier string, topic string, bucket uint32, duration uint32) (string, error, int32) {
+func (w *WalletSDK) subscribe(identifier string, topic string, bucket uint32, duration uint32, meta string) (string, error, int32) {
 	subscriber, err := w.account.PublicKey.EncodePoint(true)
 	if err != nil {
 		return "", err, -1
 	}
-	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, bucket, duration)
+	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, bucket, duration, meta)
 	if err != nil {
 		return "", err, -1
 	}
 	return w.sendRawTransaction(tx)
 }
 
-func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32) (string, error) {
-	id, err, _ := w.subscribe(identifier, topic, bucket, duration)
+func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32, meta string) (string, error) {
+	id, err, _ := w.subscribe(identifier, topic, bucket, duration, meta)
 	return id, err
 }
 
-func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32) (string, error) {
+func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32, meta string) (string, error) {
 	for {
 		bucket, err := GetFirstAvailableTopicBucket(topic)
 		if err != nil {
@@ -225,7 +225,7 @@ func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic str
 		if bucket == -1 {
 			return "", errors.New("No more free buckets")
 		}
-		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration)
+		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration, meta)
 		if err != nil && code == 45018 {
 			continue
 		}
