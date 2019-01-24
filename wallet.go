@@ -1,6 +1,7 @@
 package nkn_sdk_go
 
 import (
+	"errors"
 	"math"
 	"sort"
 
@@ -9,8 +10,9 @@ import (
 	"github.com/nknorg/nkn/core/signature"
 	"github.com/nknorg/nkn/core/transaction"
 	"github.com/nknorg/nkn/vault"
-	"github.com/pkg/errors"
 )
+
+var AlreadySubscribed = errors.New("already subscribed to this topic")
 
 type WalletSDK struct {
 	account *vault.Account
@@ -223,11 +225,14 @@ func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic str
 			return "", err
 		}
 		if bucket == -1 {
-			return "", errors.New("No more free buckets")
+			return "", errors.New("no more free buckets")
 		}
 		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration, meta)
 		if err != nil && code == 45018 {
 			continue
+		}
+		if err != nil && code == 45020 {
+			return "", AlreadySubscribed
 		}
 		return id, err
 	}
