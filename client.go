@@ -165,7 +165,11 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds uint32) 
 }
 
 func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHoldingSeconds uint32) error {
-	dests, err := GetSubscribers(topic, bucket)
+	subscribers, err := GetSubscribers(topic, bucket)
+	dests := make([]string, 0, len(subscribers))
+	for subscriber, _ := range subscribers {
+		dests = append(dests, subscriber)
+	}
 	if err != nil {
 		return err
 	}
