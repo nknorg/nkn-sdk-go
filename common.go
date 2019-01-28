@@ -3,6 +3,8 @@ package nkn_sdk_go
 import (
 	"bytes"
 	"encoding/json"
+	"math/rand"
+	"time"
 
 	"github.com/nknorg/nkn/api/httpjson/client"
 	"github.com/nknorg/nkn/common"
@@ -10,10 +12,25 @@ import (
 	"github.com/pkg/errors"
 )
 
-var SeedRPCServerAddr = "http://testnet-seed-0001.nkn.org:30003"
+var seedList = []string{
+	"testnet-node-0001.nkn.org",
+	"testnet-node-0002.nkn.org",
+	"testnet-node-0003.nkn.org",
+	"testnet-node-0004.nkn.org",
+	"testnet-node-0005.nkn.org",
+	"testnet-node-0006.nkn.org",
+}
+
+var SeedRPCServerAddr string
 var AssetId common.Uint256
 
 func Init() {
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(seedList), func(i int, j int) {
+		seedList[i], seedList[j] = seedList[j], seedList[i]
+	})
+	SeedRPCServerAddr = seedList[0]
+
 	tmp, _ := common.HexStringToBytesReverse("4945ca009174097e6614d306b66e1f9cb1fce586cb857729be9e1c5cc04c9c02")
 	if err := AssetId.Deserialize(bytes.NewReader(tmp)); err != nil {
 		panic(err)
