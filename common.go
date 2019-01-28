@@ -13,12 +13,12 @@ import (
 )
 
 var seedList = []string{
-	"testnet-node-0001.nkn.org",
-	"testnet-node-0002.nkn.org",
-	"testnet-node-0003.nkn.org",
-	"testnet-node-0004.nkn.org",
-	"testnet-node-0005.nkn.org",
-	"testnet-node-0006.nkn.org",
+	"http://testnet-node-0001.nkn.org:30003",
+	"http://testnet-node-0002.nkn.org:30003",
+	"http://testnet-node-0003.nkn.org:30003",
+	"http://testnet-node-0004.nkn.org:30003",
+	"http://testnet-node-0005.nkn.org:30003",
+	"http://testnet-node-0006.nkn.org:30003",
 }
 
 var SeedRPCServerAddr string
