@@ -1,14 +1,17 @@
 hash: 5702f537e5149ee5886d934931d667af412a6ae5f35bd7dcaeb05f541abd5894
-updated: 2019-01-21T00:04:43.0259799+03:00
+updated: 2019-01-29T10:22:12.2355125+03:00
 imports:
 - name: github.com/gogo/protobuf
   version: 636bf0302bc95575d69441b25a2603156ffdddf1
   subpackages:
   - gogoproto
+  - jsonpb
   - proto
   - protoc-gen-gogo/descriptor
+  - sortkeys
+  - types
 - name: github.com/golang/crypto
-  version: ff983b9c42bc9fbf91556e191cc8efb585c16908
+  version: c7b33c32a30bae9ba07d37eb4d86f1f8b0f644fb
   subpackages:
   - ripemd160
   - ssh/terminal
@@ -50,8 +53,9 @@ imports:
 - name: github.com/nknorg/gopass
   version: 9ddc09fe41c891b7987acd1bf75f9067a56c17f5
 - name: github.com/nknorg/nkn
-  version: 45af9914cb9aed618015d10d0f9bccc2da029293
+  version: 20215779f55bdfa883624c7c72752ebc75998c02
   subpackages:
+  - api/common
   - api/httpjson/client
   - common
   - common/serialization
@@ -62,12 +66,15 @@ imports:
   - core/signature
   - core/transaction
   - core/transaction/payload
+  - core/transaction/pool
   - core/validation
   - crypto
   - crypto/p256r1
   - crypto/util
   - errors
   - events
+  - net/node
+  - net/node/consequential
   - pb
   - por
   - util/address
@@ -81,7 +88,7 @@ imports:
   - vm/types
   - vm/utils
 - name: github.com/nknorg/nnet
-  version: 5e7a25cc73ae6a6652238ba84f4d17a5cb655d72
+  version: df780857b32a5b1451507435df8471622d69afbe
   subpackages:
   - cache
   - common
@@ -129,7 +136,7 @@ imports:
 - name: github.com/xtaci/kcp-go
   version: f48db19e7a48fe347571d6bfc52a7585a53c5315
 - name: golang.org/x/crypto
-  version: ff983b9c42bc9fbf91556e191cc8efb585c16908
+  version: c7b33c32a30bae9ba07d37eb4d86f1f8b0f644fb
   repo: https://github.com/golang/crypto
   vcs: git
   subpackages:
@@ -143,7 +150,7 @@ imports:
   - twofish
   - xtea
 - name: golang.org/x/net
-  version: 915654e7eabcea33ae277abbecf52f0d8b7a9fdc
+  version: d26f9f9a57f3fab6a695bec0d84433c2c50f8bbf
   repo: https://github.com/golang/net
   vcs: git
   subpackages:
@@ -155,7 +162,7 @@ imports:
   - internal/socket
   - ipv4
 - name: golang.org/x/sys
-  version: 11f53e03133963fb11ae0588e08b5e0b85be8be5
+  version: b90733256f2e882e81d52f9126de08df5615afd9
   repo: https://github.com/golang/sys
   vcs: git
   subpackages:
