@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var SeedList = []string{
+var SeedRPCServerAddrList = []string{
 	"http://testnet-node-0001.nkn.org:30003",
 	"http://testnet-node-0002.nkn.org:30003",
 	"http://testnet-node-0003.nkn.org:30003",
@@ -27,8 +27,8 @@ var AssetId common.Uint256
 func Init() {
 	if SeedRPCServerAddr == "" {
 		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(SeedList), func(i int, j int) {
-			SeedList[i], SeedList[j] = SeedList[j], SeedList[i]
+		rand.Shuffle(len(SeedRPCServerAddrList), func(i int, j int) {
+			SeedRPCServerAddrList[i], SeedRPCServerAddrList[j] = SeedRPCServerAddrList[j], SeedRPCServerAddrList[i]
 		})
 		SeedRPCServerAddr = SeedList[0]
 	}
