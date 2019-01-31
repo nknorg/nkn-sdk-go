@@ -30,7 +30,7 @@ func Init() {
 		rand.Shuffle(len(SeedRPCServerAddrList), func(i int, j int) {
 			SeedRPCServerAddrList[i], SeedRPCServerAddrList[j] = SeedRPCServerAddrList[j], SeedRPCServerAddrList[i]
 		})
-		SeedRPCServerAddr = SeedList[0]
+		SeedRPCServerAddr = SeedRPCServerAddrList[0]
 	}
 
 	tmp, _ := common.HexStringToBytesReverse("4945ca009174097e6614d306b66e1f9cb1fce586cb857729be9e1c5cc04c9c02")
