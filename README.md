@@ -12,6 +12,12 @@ Before you use SDK please call:
 Init()
 ```
 
+You can set your own `SeedRPCServerAddrList` before calling `Init()`:
+```go
+SeedRPCServerAddrList = []string{"http://localhost:30003"}
+Init()
+```
+
 Resolve name to wallet address:
 ```go
 address, _ := GetAddressByName("somename")
