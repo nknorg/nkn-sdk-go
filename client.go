@@ -16,9 +16,16 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ReconnectInterval time.Duration = 1
+var reconnectInterval time.Duration = 1
+
+type ClientConfig struct {
+	SeedRPCServerAddr string
+	ReconnectInterval time.Duration
+	MaxHoldingSeconds uint32
+}
 
 type Client struct {
+	config    ClientConfig
 	Address   string
 	urlString string
 	conn      *websocket.Conn
@@ -36,7 +43,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 		}
 		c.Address = address.MakeAddressString(pubKey, identifier)
 		var host string
-		err, _ = call("getwsaddr", map[string]interface{}{"address": c.Address}, &host)
+		err, _ = call(c.config.SeedRPCServerAddr, "getwsaddr", map[string]interface{}{"address": c.Address}, &host)
 		if err != nil {
 			return err
 		}
@@ -131,7 +138,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 
 		if !c.closed {
 			defer func() {
-				time.Sleep(ReconnectInterval * time.Second)
+				time.Sleep(c.config.ReconnectInterval * time.Second)
 
 				err = c.connect(account, identifier, force)
 				if err != nil {
@@ -144,8 +151,21 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 	return nil
 }
 
-func NewClient(account *vault.Account, identifier string) (*Client, error) {
-	c := Client{}
+func NewClient(account *vault.Account, identifier string, config ...ClientConfig) (*Client, error) {
+	var _config ClientConfig
+	if len(config) == 0 {
+		_config = ClientConfig{seedRPCServerAddr, reconnectInterval, 0}
+	} else {
+		_config = config[0]
+		if _config.SeedRPCServerAddr == "" {
+			_config.SeedRPCServerAddr = seedRPCServerAddr
+		}
+		if _config.ReconnectInterval == 0 {
+			_config.ReconnectInterval = reconnectInterval
+		}
+	}
+	c := Client{config: _config}
+
 	err := c.connect(account, identifier, true)
 	if err != nil {
 		return nil, err
@@ -153,19 +173,23 @@ func NewClient(account *vault.Account, identifier string) (*Client, error) {
 	return &c, nil
 }
 
-func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds uint32) error {
+func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint32) error {
 	msg := &pb.OutboundMessage{
 		Payload:           payload,
 		Dests:             dests,
-		MaxHoldingSeconds: MaxHoldingSeconds,
+	}
+	if len(MaxHoldingSeconds) == 0 {
+		msg.MaxHoldingSeconds = c.config.MaxHoldingSeconds
+	} else {
+		msg.MaxHoldingSeconds = MaxHoldingSeconds[0]
 	}
 	data, err := proto.Marshal(msg)
 	err = c.conn.WriteMessage(websocket.BinaryMessage, data)
 	return err
 }
 
-func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHoldingSeconds uint32) error {
-	subscribers, err := GetSubscribers(topic, bucket)
+func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHoldingSeconds ...uint32) error {
+	subscribers, err := getSubscribers(c.config.SeedRPCServerAddr, topic, bucket)
 	dests := make([]string, 0, len(subscribers))
 	for subscriber, _ := range subscribers {
 		dests = append(dests, subscriber)
@@ -173,7 +197,7 @@ func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHolding
 	if err != nil {
 		return err
 	}
-	return c.Send(dests, payload, MaxHoldingSeconds)
+	return c.Send(dests, payload, MaxHoldingSeconds...)
 }
 
 func (c *Client) Close() {

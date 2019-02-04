@@ -12,32 +12,6 @@ Before you use SDK please call:
 Init()
 ```
 
-You can set your own `SeedRPCServerAddrList` before calling `Init()`:
-```go
-SeedRPCServerAddrList = []string{"http://localhost:30003"}
-Init()
-```
-
-Resolve name to wallet address:
-```go
-address, _ := GetAddressByName("somename")
-```
-
-Get subscribers of bucket 0 of specified topic:
-```go
-subscribers, _ := GetSubscribers("topic", 0)
-```
-
-Get first available bucket of specified topic:
-```go
-bucket, _ := GetFirstAvailableTopicBucket("topic")
-```
-
-Get buckets count of specified topic:
-```go
-bucket, _ := GetTopicBucketsCount("topic")
-```
-
 ## Client Usage
 
 Create a client with a generated key pair:
@@ -73,8 +47,7 @@ provided by us. Any NKN full node can serve as a bootstrap RPC server. To create
 a client using customized bootstrap RPC server:
 
 ```go
-SeedRPCServerAddr = "https://ip:port"
-client, _ := NewClient(account, "any string")
+client, _ := NewClient(account, "any string", ClientConfig{SeedRPCServerAddr: "https://ip:port"})
 ```
 
 Private key should be kept **SECRET**! Never put it in version control system
@@ -96,19 +69,19 @@ fmt.Println("Connection opened.")
 Send text message to other clients:
 
 ```go
-client.Send([]string{"another client address"}, []byte("hello world!"), 0)
+client.Send([]string{"another client address"}, []byte("hello world!"))
 ```
 
 You can also send byte array directly:
 
 ```go
-client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5}, 0)
+client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5})
 ```
 
 Or publish text message to a bucket 0 of specified topic:
 
 ```go
-client.Publish("topic", 0, []byte("hello world!"), 0)
+client.Publish("topic", 0, []byte("hello world!"))
 ```
 
 Receive data from other clients:
@@ -131,6 +104,15 @@ Create wallet SDK:
 account, _ := vault.NewAccount()
 w := NewWalletSDK(account)
 ```
+
+By default the wallet will use RPC server provided by us.
+Any NKN full node can serve as a RPC server. To create
+a wallet using customized RPC server:
+```go
+account, _ := vault.NewAccount()
+w := NewWalletSDK(account, WalletConfig{SeedRPCServerAddr: "https://ip:port"})
+```
+
 
 Query asset balance for this wallet:
 ```go
@@ -191,6 +173,26 @@ if err == nil {
 } else {
     log.Println("fail:", err)
 }
+```
+
+Resolve name to wallet address:
+```go
+address, _ := w.GetAddressByName("somename")
+```
+
+Get subscribers of bucket 0 of specified topic:
+```go
+subscribers, _ := w.GetSubscribers("topic", 0)
+```
+
+Get first available bucket of specified topic:
+```go
+bucket, _ := w.GetFirstAvailableTopicBucket("topic")
+```
+
+Get buckets count of specified topic:
+```go
+bucket, _ := w.GetTopicBucketsCount("topic")
 ```
 
 ## Contributing

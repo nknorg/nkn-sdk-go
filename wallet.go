@@ -14,8 +14,13 @@ import (
 
 var AlreadySubscribed = errors.New("already subscribed to this topic")
 
+type WalletConfig struct {
+	SeedRPCServerAddr string
+}
+
 type WalletSDK struct {
 	account *vault.Account
+	config  WalletConfig
 }
 
 type utxoUnspentInfo struct {
@@ -24,8 +29,17 @@ type utxoUnspentInfo struct {
 	Value float64
 }
 
-func NewWalletSDK(account *vault.Account) *WalletSDK {
-	return &WalletSDK{account}
+func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
+	var _config WalletConfig
+	if len(config) == 0 {
+		_config = WalletConfig{seedRPCServerAddr}
+	} else {
+		_config = config[0]
+		if _config.SeedRPCServerAddr == "" {
+			_config.SeedRPCServerAddr = seedRPCServerAddr
+		}
+	}
+	return &WalletSDK{account, _config}
 }
 
 func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
@@ -61,16 +75,16 @@ func (w *WalletSDK) sendRawTransaction(tx *transaction.Transaction) (string, err
 	}
 
 	var txid string
-	err, code := call("sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txid)
+	err, code := call(w.config.SeedRPCServerAddr, "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txid)
 	if err != nil {
 		return "", err, code
 	}
 	return txid, nil, 0
 }
 
-func getUTXO(address string) ([]*transaction.UTXOUnspent, error) {
+func (w *WalletSDK) getUTXO(address string) ([]*transaction.UTXOUnspent, error) {
 	var utxoInfoList []utxoUnspentInfo
-	err, _ := call("getunspendoutput", map[string]interface{}{"address": address, "assetid": AssetId.ToHexString()}, &utxoInfoList)
+	err, _ := call(w.config.SeedRPCServerAddr, "getunspendoutput", map[string]interface{}{"address": address, "assetid": AssetId.ToHexString()}, &utxoInfoList)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +119,7 @@ func (w *WalletSDK) Balance() (common.Fixed64, error) {
 	if err != nil {
 		return common.Fixed64(-1), err
 	}
-	utxoList, err := getUTXO(address)
+	utxoList, err := w.getUTXO(address)
 	if err != nil {
 		return common.Fixed64(-1), err
 	}
@@ -134,7 +148,7 @@ func (w *WalletSDK) Transfer(address string, value string) (string, error) {
 		ProgramHash: programHash,
 	}}
 
-	utxoList, err := getUTXO(address)
+	utxoList, err := w.getUTXO(address)
 	if err != nil {
 		return "", err
 	}
@@ -220,7 +234,7 @@ func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, du
 
 func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32, meta string) (string, error) {
 	for {
-		bucket, err := GetFirstAvailableTopicBucket(topic)
+		bucket, err := w.GetFirstAvailableTopicBucket(topic)
 		if err != nil {
 			return "", err
 		}
@@ -236,4 +250,44 @@ func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic str
 		}
 		return id, err
 	}
+}
+
+func (w *WalletSDK) GetAddressByName(name string) (string, error) {
+	var address string
+	err, _ := call(w.config.SeedRPCServerAddr, "getaddressbyname", map[string]interface{}{"name": name}, &address)
+	if err != nil {
+		return "", err
+	}
+	return address, nil
+}
+
+func getSubscribers(address string, topic string, bucket uint32) (map[string]string, error) {
+	var dests map[string]string
+	err, _ := call(address, "getsubscribers", map[string]interface{}{"topic": topic, "bucket": bucket}, &dests)
+	if err != nil {
+		return nil, err
+	}
+	return dests, nil
+}
+
+func (w *WalletSDK) GetSubscribers(topic string, bucket uint32) (map[string]string, error) {
+	return getSubscribers(w.config.SeedRPCServerAddr, topic, bucket)
+}
+
+func (w *WalletSDK) GetFirstAvailableTopicBucket(topic string) (int, error) {
+	var bucket int
+	err, _ := call(w.config.SeedRPCServerAddr, "getfirstavailabletopicbucket", map[string]interface{}{"topic": topic}, &bucket)
+	if err != nil {
+		return -1, err
+	}
+	return bucket, nil
+}
+
+func (w *WalletSDK) GetTopicBucketsCount(topic string) (uint32, error) {
+	var bucket uint32
+	err, _ := call(w.config.SeedRPCServerAddr, "gettopicbucketscount", map[string]interface{}{"topic": topic}, &bucket)
+	if err != nil {
+		return 0, err
+	}
+	return bucket, nil
 }

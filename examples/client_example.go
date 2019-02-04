@@ -46,7 +46,7 @@ func main() {
 		defer toClient.Close()
 		<- toClient.OnConnect
 
-		err = fromClient.Send([]string{toClient.Address}, []byte("Hello world!"), 0)
+		err = fromClient.Send([]string{toClient.Address}, []byte("Hello world!"))
 		if err != nil {
 			return err
 		}

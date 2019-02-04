@@ -12,7 +12,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-var SeedRPCServerAddrList = []string{
+var seedList = []string{
 	"http://testnet-node-0001.nkn.org:30003",
 	"http://testnet-node-0002.nkn.org:30003",
 	"http://testnet-node-0003.nkn.org:30003",
@@ -21,16 +21,16 @@ var SeedRPCServerAddrList = []string{
 	"http://testnet-node-0006.nkn.org:30003",
 }
 
-var SeedRPCServerAddr string
+var seedRPCServerAddr string
 var AssetId common.Uint256
 
 func Init() {
-	if SeedRPCServerAddr == "" {
+	if seedRPCServerAddr == "" {
 		rand.Seed(time.Now().UnixNano())
-		rand.Shuffle(len(SeedRPCServerAddrList), func(i int, j int) {
-			SeedRPCServerAddrList[i], SeedRPCServerAddrList[j] = SeedRPCServerAddrList[j], SeedRPCServerAddrList[i]
+		rand.Shuffle(len(seedList), func(i int, j int) {
+			seedList[i], seedList[j] = seedList[j], seedList[i]
 		})
-		SeedRPCServerAddr = SeedRPCServerAddrList[0]
+		seedRPCServerAddr = seedList[0]
 	}
 
 	tmp, _ := common.HexStringToBytesReverse("4945ca009174097e6614d306b66e1f9cb1fce586cb857729be9e1c5cc04c9c02")
@@ -41,8 +41,8 @@ func Init() {
 	crypto.SetAlg("")
 }
 
-func call(action string, params map[string]interface{}, result interface{}) (error, int32) {
-	data, err := client.Call(SeedRPCServerAddr, action, 0, params)
+func call(address string, action string, params map[string]interface{}, result interface{}) (error, int32) {
+	data, err := client.Call(address, action, 0, params)
 	resp := make(map[string]*json.RawMessage)
 	err = json.Unmarshal(data, &resp)
 	if err != nil {
