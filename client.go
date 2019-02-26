@@ -35,25 +35,34 @@ type Client struct {
 	OnBlock   chan *ledger.Block
 }
 
-func (c *Client) connect(account *vault.Account, identifier string, force bool) error {
-	if force {
+func (c *Client) connect(account *vault.Account, identifier string) error {
+	conn, err := func() (*websocket.Conn, error) {
 		pubKey, err := account.PubKey().EncodePoint(true)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		c.Address = address.MakeAddressString(pubKey, identifier)
 		var host string
 		err, _ = call(c.config.SeedRPCServerAddr, "getwsaddr", map[string]interface{}{"address": c.Address}, &host)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		c.urlString = (&url.URL{Scheme: "ws", Host: host}).String()
+
+		conn, _, err := websocket.DefaultDialer.Dial(c.urlString, nil)
+		return conn, err
+	}()
+
+	if err != nil && !c.closed {
+		if err != nil {
+			log.Println(err)
+		}
+
+		time.Sleep(c.config.ReconnectInterval * time.Second)
+
+		return c.connect(account, identifier)
 	}
 
-	conn, _, err := websocket.DefaultDialer.Dial(c.urlString, nil)
-	if err != nil {
-		return err
-	}
 	c.conn = conn
 	c.OnConnect = make(chan struct{})
 	c.OnMessage = make(chan *pb.InboundMessage)
@@ -68,7 +77,6 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 			_ = c.conn.Close()
 		}()
 
-		force := false
 		err := func() error {
 			req := make(map[string]interface{})
 			req["Action"] = "setClient"
@@ -99,10 +107,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 					if err != nil {
 						return err
 					}
-					if errCode == common.WRONG_NODE {
-						force = true
-						return nil
-					} else if errCode != common.SUCCESS {
+					if errCode != common.SUCCESS {
 						return errors.New(common.ErrMessage[errCode])
 					}
 					var action string
@@ -137,14 +142,7 @@ func (c *Client) connect(account *vault.Account, identifier string, force bool) 
 		}
 
 		if !c.closed {
-			defer func() {
-				time.Sleep(c.config.ReconnectInterval * time.Second)
-
-				err = c.connect(account, identifier, force)
-				if err != nil {
-					log.Println(err)
-				}
-			}()
+			defer c.connect(account, identifier)
 		}
 	}()
 
@@ -166,7 +164,7 @@ func NewClient(account *vault.Account, identifier string, config ...ClientConfig
 	}
 	c := Client{config: _config}
 
-	err := c.connect(account, identifier, true)
+	err := c.connect(account, identifier)
 	if err != nil {
 		return nil, err
 	}
