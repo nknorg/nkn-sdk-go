@@ -37,7 +37,7 @@ fmt.PrintLn(account.PrivateKey, account.PublicKey)
 Create a client using an existing private key:
 
 ```go
-privateKey, _ := common.HexStringToBytes("cd5fa29ed5b0e951f3d1bce5997458706186320f1dd89156a73d54ed752a7f37")
+privateKey, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c67352dff44c21790d9edef7a7e3fc9bd7254359246d0ae605a3c97e71aad83d6b0d")
 account, _ := vault.NewAccountWithPrivatekey(privateKey)
 client, _ := NewClient(account, "any string")
 ```
@@ -135,6 +135,26 @@ if err == nil {
 }
 ```
 
+Open nano pay channel to specified address:
+```go
+np, err := w.NewNanoPay(address)
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
+```
+
+Send 100 NKN into channel with claim available for next 100 blocks and channel open for next 200 blocks
+```go
+txid, err = np.Send("100", 100, 200)
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
+```
+		
 Register name for this wallet (only a-z and length 8-12):
 ```go
 txid, err = w.RegisterName("somename")

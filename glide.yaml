@@ -1,5 +1,0 @@
-package: github.com/nknorg/nkn-sdk-go
-import:
-- package: github.com/nknorg/nkn
-- package: github.com/gorilla/websocket
-  version: ~1.4.0

@@ -2,13 +2,12 @@ package nkn_sdk_go
 
 import (
 	"errors"
-	"math"
-	"sort"
 
 	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/core/contract"
-	"github.com/nknorg/nkn/core/signature"
-	"github.com/nknorg/nkn/core/transaction"
+	"github.com/nknorg/nkn/pb"
+	"github.com/nknorg/nkn/program"
+	"github.com/nknorg/nkn/signature"
+	"github.com/nknorg/nkn/transaction"
 	"github.com/nknorg/nkn/vault"
 )
 
@@ -23,10 +22,13 @@ type WalletSDK struct {
 	config  WalletConfig
 }
 
-type utxoUnspentInfo struct {
-	Txid  string
-	Index uint32
-	Value float64
+type balance struct {
+	amount string `json:"amount"`
+}
+
+type nonce struct {
+	nonce         uint64 `json:"nonce"`
+	nonceInTxPool uint64 `json:"nonceInTxPool"`
 }
 
 func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
@@ -43,28 +45,17 @@ func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
 }
 
 func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
-	ct, err := contract.CreateSignatureContract(w.account.PublicKey)
+	ct, err := program.CreateSignatureProgramContext(w.account.PublicKey)
 	if err != nil {
 		return err
-	}
-	ctx := &contract.ContractContext{
-		Data:            tx,
-		ProgramHashes:   []common.Uint160{ct.ProgramHash},
-		Codes:           make([][]byte, 1),
-		Parameters:      make([][][]byte, 1),
-		MultiPubkeyPara: make([][]contract.PubkeyParameter, 1),
 	}
 
 	sig, err := signature.SignBySigner(tx, w.account)
 	if err != nil {
 		return err
 	}
-	err = ctx.AddContract(ct, w.account.PublicKey, sig)
-	if err != nil {
-		return err
-	}
 
-	tx.SetPrograms(ctx.GetPrograms())
+	tx.SetPrograms([]*pb.Program{ct.NewProgram(sig)})
 	return nil
 }
 
@@ -82,36 +73,39 @@ func (w *WalletSDK) sendRawTransaction(tx *transaction.Transaction) (string, err
 	return txid, nil, 0
 }
 
-func (w *WalletSDK) getUTXO(address string) ([]*transaction.UTXOUnspent, error) {
-	var utxoInfoList []utxoUnspentInfo
-	err, _ := call(w.config.SeedRPCServerAddr, "getunspendoutput", map[string]interface{}{"address": address, "assetid": AssetId.ToHexString()}, &utxoInfoList)
+func (w *WalletSDK) getNonce() (uint64, error) {
+	address, err := w.account.ProgramHash.ToAddress()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 
-	utxoList := make([]*transaction.UTXOUnspent, len(utxoInfoList))
-	for i, v := range utxoInfoList {
-		txidBytes, err := common.HexStringToBytesReverse(v.Txid)
-		if err != nil {
-			return nil, err
-		}
-		txid, err := common.Uint256ParseFromBytes(txidBytes)
-		if err != nil {
-			return nil, err
-		}
-		val := common.Fixed64(v.Value * math.Pow(10, 8))
-		utxoList[i] = &transaction.UTXOUnspent{
-			Txid:  txid,
-			Index: v.Index,
-			Value: val,
-		}
+	var nonce nonce
+	err, _ = call(w.config.SeedRPCServerAddr, "getnoncebyaddr", map[string]interface{}{"address": address}, &nonce)
+	if err != nil {
+		return 0, err
 	}
 
-	sort.SliceStable(utxoList, func(i, j int) bool {
-		return utxoList[i].Value < utxoList[j].Value
-	})
+	if nonce.nonceInTxPool > nonce.nonce {
+		return nonce.nonceInTxPool, nil
+	}
+	return nonce.nonce, nil
+}
 
-	return utxoList, nil
+func (w *WalletSDK) getHeight() (uint32, error) {
+	var height uint32
+	err, _ := call(w.config.SeedRPCServerAddr, "getlatestblockheight", map[string]interface{}{}, &height)
+	if err != nil {
+		return 0, err
+	}
+
+	return height, nil
+}
+
+func getFee(fee []string) (common.Fixed64, error) {
+	if len(fee) == 0 {
+		return 0, nil
+	}
+	return common.StringToFixed64(fee[0])
 }
 
 func (w *WalletSDK) Balance() (common.Fixed64, error) {
@@ -119,21 +113,16 @@ func (w *WalletSDK) Balance() (common.Fixed64, error) {
 	if err != nil {
 		return common.Fixed64(-1), err
 	}
-	utxoList, err := w.getUTXO(address)
+	var balance balance
+	err, _ = call(w.config.SeedRPCServerAddr, "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
 	if err != nil {
-		return common.Fixed64(-1), err
+		return 0, err
 	}
 
-	result := common.Fixed64(0)
-
-	for _, input := range utxoList {
-		result += input.Value
-	}
-
-	return result, nil
+	return common.StringToFixed64(balance.amount)
 }
 
-func (w *WalletSDK) Transfer(address string, value string) (string, error) {
+func (w *WalletSDK) Transfer(address string, value string, fee... string) (string, error) {
 	outputValue, err := common.StringToFixed64(value)
 	if err != nil {
 		return "", err
@@ -142,46 +131,44 @@ func (w *WalletSDK) Transfer(address string, value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	output := []*transaction.TxnOutput{{
-		AssetID:     AssetId,
-		Value:       outputValue,
-		ProgramHash: programHash,
-	}}
 
-	utxoList, err := w.getUTXO(address)
+	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
 	}
-	var expected common.Fixed64
-	var input []*transaction.TxnInput
-	for _, item := range utxoList {
-		tmpInput := &transaction.TxnInput{
-			ReferTxID:          item.Txid,
-			ReferTxOutputIndex: uint16(item.Index),
-		}
-		input = append(input, tmpInput)
-		if item.Value > expected {
-			changes := &transaction.TxnOutput{
-				AssetID:     AssetId,
-				Value:       item.Value - expected,
-				ProgramHash: w.account.ProgramHash,
-			}
-			output = append(output, changes)
-			expected = 0
-			break
-		} else if item.Value == expected {
-			expected = 0
-			break
-		} else if item.Value < expected {
-			expected = expected - item.Value
-		}
+
+	nonce, err := w.getNonce()
+	if err != nil {
+		return "", err
 	}
 
-	if expected > 0 {
-		return "", errors.New("token is not enough")
+	tx, err := transaction.NewTransferAssetTransaction(w.account.ProgramHash, programHash, nonce, outputValue, _fee)
+	if err != nil {
+		return "", err
 	}
 
-	tx, err := transaction.NewTransferAssetTransaction(input, output)
+	id, err, _ := w.sendRawTransaction(tx)
+	return id, err
+}
+
+func (w *WalletSDK) NewNanoPay(address string) (*NanoPay, error) {
+	programHash, err := common.ToScriptHash(address)
+	if err != nil {
+		return nil, err
+	}
+	return NewNanoPay(w, programHash), nil
+}
+
+func (w *WalletSDK) RegisterName(name string, fee... string) (string, error) {
+	_fee, err := getFee(fee)
+	if err != nil {
+		return "", err
+	}
+	nonce, err := w.getNonce()
+	if err != nil {
+		return "", err
+	}
+	tx, err := transaction.NewRegisterNameTransaction(w.account.PublicKey.EncodePoint(), name, nonce, _fee)
 	if err != nil {
 		return "", err
 	}
@@ -189,25 +176,16 @@ func (w *WalletSDK) Transfer(address string, value string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) RegisterName(name string) (string, error) {
-	registrant, err := w.account.PublicKey.EncodePoint(true)
+func (w *WalletSDK) DeleteName(name string, fee... string) (string, error) {
+	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
 	}
-	tx, err := transaction.NewRegisterNameTransaction(registrant, name)
+	nonce, err := w.getNonce()
 	if err != nil {
 		return "", err
 	}
-	id, err, _ := w.sendRawTransaction(tx)
-	return id, err
-}
-
-func (w *WalletSDK) DeleteName(name string) (string, error) {
-	registrant, err := w.account.PublicKey.EncodePoint(true)
-	if err != nil {
-		return "", err
-	}
-	tx, err := transaction.NewDeleteNameTransaction(registrant, name)
+	tx, err := transaction.NewDeleteNameTransaction(w.account.PublicKey.EncodePoint(), name, nonce, _fee)
 	if err != nil {
 		return "", err
 	}
@@ -215,28 +193,37 @@ func (w *WalletSDK) DeleteName(name string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) subscribe(identifier string, topic string, bucket uint32, duration uint32, meta ...string) (string, error, int32) {
-	var _meta string
-	if len(meta) > 0 {
-		_meta = meta[0]
-	}
-	subscriber, err := w.account.PublicKey.EncodePoint(true)
+func (w *WalletSDK) subscribe(identifier string, topic string, bucket uint32, duration uint32, meta string, fee... string) (string, error, int32) {
+	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err, -1
 	}
-	tx, err := transaction.NewSubscribeTransaction(subscriber, identifier, topic, bucket, duration, _meta)
+	nonce, err := w.getNonce()
+	if err != nil {
+		return "", err, -1
+	}
+	tx, err := transaction.NewSubscribeTransaction(
+		w.account.PublicKey.EncodePoint(),
+		identifier,
+		topic,
+		bucket,
+		duration,
+		meta,
+		nonce,
+		_fee,
+	)
 	if err != nil {
 		return "", err, -1
 	}
 	return w.sendRawTransaction(tx)
 }
 
-func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32, meta ...string) (string, error) {
-	id, err, _ := w.subscribe(identifier, topic, bucket, duration, meta...)
+func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32, meta string, fee... string) (string, error) {
+	id, err, _ := w.subscribe(identifier, topic, bucket, duration, meta, fee...)
 	return id, err
 }
 
-func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32, meta ...string) (string, error) {
+func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32, meta string, fee... string) (string, error) {
 	for {
 		bucket, err := w.GetFirstAvailableTopicBucket(topic)
 		if err != nil {
@@ -245,7 +232,7 @@ func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic str
 		if bucket == -1 {
 			return "", errors.New("no more free buckets")
 		}
-		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration, meta...)
+		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration, meta, fee...)
 		if err != nil && code == 45018 {
 			continue
 		}

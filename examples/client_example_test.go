@@ -1,21 +1,22 @@
-package main
+package examples
 
 import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"testing"
 	"time"
 
-	. "github.com/nknorg/nkn-sdk-go"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/vault"
+	. "github.com/nknorg/nkn-sdk-go"
 )
 
-func main() {
+func TestClient(t *testing.T) {
 	err := func () error {
 		Init()
 
-		privateKey, _ := common.HexStringToBytes("cd5fa29ed5b0e951f3d1bce5997458706186320f1dd89156a73d54ed752a7f37")
+		privateKey, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c67352dff44c21790d9edef7a7e3fc9bd7254359246d0ae605a3c97e71aad83d6b0d")
 		account, err := vault.NewAccountWithPrivatekey(privateKey)
 		if err != nil {
 			return err
@@ -56,6 +57,9 @@ func main() {
 		msg := <- toClient.OnMessage
 		timeReceived := time.Now().UnixNano() / int64(time.Millisecond)
 		log.Println("Receive message", "\"" + string(msg.Payload) + "\"", "from", msg.Src, "after", timeReceived - timeSent, "ms")
+
+		// wait to send receipt
+		time.Sleep(time.Second)
 
 		return nil
 	}()
