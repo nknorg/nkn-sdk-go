@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -34,7 +35,6 @@ type Client struct {
 	Address   string
 	addressId []byte
 	urlString string
-	conn      *websocket.Conn
 	closed    bool
 	OnConnect chan struct{}
 	OnMessage chan *pb.InboundMessage
@@ -42,6 +42,9 @@ type Client struct {
 
 	nodeInfo          *NodeInfo
 	sigChainBlockHash string
+
+	sync.Mutex
+	conn *websocket.Conn
 }
 
 type NodeInfo struct {
@@ -232,8 +235,8 @@ func NewClient(account *vault.Account, identifier string, config ...ClientConfig
 		}
 	}
 	c := Client{
-		config: _config,
-		account: account,
+		config:    _config,
+		account:   account,
 		publicKey: account.PubKey().EncodePoint(),
 	}
 	c.Address = address.MakeAddressString(c.publicKey, identifier)
@@ -278,6 +281,9 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	if err != nil {
 		return err
 	}
+
+	c.Lock()
+	defer c.Unlock()
 	return c.conn.WriteMessage(websocket.BinaryMessage, clientMsgData)
 }
 
@@ -304,11 +310,11 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 	nonce := randUint32()
 
 	sigChain := pb.SigChain{
-		Nonce:      nonce,
-		DataSize:   uint32(len(payload)),
-		SrcId:      c.addressId,
-		SrcPubkey:  c.publicKey,
-		Elems:      []*pb.SigChainElem{sigChainElem},
+		Nonce:     nonce,
+		DataSize:  uint32(len(payload)),
+		SrcId:     c.addressId,
+		SrcPubkey: c.publicKey,
+		Elems:     []*pb.SigChainElem{sigChainElem},
 	}
 
 	if c.sigChainBlockHash != "" {
@@ -350,7 +356,7 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 	if err != nil {
 		return err
 	}
-	
+
 	clientMsg := &pb.ClientMessage{
 		MessageType: pb.OUTBOUND_MESSAGE,
 		Message:     outboundMsgData,
@@ -361,6 +367,8 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 		return err
 	}
 
+	c.Lock()
+	defer c.Unlock()
 	return c.conn.WriteMessage(websocket.BinaryMessage, clientMsgData)
 }
 
