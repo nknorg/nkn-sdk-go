@@ -55,8 +55,8 @@ type Client struct {
 
 type NodeInfo struct {
 	Address   string `json:"addr"`
-	PublicKey []byte `json:"pubkey"`
-	Id        []byte `json:"id"`
+	PublicKey string `json:"pubkey"`
+	Id        string `json:"id"`
 }
 
 type SetClientResult struct {
@@ -219,11 +219,13 @@ func (c *Client) connect() error {
 						default:
 							log.Println("Message chan full, discarding msg")
 						}
-						go func() {
-							if err := c.sendReceipt(inboundMsg.PrevSignature); err != nil {
-								log.Println(err)
-							}
-						}()
+						if len(inboundMsg.PrevSignature) > 0 {
+							go func() {
+								if err := c.sendReceipt(inboundMsg.PrevSignature); err != nil {
+									log.Println(err)
+								}
+							}()
+						}
 					}
 				}
 			}
@@ -330,8 +332,12 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 		outboundMsg.MaxHoldingSeconds = MaxHoldingSeconds[0]
 	}
 
+	nodePk, err := hex.DecodeString(c.nodeInfo.PublicKey)
+	if err != nil {
+		return err
+	}
 	sigChainElem := &pb.SigChainElem{
-		NextPubkey: c.nodeInfo.PublicKey,
+		NextPubkey: nodePk,
 	}
 	buff := bytes.NewBuffer(nil)
 	if err := sigChainElem.SerializationUnsigned(buff); err != nil {
