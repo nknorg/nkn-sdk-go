@@ -20,12 +20,18 @@ import (
 	"github.com/pkg/errors"
 )
 
-var reconnectInterval time.Duration = 1
+const (
+	defaultReconnectInterval time.Duration = 1
+	defaultMsgChanLen                      = 1024
+	defaultBlockChanLen                    = 1
+)
 
 type ClientConfig struct {
 	SeedRPCServerAddr string
 	ReconnectInterval time.Duration
 	MaxHoldingSeconds uint32
+	MsgChanLen        uint32
+	BlockChanLen      uint32
 }
 
 type Client struct {
@@ -119,9 +125,9 @@ func (c *Client) connect() error {
 	}
 
 	c.conn = conn
-	c.OnConnect = make(chan struct{})
-	c.OnMessage = make(chan *pb.InboundMessage)
-	c.OnBlock = make(chan *BlockInfo)
+	c.OnConnect = make(chan struct{}, 1)
+	c.OnMessage = make(chan *pb.InboundMessage, c.config.MsgChanLen)
+	c.OnBlock = make(chan *BlockInfo, c.config.BlockChanLen)
 
 	go func() {
 		defer func() {
@@ -136,7 +142,10 @@ func (c *Client) connect() error {
 			req := make(map[string]interface{})
 			req["Action"] = "setClient"
 			req["Addr"] = c.Address
-			if err := conn.WriteJSON(req); err != nil {
+			c.Lock()
+			err := conn.WriteJSON(req)
+			c.Unlock()
+			if err != nil {
 				return err
 			}
 
@@ -173,7 +182,10 @@ func (c *Client) connect() error {
 							return err
 						}
 						c.sigChainBlockHash = setClientResult.SigChainBlockHash
-						c.OnConnect <- struct{}{}
+						select {
+						case c.OnConnect <- struct{}{}:
+						default:
+						}
 					case "updateSigChainBlockHash":
 						var sigChainBlockHash string
 						if err := json.Unmarshal(*msg["Result"], &sigChainBlockHash); err != nil {
@@ -185,7 +197,11 @@ func (c *Client) connect() error {
 						if err := json.Unmarshal(*msg["Result"], &blockInfo); err != nil {
 							return err
 						}
-						c.OnBlock <- &blockInfo
+						select {
+						case c.OnBlock <- &blockInfo:
+						default:
+							log.Println("Block chan full, discarding block")
+						}
 					}
 				case websocket.BinaryMessage:
 					clientMsg := &pb.ClientMessage{}
@@ -198,7 +214,11 @@ func (c *Client) connect() error {
 						if err := proto.Unmarshal(clientMsg.Message, inboundMsg); err != nil {
 							return err
 						}
-						c.OnMessage <- inboundMsg
+						select {
+						case c.OnMessage <- inboundMsg:
+						default:
+							log.Println("Message chan full, discarding msg")
+						}
 						go func() {
 							if err := c.sendReceipt(inboundMsg.PrevSignature); err != nil {
 								log.Println(err)
@@ -224,14 +244,26 @@ func (c *Client) connect() error {
 func NewClient(account *vault.Account, identifier string, config ...ClientConfig) (*Client, error) {
 	var _config ClientConfig
 	if len(config) == 0 {
-		_config = ClientConfig{seedRPCServerAddr, reconnectInterval, 0}
+		_config = ClientConfig{
+			SeedRPCServerAddr: seedRPCServerAddr,
+			ReconnectInterval: defaultReconnectInterval,
+			MaxHoldingSeconds: 0,
+			MsgChanLen:        defaultMsgChanLen,
+			BlockChanLen:      defaultBlockChanLen,
+		}
 	} else {
 		_config = config[0]
 		if _config.SeedRPCServerAddr == "" {
 			_config.SeedRPCServerAddr = seedRPCServerAddr
 		}
 		if _config.ReconnectInterval == 0 {
-			_config.ReconnectInterval = reconnectInterval
+			_config.ReconnectInterval = defaultReconnectInterval
+		}
+		if _config.MsgChanLen == 0 {
+			_config.MsgChanLen = defaultMsgChanLen
+		}
+		if _config.BlockChanLen == 0 {
+			_config.BlockChanLen = defaultBlockChanLen
 		}
 	}
 	c := Client{
