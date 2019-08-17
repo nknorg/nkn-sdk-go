@@ -24,6 +24,8 @@ const (
 	defaultReconnectInterval time.Duration = 1
 	defaultMsgChanLen                      = 1024
 	defaultBlockChanLen                    = 1
+	defaultConnectRetries                  = 3
+	handshakeTimeout                       = 5 * time.Second
 )
 
 type ClientConfig struct {
@@ -32,6 +34,7 @@ type ClientConfig struct {
 	MaxHoldingSeconds uint32
 	MsgChanLen        uint32
 	BlockChanLen      uint32
+	ConnectRetries    uint32
 }
 
 type Client struct {
@@ -102,7 +105,11 @@ type BlockInfo struct {
 	Hash         string     `json:"hash"`
 }
 
-func (c *Client) connect() error {
+func (c *Client) connect(retry uint32) error {
+	if retry > c.config.ConnectRetries {
+		return errors.New("Connect failed")
+	}
+
 	conn, err := func() (*websocket.Conn, error) {
 		var nodeInfo *NodeInfo
 		err, _ := call(c.config.SeedRPCServerAddr, "getwsaddr", map[string]interface{}{"address": c.Address}, &nodeInfo)
@@ -112,7 +119,9 @@ func (c *Client) connect() error {
 		c.nodeInfo = nodeInfo
 		c.urlString = (&url.URL{Scheme: "ws", Host: nodeInfo.Address}).String()
 
-		conn, _, err := websocket.DefaultDialer.Dial(c.urlString, nil)
+		dialer := websocket.DefaultDialer
+		dialer.HandshakeTimeout = handshakeTimeout
+		conn, _, err := dialer.Dial(c.urlString, nil)
 		return conn, err
 	}()
 
@@ -121,7 +130,7 @@ func (c *Client) connect() error {
 
 		time.Sleep(c.config.ReconnectInterval * time.Second)
 
-		return c.connect()
+		return c.connect(retry + 1)
 	}
 
 	c.conn = conn
@@ -236,7 +245,7 @@ func (c *Client) connect() error {
 		}
 
 		if !c.closed {
-			defer c.connect()
+			defer c.connect(0)
 		}
 	}()
 
@@ -252,6 +261,7 @@ func NewClient(account *vault.Account, identifier string, config ...ClientConfig
 			MaxHoldingSeconds: 0,
 			MsgChanLen:        defaultMsgChanLen,
 			BlockChanLen:      defaultBlockChanLen,
+			ConnectRetries:    defaultConnectRetries,
 		}
 	} else {
 		_config = config[0]
@@ -277,7 +287,7 @@ func NewClient(account *vault.Account, identifier string, config ...ClientConfig
 	addressId := sha256.Sum256([]byte(c.Address))
 	c.addressId = addressId[:]
 
-	err := c.connect()
+	err := c.connect(0)
 	if err != nil {
 		return nil, err
 	}
