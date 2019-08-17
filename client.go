@@ -44,7 +44,6 @@ type Client struct {
 	Address   string
 	addressId []byte
 	urlString string
-	closed    bool
 	OnConnect chan struct{}
 	OnMessage chan *pb.InboundMessage
 	OnBlock   chan *BlockInfo
@@ -52,8 +51,9 @@ type Client struct {
 	nodeInfo          *NodeInfo
 	sigChainBlockHash string
 
-	sync.Mutex
-	conn *websocket.Conn
+	sync.RWMutex
+	closed bool
+	conn   *websocket.Conn
 }
 
 type NodeInfo struct {
@@ -125,7 +125,7 @@ func (c *Client) connect(retry uint32) error {
 		return conn, err
 	}()
 
-	if err != nil && !c.closed {
+	if err != nil && !c.IsClosed() {
 		log.Println(err)
 
 		time.Sleep(c.config.ReconnectInterval * time.Second)
@@ -139,13 +139,7 @@ func (c *Client) connect(retry uint32) error {
 	c.OnBlock = make(chan *BlockInfo, c.config.BlockChanLen)
 
 	go func() {
-		defer func() {
-			close(c.OnConnect)
-			close(c.OnMessage)
-			close(c.OnBlock)
-
-			_ = c.conn.Close()
-		}()
+		defer c.Close()
 
 		err := func() error {
 			req := make(map[string]interface{})
@@ -244,7 +238,7 @@ func (c *Client) connect(retry uint32) error {
 			log.Println(err)
 		}
 
-		if !c.closed {
+		if !c.IsClosed() {
 			defer c.connect(0)
 		}
 	}()
@@ -432,9 +426,20 @@ func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHolding
 	return c.Send(dests, payload, MaxHoldingSeconds...)
 }
 
+func (c *Client) IsClosed() bool {
+	c.RLock()
+	defer c.RUnlock()
+	return c.closed
+}
+
 func (c *Client) Close() {
+	c.Lock()
+	defer c.Unlock()
 	if !c.closed {
 		c.closed = true
-		_ = c.conn.Close()
+		close(c.OnConnect)
+		close(c.OnMessage)
+		close(c.OnBlock)
+		c.conn.Close()
 	}
 }
