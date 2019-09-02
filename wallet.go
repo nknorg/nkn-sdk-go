@@ -22,6 +22,11 @@ type WalletSDK struct {
 	config  WalletConfig
 }
 
+type Subscription struct {
+	Meta      string
+	ExpiresAt uint32
+}
+
 type balance struct {
 	amount string `json:"amount"`
 }
@@ -59,7 +64,7 @@ func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
 	return nil
 }
 
-func (w *WalletSDK) sendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
+func (w *WalletSDK) SendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
 	err := w.signTransaction(tx)
 	if err != nil {
 		return "", err, -1
@@ -113,8 +118,12 @@ func (w *WalletSDK) Balance() (common.Fixed64, error) {
 	if err != nil {
 		return common.Fixed64(-1), err
 	}
+	return w.BalanceByAddress(address)
+}
+
+func (w *WalletSDK) BalanceByAddress(address string) (common.Fixed64, error) {
 	var balance balance
-	err, _ = call(w.config.SeedRPCServerAddr, "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
+	err, _ := call(w.config.SeedRPCServerAddr, "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
 	if err != nil {
 		return 0, err
 	}
@@ -122,7 +131,7 @@ func (w *WalletSDK) Balance() (common.Fixed64, error) {
 	return common.StringToFixed64(balance.amount)
 }
 
-func (w *WalletSDK) Transfer(address string, value string, fee... string) (string, error) {
+func (w *WalletSDK) Transfer(address string, value string, fee ...string) (string, error) {
 	outputValue, err := common.StringToFixed64(value)
 	if err != nil {
 		return "", err
@@ -147,7 +156,7 @@ func (w *WalletSDK) Transfer(address string, value string, fee... string) (strin
 		return "", err
 	}
 
-	id, err, _ := w.sendRawTransaction(tx)
+	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
 
@@ -159,7 +168,7 @@ func (w *WalletSDK) NewNanoPay(address string) (*NanoPay, error) {
 	return NewNanoPay(w, programHash), nil
 }
 
-func (w *WalletSDK) RegisterName(name string, fee... string) (string, error) {
+func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
@@ -172,11 +181,11 @@ func (w *WalletSDK) RegisterName(name string, fee... string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	id, err, _ := w.sendRawTransaction(tx)
+	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
 
-func (w *WalletSDK) DeleteName(name string, fee... string) (string, error) {
+func (w *WalletSDK) DeleteName(name string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
@@ -189,58 +198,56 @@ func (w *WalletSDK) DeleteName(name string, fee... string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	id, err, _ := w.sendRawTransaction(tx)
+	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
 
-func (w *WalletSDK) subscribe(identifier string, topic string, bucket uint32, duration uint32, meta string, fee... string) (string, error, int32) {
+func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, meta string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
-		return "", err, -1
+		return "", err
 	}
 	nonce, err := w.getNonce()
 	if err != nil {
-		return "", err, -1
+		return "", err
 	}
 	tx, err := transaction.NewSubscribeTransaction(
 		w.account.PublicKey.EncodePoint(),
 		identifier,
 		topic,
-		bucket,
 		duration,
 		meta,
 		nonce,
 		_fee,
 	)
 	if err != nil {
-		return "", err, -1
+		return "", err
 	}
-	return w.sendRawTransaction(tx)
-}
-
-func (w *WalletSDK) Subscribe(identifier string, topic string, bucket uint32, duration uint32, meta string, fee... string) (string, error) {
-	id, err, _ := w.subscribe(identifier, topic, bucket, duration, meta, fee...)
+	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
 
-func (w *WalletSDK) SubscribeToFirstAvailableBucket(identifier string, topic string, duration uint32, meta string, fee... string) (string, error) {
-	for {
-		bucket, err := w.GetFirstAvailableTopicBucket(topic)
-		if err != nil {
-			return "", err
-		}
-		if bucket == -1 {
-			return "", errors.New("no more free buckets")
-		}
-		id, err, code := w.subscribe(identifier, topic, uint32(bucket), duration, meta, fee...)
-		if err != nil && code == 45018 {
-			continue
-		}
-		if err != nil && code == 45020 {
-			return "", AlreadySubscribed
-		}
-		return id, err
+func (w *WalletSDK) Unsubscribe(identifier string, topic string, fee ...string) (string, error) {
+	_fee, err := getFee(fee)
+	if err != nil {
+		return "", err
 	}
+	nonce, err := w.getNonce()
+	if err != nil {
+		return "", err
+	}
+	tx, err := transaction.NewUnsubscribeTransaction(
+		w.account.PublicKey.EncodePoint(),
+		identifier,
+		topic,
+		nonce,
+		_fee,
+	)
+	if err != nil {
+		return "", err
+	}
+	id, err, _ := w.SendRawTransaction(tx)
+	return id, err
 }
 
 func (w *WalletSDK) GetAddressByName(name string) (string, error) {
@@ -252,33 +259,63 @@ func (w *WalletSDK) GetAddressByName(name string) (string, error) {
 	return address, nil
 }
 
-func getSubscribers(address string, topic string, bucket uint32) (map[string]string, error) {
-	var dests map[string]string
-	err, _ := call(address, "getsubscribers", map[string]interface{}{"topic": topic, "bucket": bucket}, &dests)
+func (w *WalletSDK) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+	var subscription *Subscription
+	err, _ := call(w.config.SeedRPCServerAddr, "getsubscription", map[string]interface{}{
+		"topic":      topic,
+		"subscriber": subscriber,
+	}, &subscription)
 	if err != nil {
 		return nil, err
 	}
-	return dests, nil
+	return subscription, nil
 }
 
-func (w *WalletSDK) GetSubscribers(topic string, bucket uint32) (map[string]string, error) {
-	return getSubscribers(w.config.SeedRPCServerAddr, topic, bucket)
-}
-
-func (w *WalletSDK) GetFirstAvailableTopicBucket(topic string) (int, error) {
-	var bucket int
-	err, _ := call(w.config.SeedRPCServerAddr, "getfirstavailabletopicbucket", map[string]interface{}{"topic": topic}, &bucket)
+func getSubscribers(address string, topic string, offset, limit uint32, meta, txPool bool) (map[string]string, map[string]string, error) {
+	var result map[string]interface{}
+	err, _ := call(address, "getsubscribers", map[string]interface{}{
+		"topic":  topic,
+		"offset": offset,
+		"limit":  limit,
+		"meta":   meta,
+		"txPool": txPool,
+	}, &result)
 	if err != nil {
-		return -1, err
+		return nil, nil, err
 	}
-	return bucket, nil
+	subscribers := make(map[string]string)
+	subscribersInTxPool := make(map[string]string)
+	if meta {
+		for subscriber, meta := range result["subscribers"].(map[string]interface{}) {
+			subscribers[subscriber] = meta.(string)
+		}
+		if txPool {
+			for subscriber, meta := range result["subscribersInTxPool"].(map[string]interface{}) {
+				subscribersInTxPool[subscriber] = meta.(string)
+			}
+		}
+	} else {
+		for _, subscriber := range result["subscribers"].([]interface{}) {
+			subscribers[subscriber.(string)] = ""
+		}
+		if txPool {
+			for _, subscriber := range result["subscribersInTxPool"].([]interface{}) {
+				subscribersInTxPool[subscriber.(string)] = ""
+			}
+		}
+	}
+	return subscribers, subscribersInTxPool, nil
 }
 
-func (w *WalletSDK) GetTopicBucketsCount(topic string) (uint32, error) {
-	var bucket uint32
-	err, _ := call(w.config.SeedRPCServerAddr, "gettopicbucketscount", map[string]interface{}{"topic": topic}, &bucket)
-	if err != nil {
-		return 0, err
-	}
-	return bucket, nil
+func (w *WalletSDK) GetSubscribers(topic string, offset, limit uint32, meta, txPool bool) (map[string]string, map[string]string, error) {
+	return getSubscribers(w.config.SeedRPCServerAddr, topic, offset, limit, meta, txPool)
 }
+
+func (w *WalletSDK) GetSubscribersCount(topic string) (uint32, error) {
+	var count uint32
+	err, _ := call(w.config.SeedRPCServerAddr, "getsubscriberscount", map[string]interface{}{
+		"topic":      topic,
+	}, &count)
+	return count, err
+}
+

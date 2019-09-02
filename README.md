@@ -114,12 +114,21 @@ account, _ := vault.NewAccount()
 w := NewWalletSDK(account, WalletConfig{SeedRPCServerAddr: "https://ip:port"})
 ```
 
-
 Query asset balance for this wallet:
 ```go
 balance, err := w.Balance()
 if err == nil {
-    log.Println("asset balance for this wallet is:", balance.String())
+    log.Println("asset balance:", balance.String())
+} else {
+    log.Println("query balance fail:", err)
+}
+```
+
+Query asset balance for address:
+```go
+balance, err := w.BalanceByAddress("address")
+if err == nil {
+    log.Println("asset balance:", balance.String())
 } else {
     log.Println("query balance fail:", err)
 }
@@ -176,44 +185,45 @@ if err == nil {
 }
 ```
 
-Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks:
-```go
-txid, err = w.Subscribe("identifier", "topic", 0, 10, "meta")
-if err == nil {
-    log.Println("success:", txid)
-} else {
-    log.Println("fail:", err)
-}
-```
-
-Subscribe to first available bucket of specified topic for this wallet for next 10 blocks:
-```go
-txid, err = w.SubscribeToFirstAvailableBucket("identifier", "topic", 10, "meta")
-if err == nil {
-    log.Println("success:", txid)
-} else {
-    log.Println("fail:", err)
-}
-```
-
 Resolve name to wallet address:
 ```go
 address, _ := w.GetAddressByName("somename")
 ```
 
-Get subscribers of bucket 0 of specified topic:
+Subscribe to specified topic for this wallet for next 10 blocks:
 ```go
-subscribers, _ := w.GetSubscribers("topic", 0)
+txid, err = w.Subscribe("identifier", "topic", 10, "meta")
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
 ```
 
-Get first available bucket of specified topic:
+Unsubscribe from specified topic:
 ```go
-bucket, _ := w.GetFirstAvailableTopicBucket("topic")
+txid, err = w.Unsubscribe("identifier", "topic")
+if err == nil {
+    log.Println("success:", txid)
+} else {
+    log.Println("fail:", err)
+}
 ```
 
-Get buckets count of specified topic:
+Get subscription:
 ```go
-bucket, _ := w.GetTopicBucketsCount("topic")
+subscription, _ := w.GetSubscription("topic", "identifier.publickey")
+fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
+```
+
+Get 10 subscribers of specified topic starting from 0 offset, including those in tx pool (fetch meta):
+```go
+subscribers, subscribersInTxPool, _ := w.GetSubscribers("topic", 0, 10, true, true)
+```
+
+Get subscribers count for specified topic:
+```go
+count, _ := w.GetSubscribersCount("topic")
 ```
 
 ## Contributing

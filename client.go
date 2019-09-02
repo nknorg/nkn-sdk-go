@@ -532,10 +532,13 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 	return err
 }
 
-func (c *Client) Publish(topic string, bucket uint32, payload []byte, MaxHoldingSeconds ...uint32) error {
-	subscribers, err := getSubscribers(c.config.SeedRPCServerAddr, topic, bucket)
-	dests := make([]string, 0, len(subscribers))
+func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, payload []byte, MaxHoldingSeconds ...uint32) error {
+	subscribers, subscribersInTxPool, err := getSubscribers(c.config.SeedRPCServerAddr, topic, offset, limit, false, txPool)
+	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
+		dests = append(dests, subscriber)
+	}
+	for subscriber, _ := range subscribersInTxPool {
 		dests = append(dests, subscriber)
 	}
 	if err != nil {
