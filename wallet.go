@@ -2,6 +2,7 @@ package nkn_sdk_go
 
 import (
 	"errors"
+	"time"
 
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/pb"
@@ -160,12 +161,16 @@ func (w *WalletSDK) Transfer(address string, value string, fee ...string) (strin
 	return id, err
 }
 
-func (w *WalletSDK) NewNanoPay(address string) (*NanoPay, error) {
+func (w *WalletSDK) NewNanoPay(address string, duration ...uint32) (*NanoPay, error) {
 	programHash, err := common.ToScriptHash(address)
 	if err != nil {
 		return nil, err
 	}
-	return NewNanoPay(w, programHash), nil
+	return NewNanoPay(w, programHash, duration...), nil
+}
+
+func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error) *NanoPayClaimer {
+	return NewNanoPayClaimer(w, claimInterval, errChan)
 }
 
 func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {

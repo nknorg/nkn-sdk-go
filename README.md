@@ -147,6 +147,9 @@ if err == nil {
 
 Open nano pay channel to specified address:
 ```go
+// you can optionally pass channel duration after address (default is 4320 blocks, roughly 24h)
+// after expired new channel (with new id) will be created under-the-hood
+// this means that receiver need to claim old channel and reset amount calculation
 np, err := w.NewNanoPay(address)
 if err == nil {
     log.Println("success:", txid)
@@ -155,9 +158,9 @@ if err == nil {
 }
 ```
 
-Send 100 NKN into channel with claim available for next 100 blocks and channel open for next 200 blocks
+Increment channel balance by 100 NKN:
 ```go
-txid, err = np.Send("100", 100, 200)
+txid, err = np.IncrementAmount("100")
 if err == nil {
     log.Println("success:", txid)
 } else {
