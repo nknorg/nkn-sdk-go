@@ -31,13 +31,14 @@ client, _ := NewClient(account, "any string")
 Get client key pair:
 
 ```go
-fmt.PrintLn(account.PrivateKey, account.PublicKey)
+fmt.Println(account.PrivateKey, account.PublicKey)
 ```
 
-Create a client using an existing private key:
+Create a client using an existing seed:
 
 ```go
-privateKey, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c67352dff44c21790d9edef7a7e3fc9bd7254359246d0ae605a3c97e71aad83d6b0d")
+seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
+privateKey := crypto.GetPrivateKeyFromSeed(seed)
 account, _ := vault.NewAccountWithPrivatekey(privateKey)
 client, _ := NewClient(account, "any string")
 ```
@@ -155,7 +156,7 @@ if err == nil {
 }
 ```
 		
-Register name for this wallet (only a-z and length 8-12):
+Register name for this wallet:
 ```go
 txid, err = w.RegisterName("somename")
 if err == nil {

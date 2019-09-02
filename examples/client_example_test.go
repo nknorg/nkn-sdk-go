@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nknorg/nkn/common"
+	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/vault"
 	. "github.com/nknorg/nkn-sdk-go"
 )
@@ -16,7 +17,8 @@ func TestClient(t *testing.T) {
 	err := func () error {
 		Init()
 
-		privateKey, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c67352dff44c21790d9edef7a7e3fc9bd7254359246d0ae605a3c97e71aad83d6b0d")
+		seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
+		privateKey := crypto.GetPrivateKeyFromSeed(seed)
 		account, err := vault.NewAccountWithPrivatekey(privateKey)
 		if err != nil {
 			return err
