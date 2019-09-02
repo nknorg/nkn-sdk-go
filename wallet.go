@@ -33,8 +33,8 @@ type balance struct {
 }
 
 type nonce struct {
-	nonce         uint64 `json:"nonce"`
-	nonceInTxPool uint64 `json:"nonceInTxPool"`
+	Nonce         uint64 `json:"nonce"`
+	NonceInTxPool uint64 `json:"nonceInTxPool"`
 }
 
 func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
@@ -91,10 +91,10 @@ func (w *WalletSDK) getNonce() (uint64, error) {
 		return 0, err
 	}
 
-	if nonce.nonceInTxPool > nonce.nonce {
-		return nonce.nonceInTxPool, nil
+	if nonce.NonceInTxPool > nonce.Nonce {
+		return nonce.NonceInTxPool, nil
 	}
-	return nonce.nonce, nil
+	return nonce.Nonce, nil
 }
 
 func (w *WalletSDK) getHeight() (uint32, error) {
