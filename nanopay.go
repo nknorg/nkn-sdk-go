@@ -15,6 +15,7 @@ import (
 const defaultDuration = 4320
 
 type NanoPay struct {
+	sync.Mutex
 	w        *WalletSDK
 	address  string
 	receiver common.Uint160
@@ -61,6 +62,7 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	if err != nil {
 		return nil, err
 	}
+	np.Lock()
 	if np.expiration == 0 || np.expiration <= height+5 {
 		np.id = randUint64()
 		np.expiration = height + np.duration
@@ -68,10 +70,15 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	}
 	deltaValue, err := common.StringToFixed64(delta)
 	if err != nil {
+		np.Unlock()
 		return nil, err
 	}
 	np.amount += deltaValue
-	tx, err := transaction.NewNanoPayTransaction(np.w.account.ProgramHash, np.receiver, np.id, np.amount, np.expiration, np.expiration)
+	id := np.id
+	amount := np.amount
+	expiration := np.expiration
+	np.Unlock()
+	tx, err := transaction.NewNanoPayTransaction(np.w.account.ProgramHash, np.receiver, id, amount, expiration, expiration)
 	if err != nil {
 		return nil, err
 	}
