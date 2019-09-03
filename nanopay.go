@@ -90,18 +90,18 @@ func NewNanoPayClaimer(w *WalletSDK, claimInterval time.Duration, errChan chan e
 	npc := &NanoPayClaimer{w: w}
 	go func() {
 		for {
-			var height uint32
-			if npc.tx != nil && (npc.lastClaimTime.Add(claimInterval).After(time.Now()) || npc.expiration <= height+2) {
-				var err error
-				height, err = npc.w.getHeight()
-				if err != nil {
-					errChan <- err
-					time.Sleep(time.Second)
-					continue
-				}
+			if npc.closed {
+				break
+			}
+			var err error
+			height, err := npc.w.getHeight()
+			if err != nil {
+				errChan <- err
+				time.Sleep(time.Second)
+				continue
 			}
 			npc.Lock()
-			if npc.tx != nil && (npc.lastClaimTime.Add(claimInterval).After(time.Now()) || npc.expiration <= height+2) {
+			if npc.tx != nil && (npc.lastClaimTime.Add(claimInterval).Before(time.Now()) || npc.expiration <= height+2) {
 				if err := npc.flush(); err != nil {
 					errChan <- npc.closeWithError(err)
 					break
