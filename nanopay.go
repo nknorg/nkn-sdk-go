@@ -12,7 +12,24 @@ import (
 	"github.com/nknorg/nkn/transaction"
 )
 
-const defaultDuration = 4320
+const (
+	defaultDuration = 4320
+
+	// nano pay will be considered expired by the sender
+	// when it's less than specified amount of blocks
+	// until actual expiration
+	senderExpirationDelta = 5
+
+	// nano pay will be flushed on-chain
+	// when it's less than specified amount of blocks
+	// until actual expiration
+	forceFlushDelta = 2
+
+	// nano pay will be consider expired by the receiver
+	// when it's less than specified amount of blocks
+	// until actual expiration
+	receiverExpirationDelta = 3
+)
 
 type NanoPay struct {
 	sync.Mutex
@@ -63,7 +80,7 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 		return nil, err
 	}
 	np.Lock()
-	if np.expiration == 0 || np.expiration <= height+5 {
+	if np.expiration == 0 || np.expiration <= height+senderExpirationDelta {
 		np.id = randUint64()
 		np.expiration = height + np.duration
 		np.amount = 0
@@ -101,7 +118,7 @@ func NewNanoPayClaimer(w *WalletSDK, claimInterval time.Duration, errChan chan e
 				continue
 			}
 			npc.Lock()
-			if npc.tx != nil && (npc.lastClaimTime.Add(claimInterval).Before(time.Now()) || npc.expiration <= height+2) {
+			if npc.tx != nil && (npc.lastClaimTime.Add(claimInterval).Before(time.Now()) || npc.expiration <= height+forceFlushDelta) {
 				if err := npc.flush(); err != nil {
 					errChan <- npc.closeWithError(err)
 					break
@@ -219,10 +236,10 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, e
 		npc.prevClaimedAmount += npc.amount
 		npc.amount = 0
 	}
-	if npPayload.TxnExpiration+3 >= height {
+	if npPayload.TxnExpiration+receiverExpirationDelta >= height {
 		return 0, npc.closeWithError(errors.New("nano pay tx expired"))
 	}
-	if npPayload.NanoPayExpiration+3 >= height {
+	if npPayload.NanoPayExpiration+receiverExpirationDelta >= height {
 		return 0, npc.closeWithError(errors.New("nano pay expired"))
 	}
 	npc.tx = tx
