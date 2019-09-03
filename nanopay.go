@@ -16,6 +16,7 @@ const defaultDuration = 4320
 
 type NanoPay struct {
 	w        *WalletSDK
+	address  string
 	receiver common.Uint160
 	duration uint32
 
@@ -37,14 +38,22 @@ type NanoPayClaimer struct {
 	prevClaimedAmount common.Fixed64
 }
 
-func NewNanoPay(w *WalletSDK, receiver common.Uint160, duration ...uint32) *NanoPay {
-	np := &NanoPay{w: w, receiver: receiver}
+func NewNanoPay(w *WalletSDK, address string, duration ...uint32) (*NanoPay, error) {
+	programHash, err := common.ToScriptHash(address)
+	if err != nil {
+		return nil, err
+	}
+	np := &NanoPay{w: w, address: address, receiver: programHash}
 	if len(duration) > 0 {
 		np.duration = duration[0]
 	} else {
 		np.duration = defaultDuration
 	}
-	return np
+	return np, nil
+}
+
+func (np *NanoPay) Address() string {
+	return np.address
 }
 
 func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, error) {

@@ -162,11 +162,7 @@ func (w *WalletSDK) Transfer(address string, value string, fee ...string) (strin
 }
 
 func (w *WalletSDK) NewNanoPay(address string, duration ...uint32) (*NanoPay, error) {
-	programHash, err := common.ToScriptHash(address)
-	if err != nil {
-		return nil, err
-	}
-	return NewNanoPay(w, programHash, duration...), nil
+	return NewNanoPay(w, address, duration...)
 }
 
 func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error) *NanoPayClaimer {
