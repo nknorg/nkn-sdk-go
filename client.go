@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/url"
 	"sync"
@@ -17,7 +18,6 @@ import (
 	"github.com/nknorg/nkn/pb"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/nknorg/nkn/vault"
-	"github.com/pkg/errors"
 )
 
 const (

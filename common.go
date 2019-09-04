@@ -3,12 +3,12 @@ package nkn_sdk_go
 import (
 	cryptorand "crypto/rand"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"math/rand"
 	"time"
 
 	"github.com/nknorg/nkn/api/httpjson/client"
-	"github.com/pkg/errors"
 )
 
 var seedList = []string{
