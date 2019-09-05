@@ -84,6 +84,8 @@ github.com/nknorg/nkn v1.0.8-beta.0.20190903103444-684d74736244 h1:b4nKGnHLk4Gm7
 github.com/nknorg/nkn v1.0.8-beta.0.20190903103444-684d74736244/go.mod h1:/kn2SrJ1cyPFtNaU4W5BTBSPP8ahN6/W1efBOXnULfQ=
 github.com/nknorg/nkn v1.1.0-beta h1:2tl3z8Gx2dsB144TWnFC5C7vSnO2Df+D4JVLzLbI1Ic=
 github.com/nknorg/nkn v1.1.0-beta/go.mod h1:/kn2SrJ1cyPFtNaU4W5BTBSPP8ahN6/W1efBOXnULfQ=
+github.com/nknorg/nkn v1.1.0-beta.0.20190905085347-1f804d998848 h1:migUnbkvQKuKV8QAAGopcjF8u2lMQ+0AQThsr6Y6JC0=
+github.com/nknorg/nkn v1.1.0-beta.0.20190905085347-1f804d998848/go.mod h1:/kn2SrJ1cyPFtNaU4W5BTBSPP8ahN6/W1efBOXnULfQ=
 github.com/nknorg/nnet v0.0.0-20190815010835-03d8e5d1105c h1:KGoVE3vEN7CRxwHXfBfDDPmjqM6/Nc8ZEAnW1iGes6A=
 github.com/nknorg/nnet v0.0.0-20190815010835-03d8e5d1105c/go.mod h1:XG+yLiMrl01iwez333VO2c/I0w5cy851c4STmR2/V1w=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
