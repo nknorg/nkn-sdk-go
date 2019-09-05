@@ -100,6 +100,10 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 		return nil, err
 	}
 
+	if err := np.w.signTransaction(tx); err != nil {
+		return nil, err
+	}
+
 	return tx, nil
 }
 

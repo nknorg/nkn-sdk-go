@@ -66,11 +66,6 @@ func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
 }
 
 func (w *WalletSDK) SendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
-	err := w.signTransaction(tx)
-	if err != nil {
-		return "", err, -1
-	}
-
 	var txid string
 	err, code := call(w.config.SeedRPCServerAddr, "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txid)
 	if err != nil {
@@ -157,6 +152,10 @@ func (w *WalletSDK) Transfer(address string, value string, fee ...string) (strin
 		return "", err
 	}
 
+	if err := w.signTransaction(tx); err != nil {
+		return "", err
+	}
+
 	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
@@ -182,6 +181,11 @@ func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	if err := w.signTransaction(tx); err != nil {
+		return "", err
+	}
+
 	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
@@ -199,6 +203,11 @@ func (w *WalletSDK) DeleteName(name string, fee ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	if err := w.signTransaction(tx); err != nil {
+		return "", err
+	}
+
 	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
@@ -224,6 +233,11 @@ func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, 
 	if err != nil {
 		return "", err
 	}
+
+	if err := w.signTransaction(tx); err != nil {
+		return "", err
+	}
+
 	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
@@ -247,6 +261,11 @@ func (w *WalletSDK) Unsubscribe(identifier string, topic string, fee ...string) 
 	if err != nil {
 		return "", err
 	}
+
+	if err := w.signTransaction(tx); err != nil {
+		return "", err
+	}
+
 	id, err, _ := w.SendRawTransaction(tx)
 	return id, err
 }
