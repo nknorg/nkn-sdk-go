@@ -35,6 +35,7 @@ type NanoPay struct {
 	sync.Mutex
 	w        *WalletSDK
 	address  string
+	fee      common.Fixed64
 	receiver common.Uint160
 	duration uint32
 
@@ -56,12 +57,12 @@ type NanoPayClaimer struct {
 	prevClaimedAmount common.Fixed64
 }
 
-func NewNanoPay(w *WalletSDK, address string, duration ...uint32) (*NanoPay, error) {
+func NewNanoPay(w *WalletSDK, address string, fee common.Fixed64, duration ...uint32) (*NanoPay, error) {
 	programHash, err := common.ToScriptHash(address)
 	if err != nil {
 		return nil, err
 	}
-	np := &NanoPay{w: w, address: address, receiver: programHash}
+	np := &NanoPay{w: w, address: address, fee: fee, receiver: programHash}
 	if len(duration) > 0 {
 		np.duration = duration[0]
 	} else {
@@ -99,6 +100,7 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	if err != nil {
 		return nil, err
 	}
+	tx.UnsignedTx.Fee = int64(np.fee)
 
 	if err := np.w.signTransaction(tx); err != nil {
 		return nil, err
@@ -225,20 +227,24 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, e
 	if npc.closed {
 		return 0, errors.New("attempt to use closed nano pay claimer")
 	}
-	if npc.amount >= common.Fixed64(npPayload.Amount) {
-		return 0, npc.closeWithError(errors.New("nano pay balance decreased"))
-	}
-	if *npc.id == npPayload.Id {
+	if npc.id == nil || *npc.id == npPayload.Id {
 		if senderBalance < npc.amount {
 			return 0, npc.closeWithError(errors.New("insufficient sender balance"))
 		}
-	} else {
-		if err := npc.flush(); err != nil {
-			return 0, npc.closeWithError(err)
+	}
+	if npc.id != nil {
+		if *npc.id == npPayload.Id {
+			if npc.amount >= common.Fixed64(npPayload.Amount) {
+				return 0, npc.closeWithError(errors.New("nano pay balance decreased"))
+			}
+		} else {
+			if err := npc.flush(); err != nil {
+				return 0, npc.closeWithError(err)
+			}
+			npc.id = nil
+			npc.prevClaimedAmount += npc.amount
+			npc.amount = -1
 		}
-		npc.id = nil
-		npc.prevClaimedAmount += npc.amount
-		npc.amount = 0
 	}
 	if npPayload.TxnExpiration+receiverExpirationDelta >= height {
 		return 0, npc.closeWithError(errors.New("nano pay tx expired"))

@@ -160,8 +160,12 @@ func (w *WalletSDK) Transfer(address string, value string, fee ...string) (strin
 	return id, err
 }
 
-func (w *WalletSDK) NewNanoPay(address string, duration ...uint32) (*NanoPay, error) {
-	return NewNanoPay(w, address, duration...)
+func (w *WalletSDK) NewNanoPay(address string, fee string, duration ...uint32) (*NanoPay, error) {
+	_fee, err := common.StringToFixed64(fee)
+	if err != nil {
+		return nil, err
+	}
+	return NewNanoPay(w, address, _fee, duration...)
 }
 
 func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error) *NanoPayClaimer {
