@@ -205,7 +205,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, e
 	if recipient.CompareTo(npc.w.account.ProgramHash) != 0 {
 		return 0, npc.closeWithError(errors.New("wrong nano pay recipient"))
 	}
-	if err := chain.VerifyTransaction(tx); err != nil {
+	if err := chain.VerifyTransaction(tx, 0); err != nil {
 		return 0, npc.closeWithError(err)
 	}
 	sender, err := common.Uint160ParseFromBytes(npPayload.Sender)
