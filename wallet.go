@@ -29,7 +29,7 @@ type Subscription struct {
 }
 
 type balance struct {
-	amount string `json:"amount"`
+	Amount string `json:"amount"`
 }
 
 type nonce struct {
@@ -124,7 +124,7 @@ func (w *WalletSDK) BalanceByAddress(address string) (common.Fixed64, error) {
 		return 0, err
 	}
 
-	return common.StringToFixed64(balance.amount)
+	return common.StringToFixed64(balance.Amount)
 }
 
 func (w *WalletSDK) Transfer(address string, value string, fee ...string) (string, error) {
