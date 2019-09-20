@@ -74,7 +74,38 @@ func (w *WalletSDK) SendRawTransaction(tx *transaction.Transaction) (string, err
 	return txid, nil, 0
 }
 
-func (w *WalletSDK) getNonce() (uint64, error) {
+func (w *WalletSDK) GetNonce() (uint64, error) {
+	return w.getNonce([]interface{}{})
+}
+
+func (w *WalletSDK) getHeight() (uint32, error) {
+	var height uint32
+	err, _ := call(w.config.SeedRPCServerAddr, "getlatestblockheight", map[string]interface{}{}, &height)
+	if err != nil {
+		return 0, err
+	}
+
+	return height, nil
+}
+
+func getFee(feeNonce []interface{}) (common.Fixed64, error) {
+	if len(feeNonce) < 1 {
+		return 0, nil
+	}
+	return common.StringToFixed64(feeNonce[0].(string))
+}
+
+func (w *WalletSDK) getNonce(feeNonce []interface{}) (uint64, error) {
+	if len(feeNonce) > 1 {
+		if nonce, ok := feeNonce[1].(int); ok {
+			return uint64(nonce), nil
+		} else if nonce, ok := feeNonce[1].(uint64); ok {
+			return nonce, nil
+		} else {
+			return 0, errors.New("nonce type should be either int or uint64")
+		}
+	}
+
 	address, err := w.account.ProgramHash.ToAddress()
 	if err != nil {
 		return 0, err
@@ -90,23 +121,6 @@ func (w *WalletSDK) getNonce() (uint64, error) {
 		return nonce.NonceInTxPool, nil
 	}
 	return nonce.Nonce, nil
-}
-
-func (w *WalletSDK) getHeight() (uint32, error) {
-	var height uint32
-	err, _ := call(w.config.SeedRPCServerAddr, "getlatestblockheight", map[string]interface{}{}, &height)
-	if err != nil {
-		return 0, err
-	}
-
-	return height, nil
-}
-
-func getFee(fee []string) (common.Fixed64, error) {
-	if len(fee) == 0 {
-		return 0, nil
-	}
-	return common.StringToFixed64(fee[0])
 }
 
 func (w *WalletSDK) Balance() (common.Fixed64, error) {
@@ -127,7 +141,7 @@ func (w *WalletSDK) BalanceByAddress(address string) (common.Fixed64, error) {
 	return common.StringToFixed64(balance.Amount)
 }
 
-func (w *WalletSDK) Transfer(address string, value string, fee ...string) (string, error) {
+func (w *WalletSDK) Transfer(address string, value string, feeNonce ...interface{}) (string, error) {
 	outputValue, err := common.StringToFixed64(value)
 	if err != nil {
 		return "", err
@@ -137,12 +151,12 @@ func (w *WalletSDK) Transfer(address string, value string, fee ...string) (strin
 		return "", err
 	}
 
-	_fee, err := getFee(fee)
+	_fee, err := getFee(feeNonce)
 	if err != nil {
 		return "", err
 	}
 
-	nonce, err := w.getNonce()
+	nonce, err := w.getNonce(feeNonce)
 	if err != nil {
 		return "", err
 	}
@@ -172,12 +186,12 @@ func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan 
 	return NewNanoPayClaimer(w, claimInterval, errChan)
 }
 
-func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *WalletSDK) RegisterName(name string, feeNonce ...interface{}) (string, error) {
+	_fee, err := getFee(feeNonce)
 	if err != nil {
 		return "", err
 	}
-	nonce, err := w.getNonce()
+	nonce, err := w.getNonce(feeNonce)
 	if err != nil {
 		return "", err
 	}
@@ -194,12 +208,12 @@ func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) DeleteName(name string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *WalletSDK) DeleteName(name string, feeNonce ...interface{}) (string, error) {
+	_fee, err := getFee(feeNonce)
 	if err != nil {
 		return "", err
 	}
-	nonce, err := w.getNonce()
+	nonce, err := w.getNonce(feeNonce)
 	if err != nil {
 		return "", err
 	}
@@ -216,12 +230,12 @@ func (w *WalletSDK) DeleteName(name string, fee ...string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, meta string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, meta string, feeNonce ...interface{}) (string, error) {
+	_fee, err := getFee(feeNonce)
 	if err != nil {
 		return "", err
 	}
-	nonce, err := w.getNonce()
+	nonce, err := w.getNonce(feeNonce)
 	if err != nil {
 		return "", err
 	}
@@ -246,12 +260,12 @@ func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, 
 	return id, err
 }
 
-func (w *WalletSDK) Unsubscribe(identifier string, topic string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *WalletSDK) Unsubscribe(identifier string, topic string, feeNonce ...interface{}) (string, error) {
+	_fee, err := getFee(feeNonce)
 	if err != nil {
 		return "", err
 	}
-	nonce, err := w.getNonce()
+	nonce, err := w.getNonce(feeNonce)
 	if err != nil {
 		return "", err
 	}
