@@ -18,9 +18,21 @@ type WalletConfig struct {
 	SeedRPCServerAddr string
 }
 
+type errWithCode struct {
+	err  error
+	code int32
+}
+
+type queuedTx struct {
+	tx   *transaction.Transaction
+	txId chan string
+	err  chan *errWithCode
+}
+
 type WalletSDK struct {
-	account *vault.Account
-	config  WalletConfig
+	account   *vault.Account
+	config    WalletConfig
+	txChannel chan *queuedTx
 }
 
 type Subscription struct {
@@ -47,7 +59,21 @@ func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
 			_config.SeedRPCServerAddr = seedRPCServerAddr
 		}
 	}
-	return &WalletSDK{account, _config}
+	txChannel := make(chan *queuedTx)
+	go func() {
+		for {
+			queuedTx := <- txChannel
+			tx := queuedTx.tx
+			var txId string
+			err, code := call(_config.SeedRPCServerAddr, "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txId)
+			if err != nil {
+				queuedTx.err <- &errWithCode{err, code}
+			} else {
+				queuedTx.txId <- txId
+			}
+		}
+	}()
+	return &WalletSDK{account, _config, txChannel}
 }
 
 func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
@@ -66,12 +92,15 @@ func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
 }
 
 func (w *WalletSDK) SendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
-	var txid string
-	err, code := call(w.config.SeedRPCServerAddr, "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txid)
-	if err != nil {
-		return "", err, code
+	txIdChan := make(chan string)
+	errChan := make(chan *errWithCode)
+	w.txChannel <- &queuedTx{tx, txIdChan, errChan}
+	select {
+	case txId := <-txIdChan:
+		return txId, nil, 0
+	case err := <-errChan:
+		return "", err.err, err.code
 	}
-	return txid, nil, 0
 }
 
 func (w *WalletSDK) getNonce() (uint64, error) {
