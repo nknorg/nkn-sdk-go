@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/go-multierror"
+	multierror "github.com/hashicorp/go-multierror"
 	"github.com/nknorg/nkn/chain"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/pb"
@@ -246,10 +246,10 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, e
 			npc.amount = -1
 		}
 	}
-	if npPayload.TxnExpiration+receiverExpirationDelta >= height {
+	if npPayload.TxnExpiration <= height+receiverExpirationDelta {
 		return 0, npc.closeWithError(errors.New("nano pay tx expired"))
 	}
-	if npPayload.NanoPayExpiration+receiverExpirationDelta >= height {
+	if npPayload.NanoPayExpiration <= height+receiverExpirationDelta {
 		return 0, npc.closeWithError(errors.New("nano pay expired"))
 	}
 	npc.tx = tx
