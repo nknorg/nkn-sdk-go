@@ -62,7 +62,7 @@ func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
 	txChannel := make(chan *queuedTx)
 	go func() {
 		for {
-			queuedTx := <- txChannel
+			queuedTx := <-txChannel
 			tx := queuedTx.tx
 			var txId string
 			err, code := call(_config.SeedRPCServerAddr, "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txId)
@@ -197,8 +197,11 @@ func (w *WalletSDK) NewNanoPay(address string, fee string, duration ...uint32) (
 	return NewNanoPay(w, address, _fee, duration...)
 }
 
-func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error) *NanoPayClaimer {
-	return NewNanoPayClaimer(w, claimInterval, errChan)
+func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error, address ...string) (*NanoPayClaimer, error) {
+	if len(address) > 0 {
+		return NewNanoPayClaimer(w, address[0], claimInterval, errChan)
+	}
+	return NewNanoPayClaimer(w, "", claimInterval, errChan)
 }
 
 func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
@@ -367,8 +370,7 @@ func (w *WalletSDK) GetSubscribers(topic string, offset, limit uint32, meta, txP
 func (w *WalletSDK) GetSubscribersCount(topic string) (uint32, error) {
 	var count uint32
 	err, _ := call(w.config.SeedRPCServerAddr, "getsubscriberscount", map[string]interface{}{
-		"topic":      topic,
+		"topic": topic,
 	}, &count)
 	return count, err
 }
-
