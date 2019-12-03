@@ -47,6 +47,8 @@ type NanoPay struct {
 type NanoPayClaimer struct {
 	sync.Mutex
 	w          *WalletSDK
+	address    string
+	receiver   common.Uint160
 	tx         *transaction.Transaction
 	id         *uint64
 	expiration uint32
@@ -109,8 +111,23 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	return tx, nil
 }
 
-func NewNanoPayClaimer(w *WalletSDK, claimInterval time.Duration, errChan chan error) *NanoPayClaimer {
-	npc := &NanoPayClaimer{w: w}
+func NewNanoPayClaimer(w *WalletSDK, address string, claimInterval time.Duration, errChan chan error) (*NanoPayClaimer, error) {
+	var receiver common.Uint160
+	var err error
+	if len(address) > 0 {
+		receiver, err = common.ToScriptHash(address)
+	} else {
+		receiver = w.account.ProgramHash
+		address, err = receiver.ToAddress()
+	}
+	if err != nil {
+		return nil, err
+	}
+	npc := &NanoPayClaimer{
+		w:        w,
+		address:  address,
+		receiver: receiver,
+	}
 	go func() {
 		for {
 			if npc.closed {
@@ -134,7 +151,11 @@ func NewNanoPayClaimer(w *WalletSDK, claimInterval time.Duration, errChan chan e
 			time.Sleep(time.Second)
 		}
 	}()
-	return npc
+	return npc, nil
+}
+
+func (npc *NanoPayClaimer) Address() string {
+	return npc.address
 }
 
 func (npc *NanoPayClaimer) close() error {
@@ -204,7 +225,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, e
 	if err != nil {
 		return 0, npc.closeWithError(err)
 	}
-	if recipient.CompareTo(npc.w.account.ProgramHash) != 0 {
+	if recipient.CompareTo(npc.receiver) != 0 {
 		return 0, npc.closeWithError(errors.New("wrong nano pay recipient"))
 	}
 	if err := chain.VerifyTransaction(tx, 0); err != nil {
