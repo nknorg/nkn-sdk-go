@@ -60,23 +60,25 @@ func TestWallet(t *testing.T) {
 		//log.Println("success:", txid)
 
 		// Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks
-		txid, err = w.Subscribe("identifier", "topic", 0, 10, "meta")
+		txid, err = w.Subscribe("identifier", "topic", 10, "meta")
 		if err != nil {
 			return err
 		}
 		log.Println("success:", txid)
 
-		// Open nano pay channel to specified address
-		np, err := w.NewNanoPay(address)
+		// Open nano pay channel to the specified address for the duration of next 200 blocks
+		np, err := w.NewNanoPay(address, "0", 200)
 		if err != nil {
 			return err
 		}
-		// Send 100 NKN into channel with claim available for next 100 blocks and channel open for next 200 blocks
-		txid, err = np.Send("100", 100, 200)
+		// Send 100 NKN into channel
+		tx, err := np.IncrementAmount("100")
+		txHash := tx.Hash()
+		txHashRef := &txHash
 		if err != nil {
 			return err
 		}
-		log.Println("success:", txid)
+		log.Println("success:", txHashRef.ToHexString())
 
 		return nil
 	}()

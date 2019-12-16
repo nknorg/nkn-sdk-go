@@ -2,6 +2,7 @@ package nkn_sdk_go
 
 import (
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -10,6 +11,8 @@ import (
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/nknorg/nkn-sdk-go/payloads"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gorilla/websocket"
@@ -38,6 +41,15 @@ type ClientConfig struct {
 	ConnectRetries    uint32
 }
 
+type Message struct {
+	Src       string
+	Data      []byte
+	Type      payloads.PayloadType
+	Encrypted bool
+	Pid       []byte
+	Reply     func([]byte)
+}
+
 type Client struct {
 	config            ClientConfig
 	account           *vault.Account
@@ -45,10 +57,11 @@ type Client struct {
 	Address           string
 	addressID         []byte
 	OnConnect         chan struct{}
-	OnMessage         chan *pb.InboundMessage
+	OnMessage         chan *Message
 	OnBlock           chan *BlockInfo
 	sigChainBlockHash string
 	reconnectChan     chan struct{}
+	responseChannels  map[string]chan *Message
 
 	sync.RWMutex
 	closed    bool
@@ -208,17 +221,83 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			if err := proto.Unmarshal(clientMsg.Message, inboundMsg); err != nil {
 				return err
 			}
-			select {
-			case c.OnMessage <- inboundMsg:
-			default:
-				log.Println("Message chan full, discarding msg")
-			}
+
 			if len(inboundMsg.PrevSignature) > 0 {
 				go func() {
 					if err := c.sendReceipt(inboundMsg.PrevSignature); err != nil {
 						log.Println(err)
 					}
 				}()
+			}
+
+			payloadMsg := &payloads.Message{}
+			if err := proto.Unmarshal(inboundMsg.Payload, payloadMsg); err != nil {
+				return err
+			}
+			var payloadBytes []byte
+			if payloadMsg.Encrypted {
+				//TODO
+			} else {
+				payloadBytes = payloadMsg.Payload
+			}
+			payload := &payloads.Payload{}
+			if err := proto.Unmarshal(payloadBytes, payload); err != nil {
+				return err
+			}
+			data := payload.Data
+			switch payload.Type {
+			case payloads.TEXT:
+				textData := &payloads.TextData{}
+				if err := proto.Unmarshal(data, textData); err != nil {
+					return err
+				}
+				data = []byte(textData.Text)
+			case payloads.ACK:
+				data = nil
+			}
+
+			var msg *Message
+			switch payload.Type {
+			case payloads.TEXT:
+			case payloads.BINARY:
+				msg = &Message{
+					Src:       inboundMsg.Src,
+					Data:      data,
+					Type:      payload.Type,
+					Encrypted: payloadMsg.Encrypted,
+					Pid:       payload.Pid,
+				}
+			}
+
+			if len(payload.ReplyToPid) > 0 {
+				pidString := string(payload.ReplyToPid)
+				if responseChannel, ok := c.responseChannels[pidString]; ok {
+					responseChannel <- msg
+				}
+				return nil
+			}
+
+			msg.Reply = func(response []byte) {
+				pid := payload.Pid
+				var payload *payloads.Payload
+				var err error
+				if response == nil {
+					payload, err = newAckPayload(pid)
+				} else {
+					payload, err = newBinaryPayload(response, pid)
+				}
+				if err != nil {
+					log.Println("Problem creating response to PID " + hex.EncodeToString(pid))
+				}
+				if err := c.send([]string{inboundMsg.Src}, payload); err != nil {
+					log.Println("Problem sending response to PID " + hex.EncodeToString(pid))
+				}
+			}
+
+			select {
+			case c.OnMessage <- msg:
+			default:
+				log.Println("Message chan full, discarding msg")
 			}
 		}
 	}
@@ -269,7 +348,7 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 			}
 
 			msgType, data, err := conn.ReadMessage()
-			if err != nil {
+			if err != nil && !c.IsClosed() {
 				log.Println(err)
 				c.reconnect()
 				return
@@ -377,15 +456,16 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 	pk := account.PubKey().EncodePoint()
 	addr := address.MakeAddressString(pk, identifier)
 	c := Client{
-		config:        config,
-		account:       account,
-		publicKey:     pk,
-		Address:       addr,
-		addressID:     addressToID(addr),
-		OnConnect:     make(chan struct{}, 1),
-		OnMessage:     make(chan *pb.InboundMessage, config.MsgChanLen),
-		OnBlock:       make(chan *BlockInfo, config.BlockChanLen),
-		reconnectChan: make(chan struct{}, 0),
+		config:           config,
+		account:          account,
+		publicKey:        pk,
+		Address:          addr,
+		addressID:        addressToID(addr),
+		OnConnect:        make(chan struct{}, 1),
+		OnMessage:        make(chan *Message, config.MsgChanLen),
+		OnBlock:          make(chan *BlockInfo, config.BlockChanLen),
+		reconnectChan:    make(chan struct{}, 0),
+		responseChannels: make(map[string]chan *Message),
 	}
 
 	go c.handleReconnect()
@@ -439,9 +519,66 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	return err
 }
 
-func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint32) error {
+func newBinaryPayload(data []byte, replyToPid []byte) (*payloads.Payload, error) {
+	pid := make([]byte, 8)
+	if _, err := rand.Read(pid); err != nil {
+		return nil, err
+	}
+
+	return &payloads.Payload{
+		Type:       payloads.BINARY,
+		Pid:        pid,
+		Data:       data,
+		ReplyToPid: replyToPid,
+	}, nil
+}
+
+func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
+	pid := make([]byte, 8)
+	if _, err := rand.Read(pid); err != nil {
+		return nil, err
+	}
+
+	return &payloads.Payload{
+		Type:       payloads.ACK,
+		Pid:        pid,
+		ReplyToPid: replyToPid,
+	}, nil
+}
+
+func (c *Client) Send(dests []string, data []byte, MaxHoldingSeconds ...uint32) (*Message, error) {
+	payload, err := newBinaryPayload(data, nil)
+	if err != nil {
+		return nil, err
+	}
+	pidString := string(payload.Pid)
+	responseChannel := make(chan *Message, 1)
+	c.responseChannels[pidString] = responseChannel
+	if err := c.send(dests, payload, MaxHoldingSeconds...); err != nil {
+		return nil, err
+	}
+	msg := <-responseChannel
+	return msg, nil
+}
+
+func (c *Client) send(dests []string, payload *payloads.Payload, MaxHoldingSeconds ...uint32) error {
+	payloadData, err := proto.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	msg := &payloads.Message{
+		Payload:   payloadData,
+		Encrypted: false,
+	}
+
+	msgData, err := proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
 	outboundMsg := &pb.OutboundMessage{
-		Payload: payload,
+		Payload: msgData,
 		Dests:   dests,
 	}
 	if len(MaxHoldingSeconds) == 0 {
@@ -467,7 +604,7 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 
 	sigChain := pb.SigChain{
 		Nonce:     nonce,
-		DataSize:  uint32(len(payload)),
+		DataSize:  uint32(len(payloadData)),
 		SrcId:     c.addressID,
 		SrcPubkey: c.publicKey,
 		Elems:     []*pb.SigChainElem{sigChainElem},
@@ -532,7 +669,7 @@ func (c *Client) Send(dests []string, payload []byte, MaxHoldingSeconds ...uint3
 	return err
 }
 
-func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, payload []byte, MaxHoldingSeconds ...uint32) error {
+func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data []byte, MaxHoldingSeconds ...uint32) error {
 	subscribers, subscribersInTxPool, err := getSubscribers(c.config.SeedRPCServerAddr, topic, offset, limit, false, txPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
@@ -544,5 +681,9 @@ func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, payloa
 	if err != nil {
 		return err
 	}
-	return c.Send(dests, payload, MaxHoldingSeconds...)
+	payload, err := newBinaryPayload(data, nil)
+	if err != nil {
+		return err
+	}
+	return c.send(dests, payload, MaxHoldingSeconds...)
 }

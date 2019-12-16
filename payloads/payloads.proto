@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package payloads;
+
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option (gogoproto.gostring_all) = true;
+option (gogoproto.goproto_stringer_all) = false;
+option (gogoproto.stringer_all) = true;
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+
+option (gogoproto.testgen_all) = true;
+option (gogoproto.equal_all) = true;
+option (gogoproto.populate_all) = true;
+
+enum PayloadType {
+  BINARY = 0;
+  TEXT = 1;
+  ACK = 2;
+}
+
+message Message {
+  bytes payload = 1;
+  bool encrypted = 2;
+  bytes nonce = 3;
+  bytes encrypted_key = 4;
+}
+
+message Payload {
+  PayloadType type = 1;
+  bytes pid = 2;
+  bytes data = 3;
+  bytes reply_to_pid = 4;
+  bool no_ack = 5;
+}
+
+message TextData {
+  string text = 1;
+}

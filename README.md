@@ -70,13 +70,13 @@ fmt.Println("Connection opened.")
 Send text message to other clients:
 
 ```go
-client.Send([]string{"another client address"}, []byte("hello world!"))
+response, err := client.Send([]string{"another client address"}, []byte("hello world!"))
 ```
 
 You can also send byte array directly:
 
 ```go
-client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5})
+response, err := client.Send([]string{"another client address"}, []byte{1, 2, 3, 4, 5})
 ```
 
 Or publish text message to a bucket 0 of specified topic:
@@ -90,6 +90,7 @@ Receive data from other clients:
 ```go
 msg := <- client.OnMessage
 fmt.Println("Receive binary message from", msg.Src + ":", string(msg.Payload))
+msg.Reply([]byte("response"))
 ```
 
 Listen for new blocks mined:

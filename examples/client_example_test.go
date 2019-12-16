@@ -49,16 +49,20 @@ func TestClient(t *testing.T) {
 		defer toClient.Close()
 		<- toClient.OnConnect
 
-		err = fromClient.Send([]string{toClient.Address}, []byte("Hello world!"))
+		timeSent := time.Now().UnixNano() / int64(time.Millisecond)
+		go func() {
+			msg := <- toClient.OnMessage
+			timeReceived := time.Now().UnixNano() / int64(time.Millisecond)
+			log.Println("Receive message", "\"" + string(msg.Data) + "\"", "from", msg.Src, "after", timeReceived - timeSent, "ms")
+			msg.Reply([]byte("world"))
+		}()
+
+		log.Println("Send message from", fromClient.Address, "to", toClient.Address)
+		response, err := fromClient.Send([]string{toClient.Address}, []byte("Hello"))
 		if err != nil {
 			return err
 		}
-		timeSent := time.Now().UnixNano() / int64(time.Millisecond)
-		log.Println("Send message from", fromClient.Address, "to", toClient.Address)
-
-		msg := <- toClient.OnMessage
-		timeReceived := time.Now().UnixNano() / int64(time.Millisecond)
-		log.Println("Receive message", "\"" + string(msg.Payload) + "\"", "from", msg.Src, "after", timeReceived - timeSent, "ms")
+		log.Println("Got response", "\"" + string(response.Data) + "\"", "from", response.Src)
 
 		// wait to send receipt
 		time.Sleep(time.Second)
