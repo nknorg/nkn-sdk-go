@@ -58,7 +58,7 @@ func TestClient(t *testing.T) {
 		}()
 
 		log.Println("Send message from", fromClient.Address, "to", toClient.Address)
-		response, err := fromClient.Send([]string{toClient.Address}, []byte("Hello"))
+		response, err := fromClient.Send([]string{toClient.Address, toClient.Address}, []byte("Hello"), true)
 		if err != nil {
 			return err
 		}

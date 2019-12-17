@@ -2,15 +2,20 @@ package nkn_sdk_go
 
 import (
 	"bytes"
+	"compress/zlib"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 	"sync"
 	"time"
+
+	"github.com/nknorg/nkn/crypto/ed25519"
+	"golang.org/x/crypto/nacl/box"
 
 	"github.com/nknorg/nkn-sdk-go/payloads"
 
@@ -30,6 +35,9 @@ const (
 	defaultConnectRetries    = 3
 	handshakeTimeout         = 5 * time.Second
 	maxRetryInterval         = time.Minute
+
+	nonceSize     = 24
+	sharedKeySize = 32
 )
 
 type ClientConfig struct {
@@ -54,6 +62,7 @@ type Client struct {
 	config            ClientConfig
 	account           *vault.Account
 	publicKey         []byte
+	curveSecretKey    *[sharedKeySize]byte
 	Address           string
 	addressID         []byte
 	OnConnect         chan struct{}
@@ -150,6 +159,169 @@ func (c *Client) GetConn() *websocket.Conn {
 	return c.conn
 }
 
+func (c *Client) computeSharedKey(remotePublicKey []byte) (*[sharedKeySize]byte, error) {
+	if len(remotePublicKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("public key length is %d, expecting %d", len(remotePublicKey), ed25519.PublicKeySize)
+	}
+
+	var pk [ed25519.PublicKeySize]byte
+	copy(pk[:], remotePublicKey)
+	curve25519PublicKey, ok := ed25519.PublicKeyToCurve25519PublicKey(&pk)
+	if !ok {
+		return nil, fmt.Errorf("converting public key %x to curve25519 public key failed", remotePublicKey)
+	}
+
+	var sharedKey [sharedKeySize]byte
+	box.Precompute(&sharedKey, curve25519PublicKey, c.curveSecretKey)
+	return &sharedKey, nil
+}
+
+func encrypt(message []byte, sharedKey *[sharedKeySize]byte) ([]byte, []byte, error) {
+	encrypted := make([]byte, len(message)+box.Overhead)
+	var nonce [nonceSize]byte
+	if _, err := rand.Read(nonce[:]); err != nil {
+		return nil, nil, err
+	}
+	box.SealAfterPrecomputation(encrypted[:0], message, &nonce, sharedKey)
+	return encrypted, nonce[:], nil
+}
+
+func decrypt(message []byte, nonce [nonceSize]byte, sharedKey *[sharedKeySize]byte) ([]byte, error) {
+	decrypted := make([]byte, len(message)-box.Overhead)
+	_, ok := box.OpenAfterPrecomputation(decrypted[:0], message, &nonce, sharedKey)
+	if !ok {
+		return nil, errors.New("decrypt message failed")
+	}
+
+	return decrypted, nil
+}
+
+func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte, error) {
+	rawPayload, err := proto.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(dests) > 1 {
+		var key [sharedKeySize]byte
+		if _, err := rand.Read(key[:]); err != nil {
+			return nil, err
+		}
+
+		encrypted, msgNonce, err := encrypt(rawPayload, &key)
+		if err != nil {
+			return nil, err
+		}
+
+		msgs := make([][]byte, len(dests))
+
+		for i, dest := range dests {
+			_, destPubkey, _, err := address.ParseClientAddress(dest)
+			if err != nil {
+				return nil, err
+			}
+
+			sharedKey, err := c.computeSharedKey(destPubkey)
+			if err != nil {
+				return nil, err
+			}
+
+			encryptedKey, keyNonce, err := encrypt(key[:], sharedKey)
+			if err != nil {
+				return nil, err
+			}
+
+			nonce := append(keyNonce, msgNonce...)
+
+			msgs[i], err = proto.Marshal(&payloads.Message{
+				encrypted,
+				true,
+				nonce,
+				encryptedKey,
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return msgs, nil
+	} else {
+		_, destPubkey, _, err := address.ParseClientAddress(dests[0])
+		if err != nil {
+			return nil, err
+		}
+
+		sharedKey, err := c.computeSharedKey(destPubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		encrypted, nonce, err := encrypt(rawPayload, sharedKey)
+		if err != nil {
+			return nil, err
+		}
+
+		data, err := proto.Marshal(&payloads.Message{
+			encrypted,
+			true,
+			nonce,
+			nil,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return [][]byte{data}, nil
+	}
+}
+
+func (c *Client) decryptPayload(msg *payloads.Message, srcAddr string) ([]byte, error) {
+	rawPayload := msg.Payload
+	_, srcPubkey, _, err := address.ParseClientAddress(srcAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	encryptedKey := msg.EncryptedKey
+	var decrypted []byte
+	if encryptedKey != nil && len(encryptedKey) > 0 {
+		var keyNonce, msgNonce [nonceSize]byte
+		copy(keyNonce[:], msg.Nonce[:nonceSize])
+		copy(msgNonce[:], msg.Nonce[nonceSize:])
+
+		sharedKey, err := c.computeSharedKey(srcPubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		decryptedKeySlice, err := decrypt(encryptedKey, keyNonce, sharedKey)
+		if err != nil {
+			return nil, err
+		}
+		var decryptedKey [sharedKeySize]byte
+		copy(decryptedKey[:], decryptedKeySlice)
+
+		decrypted, err = decrypt(rawPayload, msgNonce, &decryptedKey)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		var nonce [nonceSize]byte
+		copy(nonce[:], msg.Nonce)
+
+		sharedKey, err := c.computeSharedKey(srcPubkey)
+		if err != nil {
+			return nil, err
+		}
+
+		decrypted, err = decrypt(rawPayload, nonce, sharedKey)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return decrypted, nil
+}
+
 func (c *Client) handleMessage(msgType int, data []byte) error {
 	switch msgType {
 	case websocket.TextMessage:
@@ -236,7 +408,11 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			}
 			var payloadBytes []byte
 			if payloadMsg.Encrypted {
-				//TODO
+				var err error
+				payloadBytes, err = c.decryptPayload(payloadMsg, inboundMsg.Src)
+				if err != nil {
+					return err
+				}
 			} else {
 				payloadBytes = payloadMsg.Payload
 			}
@@ -259,6 +435,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			var msg *Message
 			switch payload.Type {
 			case payloads.TEXT:
+				fallthrough
 			case payloads.BINARY:
 				msg = &Message{
 					Src:       inboundMsg.Src,
@@ -289,7 +466,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				if err != nil {
 					log.Println("Problem creating response to PID " + hex.EncodeToString(pid))
 				}
-				if err := c.send([]string{inboundMsg.Src}, payload); err != nil {
+				if err := c.send([]string{inboundMsg.Src}, payload, payloadMsg.Encrypted); err != nil {
 					log.Println("Problem sending response to PID " + hex.EncodeToString(pid))
 				}
 			}
@@ -454,11 +631,17 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 	}
 
 	pk := account.PubKey().EncodePoint()
+
+	var sk [ed25519.PrivateKeySize]byte
+	copy(sk[:], account.PrivKey())
+	curveSecretKey := ed25519.PrivateKeyToCurve25519PrivateKey(&sk)
+
 	addr := address.MakeAddressString(pk, identifier)
 	c := Client{
 		config:           config,
 		account:          account,
 		publicKey:        pk,
+		curveSecretKey:   curveSecretKey,
 		Address:          addr,
 		addressID:        addressToID(addr),
 		OnConnect:        make(chan struct{}, 1),
@@ -502,8 +685,9 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 		return err
 	}
 	clientMsg := &pb.ClientMessage{
-		MessageType: pb.RECEIPT,
-		Message:     receiptData,
+		MessageType:     pb.RECEIPT,
+		Message:         receiptData,
+		CompressionType: pb.COMPRESSION_NONE,
 	}
 	clientMsgData, err := proto.Marshal(clientMsg)
 	if err != nil {
@@ -546,7 +730,7 @@ func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
 	}, nil
 }
 
-func (c *Client) Send(dests []string, data []byte, MaxHoldingSeconds ...uint32) (*Message, error) {
+func (c *Client) Send(dests []string, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) (*Message, error) {
 	payload, err := newBinaryPayload(data, nil)
 	if err != nil {
 		return nil, err
@@ -554,33 +738,49 @@ func (c *Client) Send(dests []string, data []byte, MaxHoldingSeconds ...uint32) 
 	pidString := string(payload.Pid)
 	responseChannel := make(chan *Message, 1)
 	c.responseChannels[pidString] = responseChannel
-	if err := c.send(dests, payload, MaxHoldingSeconds...); err != nil {
+	if err := c.send(dests, payload, encrypted, MaxHoldingSeconds...); err != nil {
 		return nil, err
 	}
 	msg := <-responseChannel
 	return msg, nil
 }
 
-func (c *Client) send(dests []string, payload *payloads.Payload, MaxHoldingSeconds ...uint32) error {
-	payloadData, err := proto.Marshal(payload)
-	if err != nil {
-		return err
+func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, MaxHoldingSeconds ...uint32) error {
+	var outboundMsg *pb.OutboundMessage
+	var payloadMsgs [][]byte
+
+	if encrypted {
+		var err error
+		payloadMsgs, err = c.encryptPayload(payload, dests)
+		if err != nil {
+			return err
+		}
+		outboundMsg = &pb.OutboundMessage{
+			Payloads: payloadMsgs,
+			Dests:    dests,
+		}
+	} else {
+		payloadData, err := proto.Marshal(payload)
+		if err != nil {
+			return err
+		}
+
+		data, err := proto.Marshal(&payloads.Message{
+			payloadData,
+			false,
+			nil,
+			nil,
+		})
+		if err != nil {
+			return err
+		}
+		payloadMsgs = [][]byte{data}
+		outboundMsg = &pb.OutboundMessage{
+			Payload: data,
+			Dests:   dests,
+		}
 	}
 
-	msg := &payloads.Message{
-		Payload:   payloadData,
-		Encrypted: false,
-	}
-
-	msgData, err := proto.Marshal(msg)
-	if err != nil {
-		return err
-	}
-
-	outboundMsg := &pb.OutboundMessage{
-		Payload: msgData,
-		Dests:   dests,
-	}
 	if len(MaxHoldingSeconds) == 0 {
 		outboundMsg.MaxHoldingSeconds = c.config.MaxHoldingSeconds
 	} else {
@@ -604,7 +804,6 @@ func (c *Client) send(dests []string, payload *payloads.Payload, MaxHoldingSecon
 
 	sigChain := pb.SigChain{
 		Nonce:     nonce,
-		DataSize:  uint32(len(payloadData)),
 		SrcId:     c.addressID,
 		SrcPubkey: c.publicKey,
 		Elems:     []*pb.SigChainElem{sigChainElem},
@@ -621,14 +820,18 @@ func (c *Client) send(dests []string, payload *payloads.Payload, MaxHoldingSecon
 
 	var signatures [][]byte
 
-	for _, dest := range dests {
+	for i, dest := range dests {
 		destId, destPubKey, _, err := address.ParseClientAddress(dest)
 		if err != nil {
 			return err
 		}
 		sigChain.DestId = destId
 		sigChain.DestPubkey = destPubKey
-
+		if len(payloadMsgs) > 1 {
+			sigChain.DataSize = uint32(len(payloadMsgs[i]))
+		} else {
+			sigChain.DataSize = uint32(len(payloadMsgs[0]))
+		}
 		buff := bytes.NewBuffer(nil)
 		if err := sigChain.SerializationMetadata(buff); err != nil {
 			return err
@@ -652,7 +855,25 @@ func (c *Client) send(dests []string, payload *payloads.Payload, MaxHoldingSecon
 
 	clientMsg := &pb.ClientMessage{
 		MessageType: pb.OUTBOUND_MESSAGE,
-		Message:     outboundMsgData,
+	}
+
+	if len(payloadMsgs) > 1 {
+		clientMsg.CompressionType = pb.COMPRESSION_ZLIB
+
+		var b bytes.Buffer
+		w := zlib.NewWriter(&b)
+		_, err = w.Write(outboundMsgData)
+		if err != nil {
+			return err
+		}
+		err = w.Close()
+		if err != nil {
+			return err
+		}
+		clientMsg.Message = b.Bytes()
+	} else {
+		clientMsg.CompressionType = pb.COMPRESSION_NONE
+		clientMsg.Message = outboundMsgData
 	}
 
 	clientMsgData, err := proto.Marshal(clientMsg)
@@ -669,7 +890,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, MaxHoldingSecon
 	return err
 }
 
-func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data []byte, MaxHoldingSeconds ...uint32) error {
+func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) error {
 	subscribers, subscribersInTxPool, err := getSubscribers(c.config.SeedRPCServerAddr, topic, offset, limit, false, txPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
@@ -685,5 +906,5 @@ func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data [
 	if err != nil {
 		return err
 	}
-	return c.send(dests, payload, MaxHoldingSeconds...)
+	return c.send(dests, payload, encrypted, MaxHoldingSeconds...)
 }

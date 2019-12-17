@@ -3,8 +3,9 @@ module github.com/nknorg/nkn-sdk-go
 go 1.12
 
 require (
-	github.com/gogo/protobuf v1.2.1
-	github.com/gorilla/websocket v1.4.0
+	github.com/gogo/protobuf v1.3.1
+	github.com/gorilla/websocket v1.4.1
 	github.com/hashicorp/go-multierror v1.0.0
-	github.com/nknorg/nkn v1.1.0-beta.0.20190905085347-1f804d998848
+	github.com/nknorg/nkn v1.1.1-beta
+	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
 )
