@@ -35,14 +35,14 @@ func TestClient(t *testing.T) {
 			return err
 		}
 
-		fromClient, err := NewClient(account, common.BytesToHexString(fromIdentifier))
+		fromClient, err := NewMultiClient(account, common.BytesToHexString(fromIdentifier), 0, true, 300 * time.Second)
 		if err != nil {
 			return err
 		}
 		defer fromClient.Close()
 		<- fromClient.OnConnect
 
-		toClient, err := NewClient(account, common.BytesToHexString(toIdentifier))
+		toClient, err := NewMultiClient(account, common.BytesToHexString(toIdentifier), 0, true, 300 * time.Second)
 		if err != nil {
 			return err
 		}
@@ -50,9 +50,10 @@ func TestClient(t *testing.T) {
 		<- toClient.OnConnect
 
 		timeSent := time.Now().UnixNano() / int64(time.Millisecond)
+		var timeReceived int64
 		go func() {
 			msg := <- toClient.OnMessage
-			timeReceived := time.Now().UnixNano() / int64(time.Millisecond)
+			timeReceived = time.Now().UnixNano() / int64(time.Millisecond)
 			log.Println("Receive message", "\"" + string(msg.Data) + "\"", "from", msg.Src, "after", timeReceived - timeSent, "ms")
 			msg.Reply([]byte("world"))
 		}()
@@ -62,7 +63,8 @@ func TestClient(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		log.Println("Got response", "\"" + string(response.Data) + "\"", "from", response.Src)
+		timeResponse := time.Now().UnixNano() / int64(time.Millisecond)
+		log.Println("Got response", "\"" + string(response.Data) + "\"", "from", response.Src, "after", timeResponse - timeReceived, "ms")
 
 		// wait to send receipt
 		time.Sleep(time.Second)

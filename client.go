@@ -603,17 +603,21 @@ func addressToID(addr string) []byte {
 	return id[:]
 }
 
-func NewClient(account *vault.Account, identifier string, configs ...ClientConfig) (*Client, error) {
+func defaultConfig() ClientConfig {
+	return ClientConfig{
+		SeedRPCServerAddr: seedRPCServerAddr,
+		ReconnectInterval: defaultReconnectInterval,
+		MaxHoldingSeconds: 0,
+		MsgChanLen:        defaultMsgChanLen,
+		BlockChanLen:      defaultBlockChanLen,
+		ConnectRetries:    defaultConnectRetries,
+	}
+}
+
+func getConfig(configs []ClientConfig) ClientConfig {
 	var config ClientConfig
 	if len(configs) == 0 {
-		config = ClientConfig{
-			SeedRPCServerAddr: seedRPCServerAddr,
-			ReconnectInterval: defaultReconnectInterval,
-			MaxHoldingSeconds: 0,
-			MsgChanLen:        defaultMsgChanLen,
-			BlockChanLen:      defaultBlockChanLen,
-			ConnectRetries:    defaultConnectRetries,
-		}
+		return defaultConfig()
 	} else {
 		config = configs[0]
 		if config.SeedRPCServerAddr == "" {
@@ -629,6 +633,11 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 			config.BlockChanLen = defaultBlockChanLen
 		}
 	}
+	return config
+}
+
+func NewClient(account *vault.Account, identifier string, configs ...ClientConfig) (*Client, error) {
+	config := getConfig(configs)
 
 	pk := account.PubKey().EncodePoint()
 
