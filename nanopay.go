@@ -33,7 +33,7 @@ const (
 
 type NanoPay struct {
 	sync.Mutex
-	w        *WalletSDK
+	w        *Wallet
 	address  string
 	fee      common.Fixed64
 	receiver common.Uint160
@@ -46,7 +46,7 @@ type NanoPay struct {
 
 type NanoPayClaimer struct {
 	sync.Mutex
-	w          *WalletSDK
+	w          *Wallet
 	address    string
 	receiver   common.Uint160
 	tx         *transaction.Transaction
@@ -59,7 +59,7 @@ type NanoPayClaimer struct {
 	prevClaimedAmount common.Fixed64
 }
 
-func NewNanoPay(w *WalletSDK, address string, fee common.Fixed64, duration ...uint32) (*NanoPay, error) {
+func NewNanoPay(w *Wallet, address string, fee common.Fixed64, duration ...uint32) (*NanoPay, error) {
 	programHash, err := common.ToScriptHash(address)
 	if err != nil {
 		return nil, err
@@ -111,7 +111,7 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	return tx, nil
 }
 
-func NewNanoPayClaimer(w *WalletSDK, address string, claimInterval time.Duration, errChan chan error) (*NanoPayClaimer, error) {
+func NewNanoPayClaimer(w *Wallet, address string, claimInterval time.Duration, errChan chan error) (*NanoPayClaimer, error) {
 	var receiver common.Uint160
 	var err error
 	if len(address) > 0 {
