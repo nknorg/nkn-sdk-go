@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
+	. "github.com/nknorg/nkn-sdk-go"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/vault"
-	. "github.com/nknorg/nkn-sdk-go"
 )
 
 func TestClient(t *testing.T) {
-	err := func () error {
+	err := func() error {
 		Init()
 
 		seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
@@ -35,26 +35,26 @@ func TestClient(t *testing.T) {
 			return err
 		}
 
-		fromClient, err := NewMultiClient(account, common.BytesToHexString(fromIdentifier), 0, true, 300 * time.Second)
+		fromClient, err := NewMultiClient(account, common.BytesToHexString(fromIdentifier), 0, true)
 		if err != nil {
 			return err
 		}
 		defer fromClient.Close()
-		<- fromClient.OnConnect
+		<-fromClient.OnConnect
 
-		toClient, err := NewMultiClient(account, common.BytesToHexString(toIdentifier), 0, true, 300 * time.Second)
+		toClient, err := NewMultiClient(account, common.BytesToHexString(toIdentifier), 0, true)
 		if err != nil {
 			return err
 		}
 		defer toClient.Close()
-		<- toClient.OnConnect
+		<-toClient.OnConnect
 
 		timeSent := time.Now().UnixNano() / int64(time.Millisecond)
 		var timeReceived int64
 		go func() {
-			msg := <- toClient.OnMessage
+			msg := <-toClient.OnMessage
 			timeReceived = time.Now().UnixNano() / int64(time.Millisecond)
-			log.Println("Receive message", "\"" + string(msg.Data) + "\"", "from", msg.Src, "after", timeReceived - timeSent, "ms")
+			log.Println("Receive message", "\""+string(msg.Data)+"\"", "from", msg.Src, "after", timeReceived-timeSent, "ms")
 			msg.Reply([]byte("world"))
 		}()
 
@@ -64,7 +64,7 @@ func TestClient(t *testing.T) {
 			return err
 		}
 		timeResponse := time.Now().UnixNano() / int64(time.Millisecond)
-		log.Println("Got response", "\"" + string(response.Data) + "\"", "from", response.Src, "after", timeResponse - timeReceived, "ms")
+		log.Println("Got response", "\""+string(response.Data)+"\"", "from", response.Src, "after", timeResponse-timeReceived, "ms")
 
 		// wait to send receipt
 		time.Sleep(time.Second)

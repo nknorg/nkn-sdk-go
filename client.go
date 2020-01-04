@@ -29,25 +29,9 @@ import (
 )
 
 const (
-	defaultReconnectInterval = time.Second
-	defaultMsgChanLen        = 1024
-	defaultBlockChanLen      = 1
-	defaultConnectRetries    = 3
-	handshakeTimeout         = 5 * time.Second
-	maxRetryInterval         = time.Minute
-
 	nonceSize     = 24
 	sharedKeySize = 32
 )
-
-type ClientConfig struct {
-	SeedRPCServerAddr string
-	ReconnectInterval time.Duration
-	MaxHoldingSeconds uint32
-	MsgChanLen        uint32
-	BlockChanLen      uint32
-	ConnectRetries    uint32
-}
 
 type Message struct {
 	Src       string
@@ -56,10 +40,11 @@ type Message struct {
 	Encrypted bool
 	Pid       []byte
 	Reply     func([]byte)
+	IsSession bool
 }
 
 type Client struct {
-	config            ClientConfig
+	config            *ClientConfig
 	account           *vault.Account
 	publicKey         []byte
 	curveSecretKey    *[sharedKeySize]byte
@@ -234,10 +219,10 @@ func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte
 			nonce := append(keyNonce, msgNonce...)
 
 			msgs[i], err = proto.Marshal(&payloads.Message{
-				encrypted,
-				true,
-				nonce,
-				encryptedKey,
+				Payload:      encrypted,
+				Encrypted:    true,
+				Nonce:        nonce,
+				EncryptedKey: encryptedKey,
 			})
 			if err != nil {
 				return nil, err
@@ -262,10 +247,10 @@ func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte
 		}
 
 		data, err := proto.Marshal(&payloads.Message{
-			encrypted,
-			true,
-			nonce,
-			nil,
+			Payload:      encrypted,
+			Encrypted:    true,
+			Nonce:        nonce,
+			EncryptedKey: nil,
 		})
 		if err != nil {
 			return nil, err
@@ -323,6 +308,10 @@ func (c *Client) decryptPayload(msg *payloads.Message, srcAddr string) ([]byte, 
 }
 
 func (c *Client) handleMessage(msgType int, data []byte) error {
+	if c.IsClosed() {
+		return nil
+	}
+
 	switch msgType {
 	case websocket.TextMessage:
 		msg := make(map[string]*json.RawMessage)
@@ -361,6 +350,13 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return err
 			}
 			c.sigChainBlockHash = setClientResult.SigChainBlockHash
+
+			c.RLock()
+			defer c.RUnlock()
+			if c.closed {
+				return nil
+			}
+
 			select {
 			case c.OnConnect <- struct{}{}:
 			default:
@@ -376,6 +372,13 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			if err := json.Unmarshal(*msg["Result"], &blockInfo); err != nil {
 				return err
 			}
+
+			c.RLock()
+			defer c.RUnlock()
+			if c.closed {
+				return nil
+			}
+
 			select {
 			case c.OnBlock <- &blockInfo:
 			default:
@@ -443,6 +446,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					Type:      payload.Type,
 					Encrypted: payloadMsg.Encrypted,
 					Pid:       payload.Pid,
+					IsSession: payload.IsSession,
 				}
 			}
 
@@ -451,6 +455,10 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				if responseChannel, ok := c.responseChannels[pidString]; ok {
 					responseChannel <- msg
 				}
+				return nil
+			}
+
+			if msg == nil {
 				return nil
 			}
 
@@ -471,6 +479,12 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				}
 			}
 
+			c.RLock()
+			defer c.RUnlock()
+			if c.closed {
+				return nil
+			}
+
 			select {
 			case c.OnMessage <- msg:
 			default:
@@ -485,7 +499,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 	urlString := (&url.URL{Scheme: "ws", Host: nodeInfo.Address}).String()
 	dialer := websocket.DefaultDialer
-	dialer.HandshakeTimeout = handshakeTimeout
+	dialer.HandshakeTimeout = c.config.WsHandshakeTimeout
 
 	conn, _, err := dialer.Dial(urlString, nil)
 	if err != nil {
@@ -543,19 +557,19 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 }
 
 func (c *Client) connect(maxRetries int) error {
-	retryInterval := c.config.ReconnectInterval
-	for retry := 0; maxRetries < 0 || retry <= maxRetries; retry++ {
-		if retry > 0 {
+	retryInterval := c.config.MinReconnectInterval
+	for retry := 1; maxRetries == 0 || retry <= maxRetries; retry++ {
+		if retry > 1 {
 			log.Printf("Retry in %v...\n", retryInterval)
 			time.Sleep(retryInterval)
 			retryInterval *= 2
-			if retryInterval > maxRetryInterval {
-				retryInterval = maxRetryInterval
+			if retryInterval > c.config.MaxReconnectInterval {
+				retryInterval = c.config.MaxReconnectInterval
 			}
 		}
 
 		var nodeInfo *NodeInfo
-		err, _ := call(c.config.SeedRPCServerAddr, "getwsaddr", map[string]interface{}{"address": c.Address}, &nodeInfo)
+		err, _ := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address}, &nodeInfo)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -574,6 +588,9 @@ func (c *Client) connect(maxRetries int) error {
 }
 
 func (c *Client) reconnect() {
+	if c.IsClosed() {
+		return
+	}
 	select {
 	case c.reconnectChan <- struct{}{}:
 	default:
@@ -586,10 +603,10 @@ func (c *Client) handleReconnect() {
 			return
 		}
 
-		log.Printf("Reconnect in %v...\n", c.config.ReconnectInterval)
-		time.Sleep(c.config.ReconnectInterval)
+		log.Printf("Reconnect in %v...\n", c.config.MinReconnectInterval)
+		time.Sleep(c.config.MinReconnectInterval)
 
-		err := c.connect(-1)
+		err := c.connect(0)
 		if err != nil {
 			log.Println(err)
 			c.Close()
@@ -603,41 +620,11 @@ func addressToID(addr string) []byte {
 	return id[:]
 }
 
-func defaultConfig() ClientConfig {
-	return ClientConfig{
-		SeedRPCServerAddr: seedRPCServerAddr,
-		ReconnectInterval: defaultReconnectInterval,
-		MaxHoldingSeconds: 0,
-		MsgChanLen:        defaultMsgChanLen,
-		BlockChanLen:      defaultBlockChanLen,
-		ConnectRetries:    defaultConnectRetries,
-	}
-}
-
-func getConfig(configs []ClientConfig) ClientConfig {
-	var config ClientConfig
-	if len(configs) == 0 {
-		return defaultConfig()
-	} else {
-		config = configs[0]
-		if config.SeedRPCServerAddr == "" {
-			config.SeedRPCServerAddr = seedRPCServerAddr
-		}
-		if config.ReconnectInterval == 0 {
-			config.ReconnectInterval = defaultReconnectInterval
-		}
-		if config.MsgChanLen == 0 {
-			config.MsgChanLen = defaultMsgChanLen
-		}
-		if config.BlockChanLen == 0 {
-			config.BlockChanLen = defaultBlockChanLen
-		}
-	}
-	return config
-}
-
 func NewClient(account *vault.Account, identifier string, configs ...ClientConfig) (*Client, error) {
-	config := getConfig(configs)
+	config, err := MergedClientConfig(configs)
+	if err != nil {
+		return nil, err
+	}
 
 	pk := account.PubKey().EncodePoint()
 
@@ -662,7 +649,7 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 
 	go c.handleReconnect()
 
-	err := c.connect(int(c.config.ConnectRetries))
+	err = c.connect(int(c.config.ConnectRetries))
 	if err != nil {
 		return nil, err
 	}
@@ -775,10 +762,10 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 		}
 
 		data, err := proto.Marshal(&payloads.Message{
-			payloadData,
-			false,
-			nil,
-			nil,
+			Payload:      payloadData,
+			Encrypted:    false,
+			Nonce:        nil,
+			EncryptedKey: nil,
 		})
 		if err != nil {
 			return err
@@ -830,11 +817,11 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	var signatures [][]byte
 
 	for i, dest := range dests {
-		destId, destPubKey, _, err := address.ParseClientAddress(dest)
+		destID, destPubKey, _, err := address.ParseClientAddress(dest)
 		if err != nil {
 			return err
 		}
-		sigChain.DestId = destId
+		sigChain.DestId = destID
 		sigChain.DestPubkey = destPubKey
 		if len(payloadMsgs) > 1 {
 			sigChain.DataSize = uint32(len(payloadMsgs[i]))
@@ -900,7 +887,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 }
 
 func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) error {
-	subscribers, subscribersInTxPool, err := getSubscribers(c.config.SeedRPCServerAddr, topic, offset, limit, false, txPool)
+	subscribers, subscribersInTxPool, err := getSubscribers(c.config.GetRandomSeedRPCServerAddr(), topic, offset, limit, false, txPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
 		dests = append(dests, subscriber)
@@ -916,4 +903,13 @@ func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data [
 		return err
 	}
 	return c.send(dests, payload, encrypted, MaxHoldingSeconds...)
+}
+
+func (c *Client) SetWriteDeadline(deadline time.Time) error {
+	c.Lock()
+	defer c.Unlock()
+	if c.conn == nil {
+		return errors.New("nil websocker connection")
+	}
+	return c.conn.SetWriteDeadline(deadline)
 }

@@ -1,7 +1,6 @@
 package nkn_sdk_go
 
 import (
-	"errors"
 	"time"
 
 	"github.com/nknorg/nkn/common"
@@ -11,12 +10,6 @@ import (
 	"github.com/nknorg/nkn/transaction"
 	"github.com/nknorg/nkn/vault"
 )
-
-var AlreadySubscribed = errors.New("already subscribed to this topic")
-
-type WalletConfig struct {
-	SeedRPCServerAddr string
-}
 
 type errWithCode struct {
 	err  error
@@ -29,9 +22,9 @@ type queuedTx struct {
 	err  chan *errWithCode
 }
 
-type WalletSDK struct {
+type Wallet struct {
+	config    *WalletConfig
 	account   *vault.Account
-	config    WalletConfig
 	txChannel chan *queuedTx
 }
 
@@ -49,15 +42,10 @@ type nonce struct {
 	NonceInTxPool uint64 `json:"nonceInTxPool"`
 }
 
-func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
-	var _config WalletConfig
-	if len(config) == 0 {
-		_config = WalletConfig{seedRPCServerAddr}
-	} else {
-		_config = config[0]
-		if _config.SeedRPCServerAddr == "" {
-			_config.SeedRPCServerAddr = seedRPCServerAddr
-		}
+func NewWallet(account *vault.Account, configs ...WalletConfig) (*Wallet, error) {
+	config, err := MergedWalletConfig(configs)
+	if err != nil {
+		return nil, err
 	}
 	txChannel := make(chan *queuedTx)
 	go func() {
@@ -65,7 +53,7 @@ func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
 			queuedTx := <-txChannel
 			tx := queuedTx.tx
 			var txId string
-			err, code := call(_config.SeedRPCServerAddr, "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txId)
+			err, code := call(config.GetRandomSeedRPCServerAddr(), "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txId)
 			if err != nil {
 				queuedTx.err <- &errWithCode{err, code}
 			} else {
@@ -73,10 +61,15 @@ func NewWalletSDK(account *vault.Account, config ...WalletConfig) *WalletSDK {
 			}
 		}
 	}()
-	return &WalletSDK{account, _config, txChannel}
+	wallet := &Wallet{
+		config:    config,
+		account:   account,
+		txChannel: txChannel,
+	}
+	return wallet, nil
 }
 
-func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
+func (w *Wallet) signTransaction(tx *transaction.Transaction) error {
 	ct, err := program.CreateSignatureProgramContext(w.account.PublicKey)
 	if err != nil {
 		return err
@@ -91,7 +84,7 @@ func (w *WalletSDK) signTransaction(tx *transaction.Transaction) error {
 	return nil
 }
 
-func (w *WalletSDK) SendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
+func (w *Wallet) SendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
 	txIdChan := make(chan string)
 	errChan := make(chan *errWithCode)
 	w.txChannel <- &queuedTx{tx, txIdChan, errChan}
@@ -103,14 +96,14 @@ func (w *WalletSDK) SendRawTransaction(tx *transaction.Transaction) (string, err
 	}
 }
 
-func (w *WalletSDK) getNonce() (uint64, error) {
+func (w *Wallet) getNonce() (uint64, error) {
 	address, err := w.account.ProgramHash.ToAddress()
 	if err != nil {
 		return 0, err
 	}
 
 	var nonce nonce
-	err, _ = call(w.config.SeedRPCServerAddr, "getnoncebyaddr", map[string]interface{}{"address": address}, &nonce)
+	err, _ = call(w.config.GetRandomSeedRPCServerAddr(), "getnoncebyaddr", map[string]interface{}{"address": address}, &nonce)
 	if err != nil {
 		return 0, err
 	}
@@ -121,9 +114,9 @@ func (w *WalletSDK) getNonce() (uint64, error) {
 	return nonce.Nonce, nil
 }
 
-func (w *WalletSDK) getHeight() (uint32, error) {
+func (w *Wallet) getHeight() (uint32, error) {
 	var height uint32
-	err, _ := call(w.config.SeedRPCServerAddr, "getlatestblockheight", map[string]interface{}{}, &height)
+	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getlatestblockheight", map[string]interface{}{}, &height)
 	if err != nil {
 		return 0, err
 	}
@@ -138,7 +131,7 @@ func getFee(fee []string) (common.Fixed64, error) {
 	return common.StringToFixed64(fee[0])
 }
 
-func (w *WalletSDK) Balance() (common.Fixed64, error) {
+func (w *Wallet) Balance() (common.Fixed64, error) {
 	address, err := w.account.ProgramHash.ToAddress()
 	if err != nil {
 		return common.Fixed64(-1), err
@@ -146,9 +139,9 @@ func (w *WalletSDK) Balance() (common.Fixed64, error) {
 	return w.BalanceByAddress(address)
 }
 
-func (w *WalletSDK) BalanceByAddress(address string) (common.Fixed64, error) {
+func (w *Wallet) BalanceByAddress(address string) (common.Fixed64, error) {
 	var balance balance
-	err, _ := call(w.config.SeedRPCServerAddr, "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
+	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
 	if err != nil {
 		return 0, err
 	}
@@ -156,7 +149,7 @@ func (w *WalletSDK) BalanceByAddress(address string) (common.Fixed64, error) {
 	return common.StringToFixed64(balance.Amount)
 }
 
-func (w *WalletSDK) Transfer(address string, value string, fee ...string) (string, error) {
+func (w *Wallet) Transfer(address string, value string, fee ...string) (string, error) {
 	outputValue, err := common.StringToFixed64(value)
 	if err != nil {
 		return "", err
@@ -189,7 +182,7 @@ func (w *WalletSDK) Transfer(address string, value string, fee ...string) (strin
 	return id, err
 }
 
-func (w *WalletSDK) NewNanoPay(address string, fee string, duration ...uint32) (*NanoPay, error) {
+func (w *Wallet) NewNanoPay(address string, fee string, duration ...uint32) (*NanoPay, error) {
 	_fee, err := common.StringToFixed64(fee)
 	if err != nil {
 		return nil, err
@@ -197,14 +190,14 @@ func (w *WalletSDK) NewNanoPay(address string, fee string, duration ...uint32) (
 	return NewNanoPay(w, address, _fee, duration...)
 }
 
-func (w *WalletSDK) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error, address ...string) (*NanoPayClaimer, error) {
+func (w *Wallet) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error, address ...string) (*NanoPayClaimer, error) {
 	if len(address) > 0 {
 		return NewNanoPayClaimer(w, address[0], claimInterval, errChan)
 	}
 	return NewNanoPayClaimer(w, "", claimInterval, errChan)
 }
 
-func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
+func (w *Wallet) RegisterName(name string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
@@ -226,7 +219,7 @@ func (w *WalletSDK) RegisterName(name string, fee ...string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) DeleteName(name string, fee ...string) (string, error) {
+func (w *Wallet) DeleteName(name string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
@@ -248,7 +241,7 @@ func (w *WalletSDK) DeleteName(name string, fee ...string) (string, error) {
 	return id, err
 }
 
-func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, meta string, fee ...string) (string, error) {
+func (w *Wallet) Subscribe(identifier string, topic string, duration uint32, meta string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
@@ -278,7 +271,7 @@ func (w *WalletSDK) Subscribe(identifier string, topic string, duration uint32, 
 	return id, err
 }
 
-func (w *WalletSDK) Unsubscribe(identifier string, topic string, fee ...string) (string, error) {
+func (w *Wallet) Unsubscribe(identifier string, topic string, fee ...string) (string, error) {
 	_fee, err := getFee(fee)
 	if err != nil {
 		return "", err
@@ -306,18 +299,18 @@ func (w *WalletSDK) Unsubscribe(identifier string, topic string, fee ...string) 
 	return id, err
 }
 
-func (w *WalletSDK) GetAddressByName(name string) (string, error) {
+func (w *Wallet) GetAddressByName(name string) (string, error) {
 	var address string
-	err, _ := call(w.config.SeedRPCServerAddr, "getaddressbyname", map[string]interface{}{"name": name}, &address)
+	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getaddressbyname", map[string]interface{}{"name": name}, &address)
 	if err != nil {
 		return "", err
 	}
 	return address, nil
 }
 
-func (w *WalletSDK) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+func (w *Wallet) GetSubscription(topic string, subscriber string) (*Subscription, error) {
 	var subscription *Subscription
-	err, _ := call(w.config.SeedRPCServerAddr, "getsubscription", map[string]interface{}{
+	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getsubscription", map[string]interface{}{
 		"topic":      topic,
 		"subscriber": subscriber,
 	}, &subscription)
@@ -363,13 +356,13 @@ func getSubscribers(address string, topic string, offset, limit uint32, meta, tx
 	return subscribers, subscribersInTxPool, nil
 }
 
-func (w *WalletSDK) GetSubscribers(topic string, offset, limit uint32, meta, txPool bool) (map[string]string, map[string]string, error) {
-	return getSubscribers(w.config.SeedRPCServerAddr, topic, offset, limit, meta, txPool)
+func (w *Wallet) GetSubscribers(topic string, offset, limit uint32, meta, txPool bool) (map[string]string, map[string]string, error) {
+	return getSubscribers(w.config.GetRandomSeedRPCServerAddr(), topic, offset, limit, meta, txPool)
 }
 
-func (w *WalletSDK) GetSubscribersCount(topic string) (uint32, error) {
+func (w *Wallet) GetSubscribersCount(topic string) (uint32, error) {
 	var count uint32
-	err, _ := call(w.config.SeedRPCServerAddr, "getsubscriberscount", map[string]interface{}{
+	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getsubscriberscount", map[string]interface{}{
 		"topic": topic,
 	}, &count)
 	return count, err

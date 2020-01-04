@@ -23,7 +23,7 @@ func TestWallet(t *testing.T) {
 			return err
 		}
 
-		w := NewWalletSDK(account)
+		w := NewWallet(account)
 
 		// Query asset balance for this wallet
 		balance, err := w.Balance()

@@ -5,13 +5,6 @@ Go implementation of NKN SDK.
 **Note: This repository is in the early development stage and may not have all
 functions working properly. It should be used only for testing now.**
 
-## Usage
-
-Before you use SDK please call:
-```go
-Init()
-```
-
 ## Client Usage
 
 Create a client with a generated key pair:
@@ -138,7 +131,7 @@ to get the default client and `multiclient.Clients` to get all clients.
 Create wallet SDK:
 ```go
 account, _ := vault.NewAccount()
-w := NewWalletSDK(account)
+w := NewWallet(account)
 ```
 
 By default the wallet will use RPC server provided by us.
@@ -146,7 +139,7 @@ Any NKN full node can serve as a RPC server. To create
 a wallet using customized RPC server:
 ```go
 account, _ := vault.NewAccount()
-w := NewWalletSDK(account, WalletConfig{SeedRPCServerAddr: "https://ip:port"})
+w := NewWallet(account, WalletConfig{SeedRPCServerAddr: "https://ip:port"})
 ```
 
 Query asset balance for this wallet:
@@ -202,7 +195,7 @@ if err == nil {
     log.Println("fail:", err)
 }
 ```
-		
+
 Register name for this wallet:
 ```go
 txid, err = w.RegisterName("somename")
