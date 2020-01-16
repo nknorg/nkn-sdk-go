@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/imdario/mergo"
+	"github.com/nknorg/ncp"
 )
 
 var DefaultSeedRPCServerAddr = []string{
@@ -90,10 +91,10 @@ var DefaultSessionConfig = SessionConfig{
 
 type ClientConfig struct {
 	SeedRPCServerAddr       []string
-	MaxHoldingSeconds       uint32
-	MsgChanLen              uint32
-	BlockChanLen            uint32
-	ConnectRetries          uint32
+	MaxHoldingSeconds       int32
+	MsgChanLen              int32
+	BlockChanLen            int32
+	ConnectRetries          int32
 	MsgCacheExpiration      time.Duration
 	MsgCacheCleanupInterval time.Duration
 	WsHandshakeTimeout      time.Duration
@@ -106,22 +107,7 @@ type WalletConfig struct {
 	SeedRPCServerAddr []string
 }
 
-type SessionConfig struct {
-	SessionWindowSize            uint32 // in bytes
-	MTU                          uint32 // in bytes
-	InitialConnectionWindowSize  uint32 // in packets
-	MaxConnectionWindowSize      uint32 // in packets
-	MinConnectionWindowSize      uint32 // in packets
-	MaxAckSeqListSize            uint32
-	NonStream                    bool
-	FlushInterval                time.Duration
-	CloseDelay                   time.Duration
-	InitialRetransmissionTimeout time.Duration
-	MaxRetransmissionTimeout     time.Duration
-	SendAckInterval              time.Duration
-	CheckTimeoutInterval         time.Duration
-	DialTimeout                  time.Duration
-}
+type SessionConfig ncp.Config
 
 func init() {
 	rand.Seed(time.Now().UnixNano())

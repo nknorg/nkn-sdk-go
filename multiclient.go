@@ -16,29 +16,33 @@ import (
 
 	"github.com/patrickmn/go-cache"
 
+	"github.com/nknorg/ncp"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 )
 
-const identifierRe = "^__\\d+__$"
+const (
+	identifierRe  = "^__\\d+__$"
+	SessionIDSize = 8 // in bytes
+)
 
 type MultiClient struct {
 	config        *ClientConfig
 	offset        int
 	Clients       map[int]*Client
 	DefaultClient *Client
-	addr          *Addr
+	addr          Addr
 	Address       string
 	OnConnect     chan struct{}
 	OnMessage     chan *Message
-	acceptSession chan *Session
+	acceptSession chan *ncp.Session
 	onClose       chan struct{}
 
 	sync.RWMutex
-	sessions map[string]*Session
+	sessions map[string]*ncp.Session
 	isClosed bool
 }
 
-func NewMultiClient(account *vault.Account, base string, numSubClients int, originalClient bool, configs ...ClientConfig) (*MultiClient, error) {
+func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients int, originalClient bool, configs ...ClientConfig) (*MultiClient, error) {
 	config, err := MergedClientConfig(configs)
 	if err != nil {
 		return nil, err
@@ -60,7 +64,7 @@ func NewMultiClient(account *vault.Account, base string, numSubClients int, orig
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			client, err := NewClient(account, addIdentifier(base, i), configs...)
+			client, err := NewClient(account, addIdentifier(baseIdentifier, i), configs...)
 			if err != nil {
 				log.Println(err)
 				return
@@ -83,7 +87,7 @@ func NewMultiClient(account *vault.Account, base string, numSubClients int, orig
 		defaultClient = clients[0]
 	}
 
-	addr := address.MakeAddressString(account.PublicKey.EncodePoint(), base)
+	addr := address.MakeAddressString(account.PublicKey.EncodePoint(), baseIdentifier)
 
 	onConnect := make(chan struct{}, 1)
 	go func() {
@@ -107,12 +111,12 @@ func NewMultiClient(account *vault.Account, base string, numSubClients int, orig
 		offset:        offset,
 		Clients:       clients,
 		DefaultClient: defaultClient,
-		addr:          &Addr{addr: addr},
+		addr:          Addr{addr: addr},
 		Address:       addr,
 		OnConnect:     onConnect,
 		OnMessage:     onMessage,
-		acceptSession: make(chan *Session, 128),
-		sessions:      make(map[string]*Session, 0),
+		acceptSession: make(chan *ncp.Session, 128),
+		sessions:      make(map[string]*ncp.Session, 0),
 		onClose:       make(chan struct{}, 0),
 	}
 
@@ -139,7 +143,7 @@ func NewMultiClient(account *vault.Account, base string, numSubClients int, orig
 				if msg.IsSession {
 					err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.Pid, msg.Data)
 					if err != nil {
-						if err != SessionClosed {
+						if err != ncp.SessionClosed {
 							log.Println(err)
 						}
 						continue
@@ -151,7 +155,7 @@ func NewMultiClient(account *vault.Account, base string, numSubClients int, orig
 					}
 					c.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
-					msg.Src = removeIdentifier(msg.Src)
+					msg.Src, _ = removeIdentifier(msg.Src)
 					msg.Reply = func(response []byte) {
 						pid := msg.Pid
 						var payload *payloads.Payload
@@ -190,7 +194,7 @@ func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, 
 		return nil, err
 	}
 	msg := <-responseChannel
-	msg.Src = removeIdentifier(msg.Src)
+	msg.Src, _ = removeIdentifier(msg.Src)
 	return msg, nil
 }
 
@@ -221,7 +225,7 @@ func (m *MultiClient) Send(dests []string, data []byte, encrypted bool, MaxHoldi
 	}
 	if _, value, ok := reflect.Select(cases); ok {
 		msg := value.Interface().(*Message)
-		msg.Src = removeIdentifier(msg.Src)
+		msg.Src, _ = removeIdentifier(msg.Src)
 		return msg, nil
 	}
 	return nil, errors.New("error reading response channel")
@@ -236,7 +240,7 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	return nil
 }
 
-func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *SessionConfig) (*Session, error) {
+func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *SessionConfig) (*ncp.Session, error) {
 	clientIDs := make([]string, 0, len(m.Clients))
 	clients := make(map[string]*Client, len(m.Clients))
 	for id, client := range m.Clients {
@@ -245,21 +249,21 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 		clients[clientID] = client
 	}
 	sort.Strings(clientIDs)
-	return NewSession(m.addr.addr, remoteAddr, clientIDs, (func(clientID string, dest string, buf []byte, writeTimeout time.Duration) error {
+	return ncp.NewSession(m.addr, Addr{addr: remoteAddr}, clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
 			Type:      payloads.BINARY,
 			Pid:       sessionID,
 			Data:      buf,
 			IsSession: true,
 		}
-		c := clients[clientID]
+		c := clients[localClientID]
 		if writeTimeout > 0 {
 			err := c.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if err != nil {
 				return err
 			}
 		}
-		err := c.send([]string{dest}, payload, true, 0)
+		err := c.send([]string{addIdentifierPrefix(remoteAddr, remoteClientID)}, payload, true, 0)
 		if err != nil {
 			return err
 		}
@@ -270,11 +274,11 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 			}
 		}
 		return nil
-	}), config)
+	}), (*ncp.Config)(config))
 }
 
-func (m *MultiClient) handleSessionMsg(clientID, src string, sessionID, data []byte) error {
-	remoteAddr := removeIdentifier(src)
+func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, data []byte) error {
+	remoteAddr, remoteClientID := removeIdentifier(src)
 	sessionKey := sessionKey(remoteAddr, sessionID)
 
 	m.Lock()
@@ -289,7 +293,7 @@ func (m *MultiClient) handleSessionMsg(clientID, src string, sessionID, data []b
 		m.sessions[sessionKey] = session
 		m.Unlock()
 
-		err = session.ReceiveWith(clientID, src, data)
+		err = session.ReceiveWith(localClientID, remoteClientID, data)
 		if err != nil {
 			return err
 		}
@@ -301,7 +305,7 @@ func (m *MultiClient) handleSessionMsg(clientID, src string, sessionID, data []b
 		}
 	} else {
 		m.Unlock()
-		err := session.ReceiveWith(clientID, src, data)
+		err := session.ReceiveWith(localClientID, remoteClientID, data)
 		if err != nil {
 			return err
 		}
@@ -313,11 +317,11 @@ func (m *MultiClient) Addr() net.Addr {
 	return m.addr
 }
 
-func (m *MultiClient) Dial(remoteAddr string) (*Session, error) {
+func (m *MultiClient) Dial(remoteAddr string) (*ncp.Session, error) {
 	return m.DialWithConfig(remoteAddr, nil)
 }
 
-func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (*Session, error) {
+func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (*ncp.Session, error) {
 	merged := m.config.SessionConfig
 	if config != nil {
 		err := mergo.Merge(&merged, config, mergo.WithOverride)
@@ -349,7 +353,7 @@ func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (
 	return session, nil
 }
 
-func (m *MultiClient) AcceptSession() (*Session, error) {
+func (m *MultiClient) AcceptSession() (*ncp.Session, error) {
 	for {
 		select {
 		case session := <-m.acceptSession:
@@ -361,7 +365,7 @@ func (m *MultiClient) AcceptSession() (*Session, error) {
 			return session, nil
 		case _, ok := <-m.onClose:
 			if !ok {
-				return nil, Closed
+				return nil, ncp.Closed
 			}
 		}
 	}
