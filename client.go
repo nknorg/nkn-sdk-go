@@ -39,7 +39,7 @@ type Message struct {
 	Type      payloads.PayloadType
 	Encrypted bool
 	Pid       []byte
-	Reply     func([]byte)
+	Reply     func([]byte) error
 	IsSession bool
 }
 
@@ -462,7 +462,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			msg.Reply = func(response []byte) {
+			msg.Reply = func(response []byte) error {
 				pid := payload.Pid
 				var payload *payloads.Payload
 				var err error
@@ -472,11 +472,12 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					payload, err = newBinaryPayload(response, pid)
 				}
 				if err != nil {
-					log.Println("Problem creating response to PID " + hex.EncodeToString(pid))
+					return err
 				}
 				if err := c.send([]string{inboundMsg.Src}, payload, payloadMsg.Encrypted); err != nil {
-					log.Println("Problem sending response to PID " + hex.EncodeToString(pid))
+					return err
 				}
+				return nil
 			}
 
 			c.RLock()
