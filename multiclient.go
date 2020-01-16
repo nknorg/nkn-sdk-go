@@ -1,7 +1,6 @@
 package nkn_sdk_go
 
 import (
-	"encoding/hex"
 	"errors"
 	"log"
 	"net"
@@ -159,7 +158,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 					c.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
 					msg.Src, _ = removeIdentifier(msg.Src)
-					msg.Reply = func(response []byte) {
+					msg.Reply = func(response []byte) error {
 						pid := msg.Pid
 						var payload *payloads.Payload
 						var err error
@@ -169,11 +168,12 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 							payload, err = newBinaryPayload(response, pid)
 						}
 						if err != nil {
-							log.Println("Problem creating response to PID " + hex.EncodeToString(pid))
+							return err
 						}
 						if err := m.send([]string{msg.Src}, payload, msg.Encrypted); err != nil {
-							log.Println("Problem sending response to PID " + hex.EncodeToString(pid))
+							return err
 						}
+						return nil
 					}
 					onMessage <- msg
 				}
