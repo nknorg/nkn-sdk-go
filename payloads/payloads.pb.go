@@ -48,7 +48,7 @@ var PayloadType_value = map[string]int32{
 }
 
 func (PayloadType) EnumDescriptor() ([]byte, []int) {
-	return fileDescriptor_payloads_eda209b91fbaf3f5, []int{0}
+	return fileDescriptor_payloads_06e9d2124e6d29fd, []int{0}
 }
 
 type Message struct {
@@ -61,7 +61,7 @@ type Message struct {
 func (m *Message) Reset()      { *m = Message{} }
 func (*Message) ProtoMessage() {}
 func (*Message) Descriptor() ([]byte, []int) {
-	return fileDescriptor_payloads_eda209b91fbaf3f5, []int{0}
+	return fileDescriptor_payloads_06e9d2124e6d29fd, []int{0}
 }
 func (m *Message) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -130,7 +130,7 @@ type Payload struct {
 func (m *Payload) Reset()      { *m = Payload{} }
 func (*Payload) ProtoMessage() {}
 func (*Payload) Descriptor() ([]byte, []int) {
-	return fileDescriptor_payloads_eda209b91fbaf3f5, []int{1}
+	return fileDescriptor_payloads_06e9d2124e6d29fd, []int{1}
 }
 func (m *Payload) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -208,7 +208,7 @@ type TextData struct {
 func (m *TextData) Reset()      { *m = TextData{} }
 func (*TextData) ProtoMessage() {}
 func (*TextData) Descriptor() ([]byte, []int) {
-	return fileDescriptor_payloads_eda209b91fbaf3f5, []int{2}
+	return fileDescriptor_payloads_06e9d2124e6d29fd, []int{2}
 }
 func (m *TextData) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -244,110 +244,10 @@ func (m *TextData) GetText() string {
 	return ""
 }
 
-type SessionData struct {
-	SequenceId       uint32   `protobuf:"varint,1,opt,name=sequence_id,json=sequenceId,proto3" json:"sequence_id,omitempty"`
-	Data             []byte   `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
-	AckStartSeq      []uint32 `protobuf:"varint,3,rep,packed,name=ack_start_seq,json=ackStartSeq" json:"ack_start_seq,omitempty"`
-	AckSeqCount      []uint32 `protobuf:"varint,4,rep,packed,name=ack_seq_count,json=ackSeqCount" json:"ack_seq_count,omitempty"`
-	IdentifierPrefix []string `protobuf:"bytes,5,rep,name=identifier_prefix,json=identifierPrefix" json:"identifier_prefix,omitempty"`
-	WindowSize       uint32   `protobuf:"varint,7,opt,name=window_size,json=windowSize,proto3" json:"window_size,omitempty"`
-	Mtu              uint32   `protobuf:"varint,8,opt,name=mtu,proto3" json:"mtu,omitempty"`
-	Close            bool     `protobuf:"varint,9,opt,name=close,proto3" json:"close,omitempty"`
-}
-
-func (m *SessionData) Reset()      { *m = SessionData{} }
-func (*SessionData) ProtoMessage() {}
-func (*SessionData) Descriptor() ([]byte, []int) {
-	return fileDescriptor_payloads_eda209b91fbaf3f5, []int{3}
-}
-func (m *SessionData) XXX_Unmarshal(b []byte) error {
-	return m.Unmarshal(b)
-}
-func (m *SessionData) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
-	if deterministic {
-		return xxx_messageInfo_SessionData.Marshal(b, m, deterministic)
-	} else {
-		b = b[:cap(b)]
-		n, err := m.MarshalTo(b)
-		if err != nil {
-			return nil, err
-		}
-		return b[:n], nil
-	}
-}
-func (dst *SessionData) XXX_Merge(src proto.Message) {
-	xxx_messageInfo_SessionData.Merge(dst, src)
-}
-func (m *SessionData) XXX_Size() int {
-	return m.Size()
-}
-func (m *SessionData) XXX_DiscardUnknown() {
-	xxx_messageInfo_SessionData.DiscardUnknown(m)
-}
-
-var xxx_messageInfo_SessionData proto.InternalMessageInfo
-
-func (m *SessionData) GetSequenceId() uint32 {
-	if m != nil {
-		return m.SequenceId
-	}
-	return 0
-}
-
-func (m *SessionData) GetData() []byte {
-	if m != nil {
-		return m.Data
-	}
-	return nil
-}
-
-func (m *SessionData) GetAckStartSeq() []uint32 {
-	if m != nil {
-		return m.AckStartSeq
-	}
-	return nil
-}
-
-func (m *SessionData) GetAckSeqCount() []uint32 {
-	if m != nil {
-		return m.AckSeqCount
-	}
-	return nil
-}
-
-func (m *SessionData) GetIdentifierPrefix() []string {
-	if m != nil {
-		return m.IdentifierPrefix
-	}
-	return nil
-}
-
-func (m *SessionData) GetWindowSize() uint32 {
-	if m != nil {
-		return m.WindowSize
-	}
-	return 0
-}
-
-func (m *SessionData) GetMtu() uint32 {
-	if m != nil {
-		return m.Mtu
-	}
-	return 0
-}
-
-func (m *SessionData) GetClose() bool {
-	if m != nil {
-		return m.Close
-	}
-	return false
-}
-
 func init() {
 	proto.RegisterType((*Message)(nil), "payloads.Message")
 	proto.RegisterType((*Payload)(nil), "payloads.Payload")
 	proto.RegisterType((*TextData)(nil), "payloads.TextData")
-	proto.RegisterType((*SessionData)(nil), "payloads.SessionData")
 	proto.RegisterEnum("payloads.PayloadType", PayloadType_name, PayloadType_value)
 }
 func (x PayloadType) String() string {
@@ -453,66 +353,6 @@ func (this *TextData) Equal(that interface{}) bool {
 	}
 	return true
 }
-func (this *SessionData) Equal(that interface{}) bool {
-	if that == nil {
-		return this == nil
-	}
-
-	that1, ok := that.(*SessionData)
-	if !ok {
-		that2, ok := that.(SessionData)
-		if ok {
-			that1 = &that2
-		} else {
-			return false
-		}
-	}
-	if that1 == nil {
-		return this == nil
-	} else if this == nil {
-		return false
-	}
-	if this.SequenceId != that1.SequenceId {
-		return false
-	}
-	if !bytes.Equal(this.Data, that1.Data) {
-		return false
-	}
-	if len(this.AckStartSeq) != len(that1.AckStartSeq) {
-		return false
-	}
-	for i := range this.AckStartSeq {
-		if this.AckStartSeq[i] != that1.AckStartSeq[i] {
-			return false
-		}
-	}
-	if len(this.AckSeqCount) != len(that1.AckSeqCount) {
-		return false
-	}
-	for i := range this.AckSeqCount {
-		if this.AckSeqCount[i] != that1.AckSeqCount[i] {
-			return false
-		}
-	}
-	if len(this.IdentifierPrefix) != len(that1.IdentifierPrefix) {
-		return false
-	}
-	for i := range this.IdentifierPrefix {
-		if this.IdentifierPrefix[i] != that1.IdentifierPrefix[i] {
-			return false
-		}
-	}
-	if this.WindowSize != that1.WindowSize {
-		return false
-	}
-	if this.Mtu != that1.Mtu {
-		return false
-	}
-	if this.Close != that1.Close {
-		return false
-	}
-	return true
-}
 func (this *Message) GoString() string {
 	if this == nil {
 		return "nil"
@@ -548,23 +388,6 @@ func (this *TextData) GoString() string {
 	s := make([]string, 0, 5)
 	s = append(s, "&payloads.TextData{")
 	s = append(s, "Text: "+fmt.Sprintf("%#v", this.Text)+",\n")
-	s = append(s, "}")
-	return strings.Join(s, "")
-}
-func (this *SessionData) GoString() string {
-	if this == nil {
-		return "nil"
-	}
-	s := make([]string, 0, 12)
-	s = append(s, "&payloads.SessionData{")
-	s = append(s, "SequenceId: "+fmt.Sprintf("%#v", this.SequenceId)+",\n")
-	s = append(s, "Data: "+fmt.Sprintf("%#v", this.Data)+",\n")
-	s = append(s, "AckStartSeq: "+fmt.Sprintf("%#v", this.AckStartSeq)+",\n")
-	s = append(s, "AckSeqCount: "+fmt.Sprintf("%#v", this.AckSeqCount)+",\n")
-	s = append(s, "IdentifierPrefix: "+fmt.Sprintf("%#v", this.IdentifierPrefix)+",\n")
-	s = append(s, "WindowSize: "+fmt.Sprintf("%#v", this.WindowSize)+",\n")
-	s = append(s, "Mtu: "+fmt.Sprintf("%#v", this.Mtu)+",\n")
-	s = append(s, "Close: "+fmt.Sprintf("%#v", this.Close)+",\n")
 	s = append(s, "}")
 	return strings.Join(s, "")
 }
@@ -707,104 +530,6 @@ func (m *TextData) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
-func (m *SessionData) Marshal() (dAtA []byte, err error) {
-	size := m.Size()
-	dAtA = make([]byte, size)
-	n, err := m.MarshalTo(dAtA)
-	if err != nil {
-		return nil, err
-	}
-	return dAtA[:n], nil
-}
-
-func (m *SessionData) MarshalTo(dAtA []byte) (int, error) {
-	var i int
-	_ = i
-	var l int
-	_ = l
-	if m.SequenceId != 0 {
-		dAtA[i] = 0x8
-		i++
-		i = encodeVarintPayloads(dAtA, i, uint64(m.SequenceId))
-	}
-	if len(m.Data) > 0 {
-		dAtA[i] = 0x12
-		i++
-		i = encodeVarintPayloads(dAtA, i, uint64(len(m.Data)))
-		i += copy(dAtA[i:], m.Data)
-	}
-	if len(m.AckStartSeq) > 0 {
-		dAtA2 := make([]byte, len(m.AckStartSeq)*10)
-		var j1 int
-		for _, num := range m.AckStartSeq {
-			for num >= 1<<7 {
-				dAtA2[j1] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j1++
-			}
-			dAtA2[j1] = uint8(num)
-			j1++
-		}
-		dAtA[i] = 0x1a
-		i++
-		i = encodeVarintPayloads(dAtA, i, uint64(j1))
-		i += copy(dAtA[i:], dAtA2[:j1])
-	}
-	if len(m.AckSeqCount) > 0 {
-		dAtA4 := make([]byte, len(m.AckSeqCount)*10)
-		var j3 int
-		for _, num := range m.AckSeqCount {
-			for num >= 1<<7 {
-				dAtA4[j3] = uint8(uint64(num)&0x7f | 0x80)
-				num >>= 7
-				j3++
-			}
-			dAtA4[j3] = uint8(num)
-			j3++
-		}
-		dAtA[i] = 0x22
-		i++
-		i = encodeVarintPayloads(dAtA, i, uint64(j3))
-		i += copy(dAtA[i:], dAtA4[:j3])
-	}
-	if len(m.IdentifierPrefix) > 0 {
-		for _, s := range m.IdentifierPrefix {
-			dAtA[i] = 0x2a
-			i++
-			l = len(s)
-			for l >= 1<<7 {
-				dAtA[i] = uint8(uint64(l)&0x7f | 0x80)
-				l >>= 7
-				i++
-			}
-			dAtA[i] = uint8(l)
-			i++
-			i += copy(dAtA[i:], s)
-		}
-	}
-	if m.WindowSize != 0 {
-		dAtA[i] = 0x38
-		i++
-		i = encodeVarintPayloads(dAtA, i, uint64(m.WindowSize))
-	}
-	if m.Mtu != 0 {
-		dAtA[i] = 0x40
-		i++
-		i = encodeVarintPayloads(dAtA, i, uint64(m.Mtu))
-	}
-	if m.Close {
-		dAtA[i] = 0x48
-		i++
-		if m.Close {
-			dAtA[i] = 1
-		} else {
-			dAtA[i] = 0
-		}
-		i++
-	}
-	return i, nil
-}
-
 func encodeVarintPayloads(dAtA []byte, offset int, v uint64) int {
 	for v >= 1<<7 {
 		dAtA[offset] = uint8(v&0x7f | 0x80)
@@ -870,37 +595,6 @@ func NewPopulatedTextData(r randyPayloads, easy bool) *TextData {
 	return this
 }
 
-func NewPopulatedSessionData(r randyPayloads, easy bool) *SessionData {
-	this := &SessionData{}
-	this.SequenceId = uint32(r.Uint32())
-	v7 := r.Intn(100)
-	this.Data = make([]byte, v7)
-	for i := 0; i < v7; i++ {
-		this.Data[i] = byte(r.Intn(256))
-	}
-	v8 := r.Intn(10)
-	this.AckStartSeq = make([]uint32, v8)
-	for i := 0; i < v8; i++ {
-		this.AckStartSeq[i] = uint32(r.Uint32())
-	}
-	v9 := r.Intn(10)
-	this.AckSeqCount = make([]uint32, v9)
-	for i := 0; i < v9; i++ {
-		this.AckSeqCount[i] = uint32(r.Uint32())
-	}
-	v10 := r.Intn(10)
-	this.IdentifierPrefix = make([]string, v10)
-	for i := 0; i < v10; i++ {
-		this.IdentifierPrefix[i] = string(randStringPayloads(r))
-	}
-	this.WindowSize = uint32(r.Uint32())
-	this.Mtu = uint32(r.Uint32())
-	this.Close = bool(bool(r.Intn(2) == 0))
-	if !easy && r.Intn(10) != 0 {
-	}
-	return this
-}
-
 type randyPayloads interface {
 	Float32() float32
 	Float64() float64
@@ -920,9 +614,9 @@ func randUTF8RunePayloads(r randyPayloads) rune {
 	return rune(ru + 61)
 }
 func randStringPayloads(r randyPayloads) string {
-	v11 := r.Intn(100)
-	tmps := make([]rune, v11)
-	for i := 0; i < v11; i++ {
+	v7 := r.Intn(100)
+	tmps := make([]rune, v7)
+	for i := 0; i < v7; i++ {
 		tmps[i] = randUTF8RunePayloads(r)
 	}
 	return string(tmps)
@@ -944,11 +638,11 @@ func randFieldPayloads(dAtA []byte, r randyPayloads, fieldNumber int, wire int) 
 	switch wire {
 	case 0:
 		dAtA = encodeVarintPopulatePayloads(dAtA, uint64(key))
-		v12 := r.Int63()
+		v8 := r.Int63()
 		if r.Intn(2) == 0 {
-			v12 *= -1
+			v8 *= -1
 		}
-		dAtA = encodeVarintPopulatePayloads(dAtA, uint64(v12))
+		dAtA = encodeVarintPopulatePayloads(dAtA, uint64(v8))
 	case 1:
 		dAtA = encodeVarintPopulatePayloads(dAtA, uint64(key))
 		dAtA = append(dAtA, byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256)))
@@ -1040,51 +734,6 @@ func (m *TextData) Size() (n int) {
 	return n
 }
 
-func (m *SessionData) Size() (n int) {
-	if m == nil {
-		return 0
-	}
-	var l int
-	_ = l
-	if m.SequenceId != 0 {
-		n += 1 + sovPayloads(uint64(m.SequenceId))
-	}
-	l = len(m.Data)
-	if l > 0 {
-		n += 1 + l + sovPayloads(uint64(l))
-	}
-	if len(m.AckStartSeq) > 0 {
-		l = 0
-		for _, e := range m.AckStartSeq {
-			l += sovPayloads(uint64(e))
-		}
-		n += 1 + sovPayloads(uint64(l)) + l
-	}
-	if len(m.AckSeqCount) > 0 {
-		l = 0
-		for _, e := range m.AckSeqCount {
-			l += sovPayloads(uint64(e))
-		}
-		n += 1 + sovPayloads(uint64(l)) + l
-	}
-	if len(m.IdentifierPrefix) > 0 {
-		for _, s := range m.IdentifierPrefix {
-			l = len(s)
-			n += 1 + l + sovPayloads(uint64(l))
-		}
-	}
-	if m.WindowSize != 0 {
-		n += 1 + sovPayloads(uint64(m.WindowSize))
-	}
-	if m.Mtu != 0 {
-		n += 1 + sovPayloads(uint64(m.Mtu))
-	}
-	if m.Close {
-		n += 2
-	}
-	return n
-}
-
 func sovPayloads(x uint64) (n int) {
 	for {
 		n++
@@ -1132,23 +781,6 @@ func (this *TextData) String() string {
 	}
 	s := strings.Join([]string{`&TextData{`,
 		`Text:` + fmt.Sprintf("%v", this.Text) + `,`,
-		`}`,
-	}, "")
-	return s
-}
-func (this *SessionData) String() string {
-	if this == nil {
-		return "nil"
-	}
-	s := strings.Join([]string{`&SessionData{`,
-		`SequenceId:` + fmt.Sprintf("%v", this.SequenceId) + `,`,
-		`Data:` + fmt.Sprintf("%v", this.Data) + `,`,
-		`AckStartSeq:` + fmt.Sprintf("%v", this.AckStartSeq) + `,`,
-		`AckSeqCount:` + fmt.Sprintf("%v", this.AckSeqCount) + `,`,
-		`IdentifierPrefix:` + fmt.Sprintf("%v", this.IdentifierPrefix) + `,`,
-		`WindowSize:` + fmt.Sprintf("%v", this.WindowSize) + `,`,
-		`Mtu:` + fmt.Sprintf("%v", this.Mtu) + `,`,
-		`Close:` + fmt.Sprintf("%v", this.Close) + `,`,
 		`}`,
 	}, "")
 	return s
@@ -1605,317 +1237,6 @@ func (m *TextData) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
-func (m *SessionData) Unmarshal(dAtA []byte) error {
-	l := len(dAtA)
-	iNdEx := 0
-	for iNdEx < l {
-		preIndex := iNdEx
-		var wire uint64
-		for shift := uint(0); ; shift += 7 {
-			if shift >= 64 {
-				return ErrIntOverflowPayloads
-			}
-			if iNdEx >= l {
-				return io.ErrUnexpectedEOF
-			}
-			b := dAtA[iNdEx]
-			iNdEx++
-			wire |= (uint64(b) & 0x7F) << shift
-			if b < 0x80 {
-				break
-			}
-		}
-		fieldNum := int32(wire >> 3)
-		wireType := int(wire & 0x7)
-		if wireType == 4 {
-			return fmt.Errorf("proto: SessionData: wiretype end group for non-group")
-		}
-		if fieldNum <= 0 {
-			return fmt.Errorf("proto: SessionData: illegal tag %d (wire type %d)", fieldNum, wire)
-		}
-		switch fieldNum {
-		case 1:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field SequenceId", wireType)
-			}
-			m.SequenceId = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPayloads
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.SequenceId |= (uint32(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 2:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Data", wireType)
-			}
-			var byteLen int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPayloads
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				byteLen |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			if byteLen < 0 {
-				return ErrInvalidLengthPayloads
-			}
-			postIndex := iNdEx + byteLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.Data = append(m.Data[:0], dAtA[iNdEx:postIndex]...)
-			if m.Data == nil {
-				m.Data = []byte{}
-			}
-			iNdEx = postIndex
-		case 3:
-			if wireType == 0 {
-				var v uint32
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowPayloads
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint32(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.AckStartSeq = append(m.AckStartSeq, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowPayloads
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthPayloads
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				for iNdEx < postIndex {
-					var v uint32
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowPayloads
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint32(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.AckStartSeq = append(m.AckStartSeq, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field AckStartSeq", wireType)
-			}
-		case 4:
-			if wireType == 0 {
-				var v uint32
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowPayloads
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					v |= (uint32(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				m.AckSeqCount = append(m.AckSeqCount, v)
-			} else if wireType == 2 {
-				var packedLen int
-				for shift := uint(0); ; shift += 7 {
-					if shift >= 64 {
-						return ErrIntOverflowPayloads
-					}
-					if iNdEx >= l {
-						return io.ErrUnexpectedEOF
-					}
-					b := dAtA[iNdEx]
-					iNdEx++
-					packedLen |= (int(b) & 0x7F) << shift
-					if b < 0x80 {
-						break
-					}
-				}
-				if packedLen < 0 {
-					return ErrInvalidLengthPayloads
-				}
-				postIndex := iNdEx + packedLen
-				if postIndex > l {
-					return io.ErrUnexpectedEOF
-				}
-				for iNdEx < postIndex {
-					var v uint32
-					for shift := uint(0); ; shift += 7 {
-						if shift >= 64 {
-							return ErrIntOverflowPayloads
-						}
-						if iNdEx >= l {
-							return io.ErrUnexpectedEOF
-						}
-						b := dAtA[iNdEx]
-						iNdEx++
-						v |= (uint32(b) & 0x7F) << shift
-						if b < 0x80 {
-							break
-						}
-					}
-					m.AckSeqCount = append(m.AckSeqCount, v)
-				}
-			} else {
-				return fmt.Errorf("proto: wrong wireType = %d for field AckSeqCount", wireType)
-			}
-		case 5:
-			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field IdentifierPrefix", wireType)
-			}
-			var stringLen uint64
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPayloads
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				stringLen |= (uint64(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLengthPayloads
-			}
-			postIndex := iNdEx + intStringLen
-			if postIndex > l {
-				return io.ErrUnexpectedEOF
-			}
-			m.IdentifierPrefix = append(m.IdentifierPrefix, string(dAtA[iNdEx:postIndex]))
-			iNdEx = postIndex
-		case 7:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field WindowSize", wireType)
-			}
-			m.WindowSize = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPayloads
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.WindowSize |= (uint32(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 8:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Mtu", wireType)
-			}
-			m.Mtu = 0
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPayloads
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				m.Mtu |= (uint32(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-		case 9:
-			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Close", wireType)
-			}
-			var v int
-			for shift := uint(0); ; shift += 7 {
-				if shift >= 64 {
-					return ErrIntOverflowPayloads
-				}
-				if iNdEx >= l {
-					return io.ErrUnexpectedEOF
-				}
-				b := dAtA[iNdEx]
-				iNdEx++
-				v |= (int(b) & 0x7F) << shift
-				if b < 0x80 {
-					break
-				}
-			}
-			m.Close = bool(v != 0)
-		default:
-			iNdEx = preIndex
-			skippy, err := skipPayloads(dAtA[iNdEx:])
-			if err != nil {
-				return err
-			}
-			if skippy < 0 {
-				return ErrInvalidLengthPayloads
-			}
-			if (iNdEx + skippy) > l {
-				return io.ErrUnexpectedEOF
-			}
-			iNdEx += skippy
-		}
-	}
-
-	if iNdEx > l {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
-}
 func skipPayloads(dAtA []byte) (n int, err error) {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2021,42 +1342,33 @@ var (
 	ErrIntOverflowPayloads   = fmt.Errorf("proto: integer overflow")
 )
 
-func init() { proto.RegisterFile("payloads/payloads.proto", fileDescriptor_payloads_eda209b91fbaf3f5) }
+func init() { proto.RegisterFile("payloads/payloads.proto", fileDescriptor_payloads_06e9d2124e6d29fd) }
 
-var fileDescriptor_payloads_eda209b91fbaf3f5 = []byte{
-	// 536 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x52, 0x3d, 0x6f, 0xd3, 0x50,
-	0x14, 0xf5, 0x8b, 0x9d, 0xaf, 0x9b, 0x04, 0x85, 0x27, 0x2a, 0x9e, 0x10, 0x3c, 0xa2, 0xb0, 0x84,
-	0xaf, 0x56, 0x82, 0x95, 0xa5, 0x2d, 0x0c, 0x55, 0x05, 0xaa, 0x9c, 0x0c, 0x30, 0x59, 0xae, 0x7d,
-	0x13, 0x9e, 0x92, 0xfa, 0x39, 0x7e, 0x2f, 0x6a, 0x5c, 0x31, 0xf4, 0x27, 0xf0, 0x33, 0x98, 0x99,
-	0xf8, 0x09, 0x8c, 0x19, 0x3b, 0x12, 0x67, 0x61, 0xec, 0xc8, 0x88, 0xfc, 0x9c, 0x8f, 0x6e, 0xe7,
-	0x9c, 0x7b, 0x9e, 0xef, 0xb9, 0xf7, 0x1a, 0x1e, 0xc6, 0x7e, 0x3a, 0x91, 0x7e, 0xa8, 0x0e, 0x36,
-	0x60, 0x3f, 0x4e, 0xa4, 0x96, 0xb4, 0xb6, 0xe1, 0x8f, 0x5e, 0x8f, 0x84, 0xfe, 0x3a, 0x3b, 0xdf,
-	0x0f, 0xe4, 0xc5, 0xc1, 0x48, 0x8e, 0xe4, 0x81, 0x31, 0x9c, 0xcf, 0x86, 0x86, 0x19, 0x62, 0x50,
-	0xf1, 0xb0, 0xfb, 0x0d, 0xaa, 0x1f, 0x51, 0x29, 0x7f, 0x84, 0x94, 0x41, 0x75, 0xfd, 0x15, 0x46,
-	0x3a, 0xa4, 0xd7, 0x74, 0x37, 0x94, 0x3e, 0x86, 0x3a, 0x46, 0x41, 0x92, 0xc6, 0x1a, 0x43, 0x56,
-	0xea, 0x90, 0x5e, 0xcd, 0xdd, 0x09, 0xf4, 0x01, 0x94, 0x23, 0x19, 0x05, 0xc8, 0x6c, 0xf3, 0xaa,
-	0x20, 0xf4, 0x19, 0xb4, 0xb6, 0x16, 0x6f, 0x8c, 0x29, 0x73, 0x4c, 0xb5, 0xb9, 0x15, 0x4f, 0x31,
-	0xed, 0xfe, 0x24, 0x50, 0x3d, 0x5b, 0x37, 0x79, 0x0e, 0x8e, 0x4e, 0x63, 0x34, 0xbd, 0xef, 0xbd,
-	0xd9, 0xdb, 0xdf, 0x4e, 0xb8, 0x36, 0x0c, 0xd2, 0x18, 0x5d, 0x63, 0xa1, 0x6d, 0xb0, 0x63, 0x51,
-	0x24, 0x69, 0xba, 0x39, 0xa4, 0x14, 0x9c, 0xd0, 0xd7, 0xfe, 0x3a, 0x82, 0xc1, 0xb4, 0x03, 0xcd,
-	0x04, 0xe3, 0x49, 0xea, 0x69, 0xe9, 0xe5, 0xf6, 0x22, 0x00, 0x18, 0x6d, 0x20, 0xcf, 0x44, 0x48,
-	0xf7, 0xa0, 0x12, 0x49, 0xcf, 0x0f, 0xc6, 0xac, 0x6c, 0x86, 0x2a, 0x47, 0xf2, 0x30, 0x18, 0xd3,
-	0x27, 0x00, 0x42, 0x79, 0x0a, 0x95, 0x12, 0x32, 0x62, 0x95, 0x62, 0x5e, 0xa1, 0xfa, 0x85, 0xd0,
-	0xe5, 0x50, 0x1b, 0xe0, 0x5c, 0xbf, 0xcf, 0x7b, 0x50, 0x70, 0x34, 0xce, 0xb5, 0x09, 0x5d, 0x77,
-	0x0d, 0xee, 0x5e, 0x97, 0xa0, 0xb1, 0xf6, 0x1a, 0xcf, 0x53, 0x68, 0x28, 0x9c, 0xce, 0x30, 0x0a,
-	0xd0, 0x13, 0xc5, 0x6e, 0x5b, 0x2e, 0x6c, 0xa4, 0x93, 0x5d, 0xf8, 0xd2, 0x9d, 0xf0, 0x5d, 0x68,
-	0xf9, 0xc1, 0xd8, 0x53, 0xda, 0x4f, 0xb4, 0xa7, 0x70, 0xca, 0xec, 0x8e, 0xdd, 0x6b, 0xb9, 0x0d,
-	0x3f, 0x18, 0xf7, 0x73, 0xad, 0x8f, 0xd3, 0xad, 0x07, 0xa7, 0x5e, 0x20, 0x67, 0x91, 0x66, 0xce,
-	0xce, 0x83, 0xd3, 0xe3, 0x5c, 0xa2, 0x2f, 0xe1, 0xbe, 0x08, 0x31, 0xd2, 0x62, 0x28, 0x30, 0xf1,
-	0xe2, 0x04, 0x87, 0x62, 0xce, 0xca, 0x1d, 0xbb, 0x57, 0x77, 0xdb, 0xbb, 0xc2, 0x99, 0xd1, 0xf3,
-	0xa4, 0x97, 0x22, 0x0a, 0xe5, 0xa5, 0xa7, 0xc4, 0x15, 0xb2, 0x6a, 0x91, 0xb4, 0x90, 0xfa, 0xe2,
-	0xca, 0x2c, 0xfe, 0x42, 0xcf, 0x58, 0xcd, 0x14, 0x72, 0x98, 0x1f, 0x3f, 0x98, 0x48, 0x85, 0xac,
-	0x5e, 0x6c, 0xd0, 0x90, 0x17, 0xaf, 0xa0, 0x71, 0xe7, 0x6a, 0x14, 0xa0, 0x72, 0x74, 0xf2, 0xe9,
-	0xd0, 0xfd, 0xd2, 0xb6, 0x68, 0x0d, 0x9c, 0xc1, 0x87, 0xcf, 0x83, 0x36, 0xa1, 0x55, 0xb0, 0x0f,
-	0x8f, 0x4f, 0xdb, 0xa5, 0xa3, 0x77, 0x8b, 0x25, 0xb7, 0x6e, 0x96, 0xdc, 0xba, 0x5d, 0x72, 0xf2,
-	0x6f, 0xc9, 0xc9, 0x75, 0xc6, 0xc9, 0x8f, 0x8c, 0x93, 0x5f, 0x19, 0x27, 0xbf, 0x33, 0x4e, 0x16,
-	0x19, 0x27, 0x7f, 0x32, 0x4e, 0xfe, 0x66, 0xdc, 0xba, 0xcd, 0x38, 0xf9, 0xbe, 0xe2, 0xd6, 0x62,
-	0xc5, 0xad, 0x9b, 0x15, 0xb7, 0xce, 0x2b, 0xe6, 0x47, 0x7e, 0xfb, 0x3f, 0x00, 0x00, 0xff, 0xff,
-	0xcf, 0x7e, 0x34, 0x73, 0x1c, 0x03, 0x00, 0x00,
+var fileDescriptor_payloads_06e9d2124e6d29fd = []byte{
+	// 398 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x51, 0xb1, 0x8e, 0xd3, 0x40,
+	0x14, 0xf4, 0x5e, 0x1c, 0xdb, 0xf7, 0x30, 0xc8, 0x5a, 0x71, 0xc2, 0x42, 0xf0, 0x14, 0x85, 0x26,
+	0x20, 0x48, 0x24, 0x68, 0x69, 0x12, 0xa0, 0x40, 0x11, 0x28, 0x32, 0x2e, 0xa0, 0xb2, 0x1c, 0x7b,
+	0x31, 0x56, 0x82, 0xd7, 0xca, 0x6e, 0xa4, 0x58, 0xa2, 0xe0, 0x13, 0xf8, 0x0c, 0x6a, 0x2a, 0x3e,
+	0x81, 0x32, 0x65, 0x4a, 0xbc, 0x69, 0x28, 0x53, 0x52, 0xa2, 0xac, 0x9d, 0x70, 0xdd, 0xcc, 0x78,
+	0x9e, 0x67, 0x46, 0x0b, 0x77, 0xca, 0xb8, 0x5a, 0xf2, 0x38, 0x15, 0xa3, 0x13, 0x18, 0x96, 0x2b,
+	0x2e, 0x39, 0x75, 0x4e, 0xfc, 0xee, 0x93, 0x2c, 0x97, 0x9f, 0xd6, 0xf3, 0x61, 0xc2, 0x3f, 0x8f,
+	0x32, 0x9e, 0xf1, 0x91, 0x36, 0xcc, 0xd7, 0x1f, 0x35, 0xd3, 0x44, 0xa3, 0xe6, 0xb0, 0xff, 0x05,
+	0xec, 0x37, 0x4c, 0x88, 0x38, 0x63, 0xd4, 0x07, 0xbb, 0xfd, 0x8b, 0x4f, 0x7a, 0x64, 0xe0, 0x06,
+	0x27, 0x4a, 0xef, 0xc1, 0x25, 0x2b, 0x92, 0x55, 0x55, 0x4a, 0x96, 0xfa, 0x17, 0x3d, 0x32, 0x70,
+	0x82, 0xff, 0x02, 0xbd, 0x0d, 0xdd, 0x82, 0x17, 0x09, 0xf3, 0x3b, 0xfa, 0xaa, 0x21, 0xf4, 0x01,
+	0xdc, 0x3c, 0x5b, 0xa2, 0x05, 0xab, 0x7c, 0x53, 0x7f, 0x75, 0xcf, 0xe2, 0x94, 0x55, 0xfd, 0x1f,
+	0x04, 0xec, 0x59, 0x1b, 0xf2, 0x10, 0x4c, 0x59, 0x95, 0x4c, 0x67, 0xdf, 0x7a, 0x7a, 0x35, 0x3c,
+	0x2f, 0x6c, 0x0d, 0x61, 0x55, 0xb2, 0x40, 0x5b, 0xa8, 0x07, 0x9d, 0x32, 0x6f, 0x9a, 0xb8, 0xc1,
+	0x11, 0x52, 0x0a, 0x66, 0x1a, 0xcb, 0xb8, 0xad, 0xa0, 0x31, 0xed, 0x81, 0xbb, 0x62, 0xe5, 0xb2,
+	0x8a, 0x24, 0x8f, 0x8e, 0xf6, 0xa6, 0x00, 0x68, 0x2d, 0xe4, 0xb3, 0x3c, 0xa5, 0x57, 0x60, 0x15,
+	0x3c, 0x8a, 0x93, 0x85, 0xdf, 0xd5, 0xa3, 0xba, 0x05, 0x1f, 0x27, 0x0b, 0x7a, 0x1f, 0x20, 0x17,
+	0x91, 0x60, 0x42, 0xe4, 0xbc, 0xf0, 0xad, 0x66, 0x6f, 0x2e, 0xde, 0x35, 0x42, 0x1f, 0xc1, 0x09,
+	0xd9, 0x46, 0xbe, 0x3c, 0x66, 0x50, 0x30, 0x25, 0xdb, 0x48, 0x5d, 0xfa, 0x32, 0xd0, 0xf8, 0xd1,
+	0x63, 0xb8, 0x71, 0xad, 0x32, 0x05, 0xb0, 0x26, 0xaf, 0xdf, 0x8e, 0x83, 0x0f, 0x9e, 0x41, 0x1d,
+	0x30, 0xc3, 0x57, 0xef, 0x43, 0x8f, 0x50, 0x1b, 0x3a, 0xe3, 0x17, 0x53, 0xef, 0x62, 0xf2, 0x7c,
+	0x5b, 0xa3, 0xb1, 0xab, 0xd1, 0x38, 0xd4, 0x48, 0xfe, 0xd6, 0x48, 0xbe, 0x2a, 0x24, 0xdf, 0x15,
+	0x92, 0x9f, 0x0a, 0xc9, 0x2f, 0x85, 0x64, 0xab, 0x90, 0xfc, 0x56, 0x48, 0xfe, 0x28, 0x34, 0x0e,
+	0x0a, 0xc9, 0xb7, 0x3d, 0x1a, 0xdb, 0x3d, 0x1a, 0xbb, 0x3d, 0x1a, 0x73, 0x4b, 0xbf, 0xe2, 0xb3,
+	0x7f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xbe, 0x92, 0xe5, 0x9d, 0x19, 0x02, 0x00, 0x00,
 }

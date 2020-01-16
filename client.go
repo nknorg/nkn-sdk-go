@@ -778,7 +778,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	}
 
 	if len(MaxHoldingSeconds) == 0 {
-		outboundMsg.MaxHoldingSeconds = c.config.MaxHoldingSeconds
+		outboundMsg.MaxHoldingSeconds = uint32(c.config.MaxHoldingSeconds)
 	} else {
 		outboundMsg.MaxHoldingSeconds = MaxHoldingSeconds[0]
 	}

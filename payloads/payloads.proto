@@ -40,14 +40,3 @@ message Payload {
 message TextData {
   string text = 1;
 }
-
-message SessionData {
-  uint32 sequence_id = 1;
-  bytes data = 2;
-  repeated uint32 ack_start_seq = 3;
-  repeated uint32 ack_seq_count = 4;
-  repeated string identifier_prefix = 5;
-  uint32 window_size = 7;
-  uint32 mtu = 8;
-  bool close = 9;
-}

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"flag"
+	"fmt"
 	"log"
 	"math"
 	"net"
@@ -47,7 +48,12 @@ func read(sess net.Conn) error {
 		if err != nil {
 			return err
 		}
-		bytesReceived += n
+		for i := 0; i < n; i++ {
+			if b[i] != byte(bytesReceived%math.MaxUint8) {
+				return fmt.Errorf("byte %d should be %d, got %d", bytesReceived, bytesReceived%math.MaxUint8, b[i])
+			}
+			bytesReceived++
+		}
 		if ((bytesReceived - n) * 10 / numBytes) != (bytesReceived * 10 / numBytes) {
 			log.Println("Received", bytesReceived, "bytes", float64(bytesReceived)/math.Pow(2, 20)/(float64(time.Since(timeStart))/float64(time.Second)), "MB/s")
 		}
@@ -72,13 +78,16 @@ func write(sess net.Conn, numBytes int) error {
 	for i := 0; i < numBytes/1024; i++ {
 		b := make([]byte, 1024)
 		for j := 0; j < len(b); j++ {
-			b[j] = byte(j % math.MaxUint8)
+			b[j] = byte(bytesSent % math.MaxUint8)
+			bytesSent++
 		}
 		n, err := sess.Write(b)
 		if err != nil {
 			return err
 		}
-		bytesSent += n
+		if n != len(b) {
+			return fmt.Errorf("sent %d instead of %d bytes", n, len(b))
+		}
 		if ((bytesSent - n) * 10 / numBytes) != (bytesSent * 10 / numBytes) {
 			log.Println("Sent", bytesSent, "bytes", float64(bytesSent)/math.Pow(2, 20)/(float64(time.Since(timeStart))/float64(time.Second)), "MB/s")
 		}
