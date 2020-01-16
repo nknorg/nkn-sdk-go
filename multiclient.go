@@ -141,6 +141,9 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 			if i, value, ok := reflect.Select(cases); ok {
 				msg := value.Interface().(*Message)
 				if msg.IsSession {
+					if !msg.Encrypted {
+						continue
+					}
 					err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.Pid, msg.Data)
 					if err != nil {
 						if err != ncp.SessionClosed {
