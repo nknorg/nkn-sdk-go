@@ -2,6 +2,7 @@ package nkn_sdk_go
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"reflect"
@@ -118,7 +119,8 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 		onClose:       make(chan struct{}, 0),
 	}
 
-	c := cache.New(config.MsgCacheExpiration, config.MsgCacheExpiration)
+	msgCache := cache.New(config.MsgCacheExpiration, config.MsgCacheExpiration)
+
 	go func() {
 		cases := make([]reflect.SelectCase, numClients)
 		for i := 0; i < numClients; i++ {
@@ -151,10 +153,10 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 					}
 				} else {
 					cacheKey := string(msg.Pid)
-					if _, ok := c.Get(cacheKey); ok {
+					if _, ok := msgCache.Get(cacheKey); ok {
 						continue
 					}
-					c.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
+					msgCache.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
 					msg.Src, _ = removeIdentifier(msg.Src)
 					msg.Reply = func(response []byte) error {
@@ -183,7 +185,12 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 	return m, nil
 }
 
-func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, configs ...*MessageConfig) (*Message, error) {
+func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
+	client, ok := m.Clients[clientID]
+	if !ok {
+		return nil, fmt.Errorf("clientID %d not found", clientID)
+	}
+
 	config, err := MergeMessageConfig(&m.config.MessageConfig, configs)
 	if err != nil {
 		return nil, err
@@ -193,21 +200,24 @@ func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, 
 	if err != nil {
 		return nil, err
 	}
-	pidString := string(payload.Pid)
-	responseChannel := make(chan *Message, 1)
-	c := m.Clients[clientID]
-	c.responseChannels[pidString] = responseChannel
+
 	if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
-	msg := <-responseChannel
-	msg.Src, _ = removeIdentifier(msg.Src)
-	return msg, nil
+
+	pidString := string(payload.Pid)
+	respChan := make(chan *Message, 1)
+	client.responseChannels.Add(pidString, respChan, cache.DefaultExpiration)
+
+	return respChan, nil
 }
 
 func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
-	c := m.Clients[clientID]
-	return c.send(processDest(dests, clientID), payload, encrypted, maxHoldingSeconds)
+	client, ok := m.Clients[clientID]
+	if !ok {
+		return fmt.Errorf("clientID %d not found", clientID)
+	}
+	return client.send(processDest(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
 func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
@@ -226,12 +236,12 @@ func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfi
 	pidString := string(payload.Pid)
 	offset := m.offset
 	success := false
-	for clientID, c := range m.Clients {
+	for clientID, client := range m.Clients {
 		if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
 			success = true
-			responseChannel := make(chan *Message, 1)
-			responseChannels[clientID+offset] = responseChannel
-			c.responseChannels[pidString] = responseChannel
+			ch := make(chan *Message, 1)
+			responseChannels[clientID+offset] = ch
+			client.responseChannels.Add(pidString, ch, cache.DefaultExpiration)
 		}
 	}
 	if !success {
@@ -290,19 +300,19 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 			Data:      buf,
 			IsSession: true,
 		}
-		c := clients[localClientID]
+		client := clients[localClientID]
 		if writeTimeout > 0 {
-			err := c.SetWriteDeadline(time.Now().Add(writeTimeout))
+			err := client.SetWriteDeadline(time.Now().Add(writeTimeout))
 			if err != nil {
 				return err
 			}
 		}
-		err := c.send([]string{addIdentifierPrefix(remoteAddr, remoteClientID)}, payload, true, 0)
+		err := client.send([]string{addIdentifierPrefix(remoteAddr, remoteClientID)}, payload, true, 0)
 		if err != nil {
 			return err
 		}
 		if writeTimeout > 0 {
-			err = c.SetWriteDeadline(zeroTime)
+			err = client.SetWriteDeadline(zeroTime)
 			if err != nil {
 				return err
 			}

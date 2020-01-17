@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nknorg/nkn/crypto/ed25519"
+	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/nacl/box"
 
 	"github.com/nknorg/nkn-sdk-go/payloads"
@@ -55,13 +56,13 @@ type Client struct {
 	OnBlock           chan *BlockInfo
 	sigChainBlockHash string
 	reconnectChan     chan struct{}
+	responseChannels  *cache.Cache
 
 	sync.RWMutex
-	closed           bool
-	conn             *websocket.Conn
-	nodeInfo         *NodeInfo
-	urlString        string
-	responseChannels map[string]chan *Message
+	closed    bool
+	conn      *websocket.Conn
+	nodeInfo  *NodeInfo
+	urlString string
 }
 
 type clientInterface interface {
@@ -457,16 +458,11 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			if len(payload.ReplyToPid) > 0 {
 				pidString := string(payload.ReplyToPid)
-				c.Lock()
-				responseChannel, ok := c.responseChannels[pidString]
+				respChan, ok := c.responseChannels.Get(pidString)
 				if ok {
-					delete(c.responseChannels, pidString)
-				}
-				c.Unlock()
-				if responseChannel != nil {
+					c.responseChannels.Delete(pidString)
 					select {
-					case responseChannel <- msg:
-						close(responseChannel)
+					case respChan.(chan *Message) <- msg:
 					default:
 					}
 				}
@@ -660,7 +656,7 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 		OnMessage:        make(chan *Message, config.MsgChanLen),
 		OnBlock:          make(chan *BlockInfo, config.BlockChanLen),
 		reconnectChan:    make(chan struct{}, 0),
-		responseChannels: make(map[string]chan *Message),
+		responseChannels: cache.New(config.MsgCacheExpiration, config.MsgCacheExpiration),
 	}
 
 	go c.handleReconnect()
@@ -760,9 +756,7 @@ func (c *Client) Send(dests []string, data []byte, configs ...*MessageConfig) (c
 
 	pidString := string(payload.Pid)
 	respChan := make(chan *Message, 1)
-	c.Lock()
-	c.responseChannels[pidString] = respChan
-	c.Unlock()
+	c.responseChannels.Add(pidString, respChan, cache.DefaultExpiration)
 
 	return respChan, nil
 }

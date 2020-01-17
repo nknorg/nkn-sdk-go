@@ -58,7 +58,7 @@ func main() {
 		}
 
 		go func() {
-			log.Println("Serving content at", m.Address)
+			log.Println("Serving content at", m.Addr().String())
 			fs := http.FileServer(http.Dir(*serveDir))
 			http.Handle("/", fs)
 			http.Serve(m, nil)
@@ -72,7 +72,7 @@ func main() {
 		}
 
 		if len(*dialAddr) == 0 {
-			*dialAddr = listenID + "." + strings.SplitN(m.Address, ".", 2)[1]
+			*dialAddr = listenID + "." + strings.SplitN(m.Addr().String(), ".", 2)[1]
 		}
 
 		listener, err := net.Listen("tcp", *httpAddr)

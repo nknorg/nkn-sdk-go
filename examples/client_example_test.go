@@ -57,11 +57,11 @@ func TestClient(t *testing.T) {
 				isEncryptedStr = "encrypted"
 			}
 			log.Println("Receive", isEncryptedStr, "message", "\""+string(msg.Data)+"\"", "from", msg.Src, "after", timeReceived-timeSent, "ms")
-			msg.Reply([]byte("world"))
+			msg.Reply([]byte("World"))
 		}()
 
 		log.Println("Send message from", fromClient.Address, "to", toClient.Address)
-		respChan, err := fromClient.Send([]string{toClient.Address, toClient.Address}, []byte("Hello"))
+		respChan, err := fromClient.Send([]string{toClient.Address}, []byte("Hello"))
 		if err != nil {
 			return err
 		}
