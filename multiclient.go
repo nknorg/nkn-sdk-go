@@ -232,52 +232,67 @@ func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfi
 	}
 
 	respChan := make(chan *Message, 1)
-	responseChannels := make([]chan *Message, len(m.Clients))
-	pidString := string(payload.Pid)
-	offset := m.offset
-	success := false
-	for clientID, client := range m.Clients {
-		if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
-			success = true
-			ch := make(chan *Message, 1)
-			responseChannels[clientID+offset] = ch
-			client.responseChannels.Add(pidString, ch, cache.DefaultExpiration)
-		}
-	}
-	if !success {
-		return nil, errors.New("all clients failed to send msg")
-	}
+	rawRespChan := make(chan *Message, 0)
+	success := make(chan struct{}, 0)
+	fail := make(chan struct{}, 0)
 
 	go func() {
-		cases := make([]reflect.SelectCase, len(responseChannels))
-		for i, responseChannel := range responseChannels {
-			if responseChannel != nil {
-				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(responseChannel)}
-			} else {
-				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv}
+		sent := 0
+		for clientID, client := range m.Clients {
+			if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
+				select {
+				case success <- struct{}{}:
+				default:
+				}
+				sent++
+				client.responseChannels.Add(string(payload.Pid), rawRespChan, cache.DefaultExpiration)
 			}
 		}
-		if _, value, ok := reflect.Select(cases); ok {
-			msg := value.Interface().(*Message)
-			msg.Src, _ = removeIdentifier(msg.Src)
-			respChan <- msg
+		if sent == 0 {
+			select {
+			case fail <- struct{}{}:
+			default:
+			}
 		}
+
+		msg := <-rawRespChan
+		msg.Src, _ = removeIdentifier(msg.Src)
+		respChan <- msg
 	}()
 
-	return respChan, nil
+	select {
+	case <-success:
+		return respChan, nil
+	case <-fail:
+		return nil, errors.New("all clients failed to send msg")
+	}
 }
 
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
-	success := false
-	for clientID := range m.Clients {
-		if err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds); err == nil {
-			success = true
+	success := make(chan struct{}, 0)
+	fail := make(chan struct{}, 0)
+	go func() {
+		sent := 0
+		for clientID := range m.Clients {
+			if err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds); err == nil {
+				select {
+				case success <- struct{}{}:
+				default:
+				}
+				sent++
+			}
 		}
-	}
-	if !success {
+		if sent == 0 {
+			fail <- struct{}{}
+		}
+	}()
+
+	select {
+	case <-success:
+		return nil
+	case <-fail:
 		return errors.New("all clients failed to send msg")
 	}
-	return nil
 }
 
 func (m *MultiClient) Publish(topic string, data []byte, configs ...*MessageConfig) error {
