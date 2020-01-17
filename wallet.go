@@ -43,7 +43,7 @@ type nonce struct {
 }
 
 func NewWallet(account *vault.Account, configs ...WalletConfig) (*Wallet, error) {
-	config, err := MergedWalletConfig(configs)
+	config, err := MergeWalletConfig(configs)
 	if err != nil {
 		return nil, err
 	}

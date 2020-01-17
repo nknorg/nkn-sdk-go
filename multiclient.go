@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/imdario/mergo"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/nknorg/nkn/vault"
 
@@ -42,7 +41,7 @@ type MultiClient struct {
 }
 
 func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients int, originalClient bool, configs ...ClientConfig) (*MultiClient, error) {
-	config, err := MergedClientConfig(configs)
+	config, err := MergeClientConfig(configs)
 	if err != nil {
 		return nil, err
 	}
@@ -165,12 +164,12 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 						if response == nil {
 							payload, err = newAckPayload(pid)
 						} else {
-							payload, err = newBinaryPayload(response, pid)
+							payload, err = newBinaryPayload(response, pid, false)
 						}
 						if err != nil {
 							return err
 						}
-						if err := m.send([]string{msg.Src}, payload, msg.Encrypted); err != nil {
+						if err := m.send([]string{msg.Src}, payload, msg.Encrypted, 0); err != nil {
 							return err
 						}
 						return nil
@@ -184,8 +183,13 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 	return m, nil
 }
 
-func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) (*Message, error) {
-	payload, err := newBinaryPayload(data, nil)
+func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, configs ...*MessageConfig) (*Message, error) {
+	config, err := MergeMessageConfig(&m.config.MessageConfig, configs)
+	if err != nil {
+		return nil, err
+	}
+
+	payload, err := newBinaryPayload(data, nil, config.NoAck)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +197,7 @@ func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, 
 	responseChannel := make(chan *Message, 1)
 	c := m.Clients[clientID]
 	c.responseChannels[pidString] = responseChannel
-	if err := m.sendWithClient(clientID, dests, payload, encrypted, MaxHoldingSeconds...); err != nil {
+	if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 	msg := <-responseChannel
@@ -201,42 +205,62 @@ func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, 
 	return msg, nil
 }
 
-func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, MaxHoldingSeconds ...uint32) error {
+func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	c := m.Clients[clientID]
-	return c.send(processDest(dests, clientID), payload, encrypted, MaxHoldingSeconds...)
+	return c.send(processDest(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
-func (m *MultiClient) Send(dests []string, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) (*Message, error) {
-	payload, err := newBinaryPayload(data, nil)
+func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
+	config, err := MergeMessageConfig(&m.config.MessageConfig, configs)
 	if err != nil {
 		return nil, err
 	}
+
+	payload, err := newBinaryPayload(data, nil, config.NoAck)
+	if err != nil {
+		return nil, err
+	}
+
+	respChan := make(chan *Message, 1)
 	responseChannels := make([]chan *Message, len(m.Clients))
 	pidString := string(payload.Pid)
 	offset := m.offset
+	success := false
 	for clientID, c := range m.Clients {
+		if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+			continue
+		}
+		success = true
 		responseChannel := make(chan *Message, 1)
 		responseChannels[clientID+offset] = responseChannel
 		c.responseChannels[pidString] = responseChannel
-		if err := m.sendWithClient(clientID, dests, payload, encrypted, MaxHoldingSeconds...); err != nil {
-			return nil, err
+	}
+	if !success {
+		return nil, errors.New("all clients failed to send msg")
+	}
+
+	go func() {
+		cases := make([]reflect.SelectCase, len(responseChannels))
+		for i, responseChannel := range responseChannels {
+			if responseChannel != nil {
+				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(responseChannel)}
+			} else {
+				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv}
+			}
 		}
-	}
-	cases := make([]reflect.SelectCase, len(responseChannels))
-	for i, responseChannel := range responseChannels {
-		cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(responseChannel)}
-	}
-	if _, value, ok := reflect.Select(cases); ok {
-		msg := value.Interface().(*Message)
-		msg.Src, _ = removeIdentifier(msg.Src)
-		return msg, nil
-	}
-	return nil, errors.New("error reading response channel")
+		if _, value, ok := reflect.Select(cases); ok {
+			msg := value.Interface().(*Message)
+			msg.Src, _ = removeIdentifier(msg.Src)
+			respChan <- msg
+		}
+	}()
+
+	return respChan, nil
 }
 
-func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, MaxHoldingSeconds ...uint32) error {
+func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	for clientID := range m.Clients {
-		if err := m.sendWithClient(clientID, dests, payload, encrypted, MaxHoldingSeconds...); err != nil {
+		if err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds); err != nil {
 			return err
 		}
 	}
@@ -325,14 +349,11 @@ func (m *MultiClient) Dial(remoteAddr string) (*ncp.Session, error) {
 }
 
 func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (*ncp.Session, error) {
-	merged := m.config.SessionConfig
-	if config != nil {
-		err := mergo.Merge(&merged, config, mergo.WithOverride)
-		if err != nil {
-			return nil, err
-		}
+	var err error
+	config, err = MergeSessionConfig(&m.config.SessionConfig, config)
+	if err != nil {
+		return nil, err
 	}
-	config = &merged
 
 	sessionID, err := RandomBytes(SessionIDSize)
 	if err != nil {

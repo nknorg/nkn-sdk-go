@@ -65,11 +65,17 @@ var DefaultClientConfig = ClientConfig{
 	MsgCacheCleanupInterval: 60 * time.Second,
 	WsHandshakeTimeout:      5 * time.Second,
 	MaxReconnectInterval:    time.Minute,
+	MessageConfig:           DefaultMessageConfig,
 	SessionConfig:           DefaultSessionConfig,
 }
 
-var DefaultWalletConfig = WalletConfig{
-	SeedRPCServerAddr: DefaultSeedRPCServerAddr,
+var DefaultMessageConfig = MessageConfig{
+	Unencrypted:       false,
+	NoAck:             false,
+	MaxHoldingSeconds: 0,
+	Offset:            0,
+	Limit:             1000,
+	TxPool:            false,
 }
 
 var DefaultSessionConfig = SessionConfig{
@@ -89,6 +95,10 @@ var DefaultSessionConfig = SessionConfig{
 	DialTimeout:                  0,
 }
 
+var DefaultWalletConfig = WalletConfig{
+	SeedRPCServerAddr: DefaultSeedRPCServerAddr,
+}
+
 type ClientConfig struct {
 	SeedRPCServerAddr       []string
 	MaxHoldingSeconds       int32
@@ -100,14 +110,26 @@ type ClientConfig struct {
 	WsHandshakeTimeout      time.Duration
 	MinReconnectInterval    time.Duration
 	MaxReconnectInterval    time.Duration
+	MessageConfig           MessageConfig
 	SessionConfig           SessionConfig
 }
+
+type MessageConfig struct {
+	Unencrypted       bool
+	NoAck             bool
+	MaxHoldingSeconds int32
+
+	// for publish
+	Offset int32
+	Limit  int32
+	TxPool bool
+}
+
+type SessionConfig ncp.Config
 
 type WalletConfig struct {
 	SeedRPCServerAddr []string
 }
-
-type SessionConfig ncp.Config
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -127,7 +149,7 @@ func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
 	return config.SeedRPCServerAddr[rand.Intn(len(config.SeedRPCServerAddr))]
 }
 
-func MergedClientConfig(conf []ClientConfig) (*ClientConfig, error) {
+func MergeClientConfig(conf []ClientConfig) (*ClientConfig, error) {
 	merged := DefaultClientConfig
 	if len(conf) > 0 {
 		err := mergo.Merge(&merged, &conf[0], mergo.WithOverride)
@@ -138,10 +160,10 @@ func MergedClientConfig(conf []ClientConfig) (*ClientConfig, error) {
 	return &merged, nil
 }
 
-func MergedWalletConfig(conf []WalletConfig) (*WalletConfig, error) {
-	merged := DefaultWalletConfig
+func MergeMessageConfig(base *MessageConfig, conf []*MessageConfig) (*MessageConfig, error) {
+	merged := *base
 	if len(conf) > 0 {
-		err := mergo.Merge(&merged, &conf[0], mergo.WithOverride)
+		err := mergo.Merge(&merged, conf[0], mergo.WithOverride)
 		if err != nil {
 			return nil, err
 		}
@@ -149,10 +171,21 @@ func MergedWalletConfig(conf []WalletConfig) (*WalletConfig, error) {
 	return &merged, nil
 }
 
-func MergedSessionConfig(conf *SessionConfig) (*SessionConfig, error) {
-	merged := DefaultSessionConfig
+func MergeSessionConfig(base, conf *SessionConfig) (*SessionConfig, error) {
+	merged := *base
 	if conf != nil {
 		err := mergo.Merge(&merged, conf, mergo.WithOverride)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &merged, nil
+}
+
+func MergeWalletConfig(conf []WalletConfig) (*WalletConfig, error) {
+	merged := DefaultWalletConfig
+	if len(conf) > 0 {
+		err := mergo.Merge(&merged, &conf[0], mergo.WithOverride)
 		if err != nil {
 			return nil, err
 		}

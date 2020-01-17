@@ -55,13 +55,13 @@ type Client struct {
 	OnBlock           chan *BlockInfo
 	sigChainBlockHash string
 	reconnectChan     chan struct{}
-	responseChannels  map[string]chan *Message
 
 	sync.RWMutex
-	closed    bool
-	conn      *websocket.Conn
-	nodeInfo  *NodeInfo
-	urlString string
+	closed           bool
+	conn             *websocket.Conn
+	nodeInfo         *NodeInfo
+	urlString        string
+	responseChannels map[string]chan *Message
 }
 
 type NodeInfo struct {
@@ -452,8 +452,18 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			if len(payload.ReplyToPid) > 0 {
 				pidString := string(payload.ReplyToPid)
-				if responseChannel, ok := c.responseChannels[pidString]; ok {
-					responseChannel <- msg
+				c.Lock()
+				responseChannel, ok := c.responseChannels[pidString]
+				if ok {
+					delete(c.responseChannels, pidString)
+				}
+				c.Unlock()
+				if responseChannel != nil {
+					select {
+					case responseChannel <- msg:
+						close(responseChannel)
+					default:
+					}
 				}
 				return nil
 			}
@@ -469,12 +479,12 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				if response == nil {
 					payload, err = newAckPayload(pid)
 				} else {
-					payload, err = newBinaryPayload(response, pid)
+					payload, err = newBinaryPayload(response, pid, false)
 				}
 				if err != nil {
 					return err
 				}
-				if err := c.send([]string{inboundMsg.Src}, payload, payloadMsg.Encrypted); err != nil {
+				if err := c.send([]string{inboundMsg.Src}, payload, payloadMsg.Encrypted, 0); err != nil {
 					return err
 				}
 				return nil
@@ -622,7 +632,7 @@ func addressToID(addr string) []byte {
 }
 
 func NewClient(account *vault.Account, identifier string, configs ...ClientConfig) (*Client, error) {
-	config, err := MergedClientConfig(configs)
+	config, err := MergeClientConfig(configs)
 	if err != nil {
 		return nil, err
 	}
@@ -700,7 +710,7 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	return err
 }
 
-func newBinaryPayload(data []byte, replyToPid []byte) (*payloads.Payload, error) {
+func newBinaryPayload(data []byte, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
 	pid := make([]byte, 8)
 	if _, err := rand.Read(pid); err != nil {
 		return nil, err
@@ -711,6 +721,7 @@ func newBinaryPayload(data []byte, replyToPid []byte) (*payloads.Payload, error)
 		Pid:        pid,
 		Data:       data,
 		ReplyToPid: replyToPid,
+		NoAck:      noAck,
 	}, nil
 }
 
@@ -727,24 +738,40 @@ func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
 	}, nil
 }
 
-func (c *Client) Send(dests []string, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) (*Message, error) {
-	payload, err := newBinaryPayload(data, nil)
+func (c *Client) Send(dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
+	config, err := MergeMessageConfig(&c.config.MessageConfig, configs)
 	if err != nil {
 		return nil, err
 	}
-	pidString := string(payload.Pid)
-	responseChannel := make(chan *Message, 1)
-	c.responseChannels[pidString] = responseChannel
-	if err := c.send(dests, payload, encrypted, MaxHoldingSeconds...); err != nil {
+
+	payload, err := newBinaryPayload(data, nil, config.NoAck)
+	if err != nil {
 		return nil, err
 	}
-	msg := <-responseChannel
-	return msg, nil
+
+	if err := c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+		return nil, err
+	}
+
+	pidString := string(payload.Pid)
+	respChan := make(chan *Message, 1)
+	c.Lock()
+	c.responseChannels[pidString] = respChan
+	c.Unlock()
+
+	return respChan, nil
 }
 
-func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, MaxHoldingSeconds ...uint32) error {
-	var outboundMsg *pb.OutboundMessage
+func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
+	if maxHoldingSeconds < 0 {
+		maxHoldingSeconds = 0
+	}
+
 	var payloadMsgs [][]byte
+	outboundMsg := &pb.OutboundMessage{
+		Dests:             dests,
+		MaxHoldingSeconds: uint32(maxHoldingSeconds),
+	}
 
 	if encrypted {
 		var err error
@@ -752,16 +779,12 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 		if err != nil {
 			return err
 		}
-		outboundMsg = &pb.OutboundMessage{
-			Payloads: payloadMsgs,
-			Dests:    dests,
-		}
+		outboundMsg.Payloads = payloadMsgs
 	} else {
 		payloadData, err := proto.Marshal(payload)
 		if err != nil {
 			return err
 		}
-
 		data, err := proto.Marshal(&payloads.Message{
 			Payload:      payloadData,
 			Encrypted:    false,
@@ -772,16 +795,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 			return err
 		}
 		payloadMsgs = [][]byte{data}
-		outboundMsg = &pb.OutboundMessage{
-			Payload: data,
-			Dests:   dests,
-		}
-	}
-
-	if len(MaxHoldingSeconds) == 0 {
-		outboundMsg.MaxHoldingSeconds = uint32(c.config.MaxHoldingSeconds)
-	} else {
-		outboundMsg.MaxHoldingSeconds = MaxHoldingSeconds[0]
+		outboundMsg.Payload = data
 	}
 
 	nodePk, err := hex.DecodeString(c.nodeInfo.PublicKey)
@@ -887,8 +901,13 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	return err
 }
 
-func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data []byte, encrypted bool, MaxHoldingSeconds ...uint32) error {
-	subscribers, subscribersInTxPool, err := getSubscribers(c.config.GetRandomSeedRPCServerAddr(), topic, offset, limit, false, txPool)
+func (c *Client) Publish(topic string, data []byte, configs ...*MessageConfig) error {
+	config, err := MergeMessageConfig(&c.config.MessageConfig, configs)
+	if err != nil {
+		return err
+	}
+
+	subscribers, subscribersInTxPool, err := getSubscribers(c.config.GetRandomSeedRPCServerAddr(), topic, uint32(config.Offset), uint32(config.Limit), false, config.TxPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
 		dests = append(dests, subscriber)
@@ -899,11 +918,13 @@ func (c *Client) Publish(topic string, offset, limit uint32, txPool bool, data [
 	if err != nil {
 		return err
 	}
-	payload, err := newBinaryPayload(data, nil)
+
+	payload, err := newBinaryPayload(data, nil, config.NoAck)
 	if err != nil {
 		return err
 	}
-	return c.send(dests, payload, encrypted, MaxHoldingSeconds...)
+
+	return c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds)
 }
 
 func (c *Client) SetWriteDeadline(deadline time.Time) error {
