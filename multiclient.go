@@ -227,13 +227,12 @@ func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfi
 	offset := m.offset
 	success := false
 	for clientID, c := range m.Clients {
-		if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
-			continue
+		if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
+			success = true
+			responseChannel := make(chan *Message, 1)
+			responseChannels[clientID+offset] = responseChannel
+			c.responseChannels[pidString] = responseChannel
 		}
-		success = true
-		responseChannel := make(chan *Message, 1)
-		responseChannels[clientID+offset] = responseChannel
-		c.responseChannels[pidString] = responseChannel
 	}
 	if !success {
 		return nil, errors.New("all clients failed to send msg")
@@ -259,12 +258,20 @@ func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfi
 }
 
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
+	success := false
 	for clientID := range m.Clients {
-		if err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds); err != nil {
-			return err
+		if err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds); err == nil {
+			success = true
 		}
 	}
+	if !success {
+		return errors.New("all clients failed to send msg")
+	}
 	return nil
+}
+
+func (m *MultiClient) Publish(topic string, data []byte, configs ...*MessageConfig) error {
+	return publish(m, topic, data, configs...)
 }
 
 func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *SessionConfig) (*ncp.Session, error) {
@@ -430,4 +437,8 @@ func (m *MultiClient) IsClosed() bool {
 	m.RLock()
 	defer m.RUnlock()
 	return m.isClosed
+}
+
+func (m *MultiClient) getConfig() *ClientConfig {
+	return m.config
 }

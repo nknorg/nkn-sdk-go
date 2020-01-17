@@ -64,6 +64,11 @@ type Client struct {
 	responseChannels map[string]chan *Message
 }
 
+type clientInterface interface {
+	getConfig() *ClientConfig
+	send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error
+}
+
 type NodeInfo struct {
 	Address   string `json:"addr"`
 	PublicKey string `json:"pubkey"`
@@ -901,13 +906,13 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	return err
 }
 
-func (c *Client) Publish(topic string, data []byte, configs ...*MessageConfig) error {
-	config, err := MergeMessageConfig(&c.config.MessageConfig, configs)
+func publish(c clientInterface, topic string, data []byte, configs ...*MessageConfig) error {
+	config, err := MergeMessageConfig(&c.getConfig().MessageConfig, configs)
 	if err != nil {
 		return err
 	}
 
-	subscribers, subscribersInTxPool, err := getSubscribers(c.config.GetRandomSeedRPCServerAddr(), topic, uint32(config.Offset), uint32(config.Limit), false, config.TxPool)
+	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, uint32(config.Offset), uint32(config.Limit), false, config.TxPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
 		dests = append(dests, subscriber)
@@ -919,12 +924,16 @@ func (c *Client) Publish(topic string, data []byte, configs ...*MessageConfig) e
 		return err
 	}
 
-	payload, err := newBinaryPayload(data, nil, config.NoAck)
+	payload, err := newBinaryPayload(data, nil, true)
 	if err != nil {
 		return err
 	}
 
 	return c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds)
+}
+
+func (c *Client) Publish(topic string, data []byte, configs ...*MessageConfig) error {
+	return publish(c, topic, data, configs...)
 }
 
 func (c *Client) SetWriteDeadline(deadline time.Time) error {
@@ -934,4 +943,8 @@ func (c *Client) SetWriteDeadline(deadline time.Time) error {
 		return errors.New("nil websocker connection")
 	}
 	return c.conn.SetWriteDeadline(deadline)
+}
+
+func (c *Client) getConfig() *ClientConfig {
+	return c.config
 }
