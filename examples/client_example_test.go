@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/nknorg/nkn-sdk-go"
+	nknsdk "github.com/nknorg/nkn-sdk-go"
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/vault"
@@ -15,8 +15,6 @@ import (
 
 func TestClient(t *testing.T) {
 	err := func() error {
-		Init()
-
 		seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
 		privateKey := crypto.GetPrivateKeyFromSeed(seed)
 		account, err := vault.NewAccountWithPrivatekey(privateKey)
@@ -35,14 +33,14 @@ func TestClient(t *testing.T) {
 			return err
 		}
 
-		fromClient, err := NewMultiClient(account, common.BytesToHexString(fromIdentifier), 0, true)
+		fromClient, err := nknsdk.NewMultiClient(account, common.BytesToHexString(fromIdentifier), 0, true)
 		if err != nil {
 			return err
 		}
 		defer fromClient.Close()
 		<-fromClient.OnConnect
 
-		toClient, err := NewMultiClient(account, common.BytesToHexString(toIdentifier), 0, true)
+		toClient, err := nknsdk.NewMultiClient(account, common.BytesToHexString(toIdentifier), 0, true)
 		if err != nil {
 			return err
 		}
@@ -54,17 +52,26 @@ func TestClient(t *testing.T) {
 		go func() {
 			msg := <-toClient.OnMessage
 			timeReceived = time.Now().UnixNano() / int64(time.Millisecond)
-			log.Println("Receive message", "\""+string(msg.Data)+"\"", "from", msg.Src, "after", timeReceived-timeSent, "ms")
+			isEncryptedStr := "unencrypted"
+			if msg.Encrypted {
+				isEncryptedStr = "encrypted"
+			}
+			log.Println("Receive", isEncryptedStr, "message", "\""+string(msg.Data)+"\"", "from", msg.Src, "after", timeReceived-timeSent, "ms")
 			msg.Reply([]byte("world"))
 		}()
 
 		log.Println("Send message from", fromClient.Address, "to", toClient.Address)
-		response, err := fromClient.Send([]string{toClient.Address, toClient.Address}, []byte("Hello"), true)
+		respChan, err := fromClient.Send([]string{toClient.Address, toClient.Address}, []byte("Hello"))
 		if err != nil {
 			return err
 		}
+		response := <-respChan
+		isEncryptedStr := "unencrypted"
+		if response.Encrypted {
+			isEncryptedStr = "encrypted"
+		}
 		timeResponse := time.Now().UnixNano() / int64(time.Millisecond)
-		log.Println("Got response", "\""+string(response.Data)+"\"", "from", response.Src, "after", timeResponse-timeReceived, "ms")
+		log.Println("Got", isEncryptedStr, "response", "\""+string(response.Data)+"\"", "from", response.Src, "after", timeResponse-timeReceived, "ms")
 
 		// wait to send receipt
 		time.Sleep(time.Second)

@@ -9,13 +9,11 @@ import (
 	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/vault"
 
-	. "github.com/nknorg/nkn-sdk-go"
+	nknsdk "github.com/nknorg/nkn-sdk-go"
 )
 
 func TestWallet(t *testing.T) {
-	err := func () error {
-		Init()
-
+	err := func() error {
 		seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
 		privateKey := crypto.GetPrivateKeyFromSeed(seed)
 		account, err := vault.NewAccountWithPrivatekey(privateKey)
@@ -23,7 +21,10 @@ func TestWallet(t *testing.T) {
 			return err
 		}
 
-		w := NewWallet(account)
+		w, err := nknsdk.NewWallet(account)
+		if err != nil {
+			return err
+		}
 
 		// Query asset balance for this wallet
 		balance, err := w.Balance()
