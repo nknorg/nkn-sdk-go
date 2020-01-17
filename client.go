@@ -59,10 +59,11 @@ type Client struct {
 	responseChannels  *cache.Cache
 
 	sync.RWMutex
-	closed    bool
-	conn      *websocket.Conn
-	nodeInfo  *NodeInfo
-	urlString string
+	closed     bool
+	conn       *websocket.Conn
+	nodeInfo   *NodeInfo
+	urlString  string
+	sharedKeys map[string]*[sharedKeySize]byte
 }
 
 type clientInterface interface {
@@ -150,7 +151,14 @@ func (c *Client) GetConn() *websocket.Conn {
 	return c.conn
 }
 
-func (c *Client) computeSharedKey(remotePublicKey []byte) (*[sharedKeySize]byte, error) {
+func (c *Client) getOrComputeSharedKey(remotePublicKey []byte) (*[sharedKeySize]byte, error) {
+	c.RLock()
+	sharedKey, ok := c.sharedKeys[string(remotePublicKey)]
+	c.RUnlock()
+	if ok && sharedKey != nil {
+		return sharedKey, nil
+	}
+
 	if len(remotePublicKey) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("public key length is %d, expecting %d", len(remotePublicKey), ed25519.PublicKeySize)
 	}
@@ -162,9 +170,14 @@ func (c *Client) computeSharedKey(remotePublicKey []byte) (*[sharedKeySize]byte,
 		return nil, fmt.Errorf("converting public key %x to curve25519 public key failed", remotePublicKey)
 	}
 
-	var sharedKey [sharedKeySize]byte
-	box.Precompute(&sharedKey, curve25519PublicKey, c.curveSecretKey)
-	return &sharedKey, nil
+	sharedKey = new([sharedKeySize]byte)
+	box.Precompute(sharedKey, curve25519PublicKey, c.curveSecretKey)
+
+	c.Lock()
+	c.sharedKeys[string(remotePublicKey)] = sharedKey
+	c.Unlock()
+
+	return sharedKey, nil
 }
 
 func encrypt(message []byte, sharedKey *[sharedKeySize]byte) ([]byte, []byte, error) {
@@ -212,7 +225,7 @@ func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte
 				return nil, err
 			}
 
-			sharedKey, err := c.computeSharedKey(destPubkey)
+			sharedKey, err := c.getOrComputeSharedKey(destPubkey)
 			if err != nil {
 				return nil, err
 			}
@@ -242,7 +255,7 @@ func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte
 			return nil, err
 		}
 
-		sharedKey, err := c.computeSharedKey(destPubkey)
+		sharedKey, err := c.getOrComputeSharedKey(destPubkey)
 		if err != nil {
 			return nil, err
 		}
@@ -279,7 +292,7 @@ func (c *Client) decryptPayload(msg *payloads.Message, srcAddr string) ([]byte, 
 		copy(keyNonce[:], msg.Nonce[:nonceSize])
 		copy(msgNonce[:], msg.Nonce[nonceSize:])
 
-		sharedKey, err := c.computeSharedKey(srcPubkey)
+		sharedKey, err := c.getOrComputeSharedKey(srcPubkey)
 		if err != nil {
 			return nil, err
 		}
@@ -299,7 +312,7 @@ func (c *Client) decryptPayload(msg *payloads.Message, srcAddr string) ([]byte, 
 		var nonce [nonceSize]byte
 		copy(nonce[:], msg.Nonce)
 
-		sharedKey, err := c.computeSharedKey(srcPubkey)
+		sharedKey, err := c.getOrComputeSharedKey(srcPubkey)
 		if err != nil {
 			return nil, err
 		}
@@ -657,6 +670,7 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 		OnBlock:          make(chan *BlockInfo, config.BlockChanLen),
 		reconnectChan:    make(chan struct{}, 0),
 		responseChannels: cache.New(config.MsgCacheExpiration, config.MsgCacheExpiration),
+		sharedKeys:       make(map[string]*[sharedKeySize]byte),
 	}
 
 	go c.handleReconnect()
