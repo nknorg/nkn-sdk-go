@@ -19,6 +19,7 @@ enum PayloadType {
   BINARY = 0;
   TEXT = 1;
   ACK = 2;
+  SESSION = 3;
 }
 
 message Message {
@@ -34,7 +35,6 @@ message Payload {
   bytes data = 3;
   bytes reply_to_pid = 4;
   bool no_ack = 5;
-  bool is_session = 6;
 }
 
 message TextData {

@@ -41,7 +41,6 @@ type Message struct {
 	Encrypted bool
 	Pid       []byte
 	Reply     func([]byte) error
-	IsSession bool
 }
 
 type Client struct {
@@ -456,7 +455,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			var msg *Message
 			switch payload.Type {
-			case payloads.TEXT:
+			case payloads.TEXT, payloads.SESSION:
 				fallthrough
 			case payloads.BINARY:
 				msg = &Message{
@@ -465,7 +464,6 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					Type:      payload.Type,
 					Encrypted: payloadMsg.Encrypted,
 					Pid:       payload.Pid,
-					IsSession: payload.IsSession,
 				}
 			}
 
