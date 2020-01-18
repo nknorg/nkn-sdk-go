@@ -141,7 +141,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 			}
 			if i, value, ok := reflect.Select(cases); ok {
 				msg := value.Interface().(*Message)
-				if msg.IsSession {
+				if msg.Type == payloads.SESSION {
 					if !msg.Encrypted {
 						continue
 					}
@@ -311,10 +311,9 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 	sort.Strings(clientIDs)
 	return ncp.NewSession(m.addr, Addr{addr: remoteAddr}, clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
-			Type:      payloads.BINARY,
-			Pid:       sessionID,
-			Data:      buf,
-			IsSession: true,
+			Type: payloads.SESSION,
+			Pid:  sessionID,
+			Data: buf,
 		}
 		client := clients[localClientID]
 		if writeTimeout > 0 {
