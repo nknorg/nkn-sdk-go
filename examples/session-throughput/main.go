@@ -162,7 +162,7 @@ func main() {
 			*dialAddr = listenID + "." + strings.SplitN(m.Addr().String(), ".", 2)[1]
 		}
 
-		s, err := m.DialWithConfig(*dialAddr, &nknsdk.SessionConfig{DialTimeout: 3 * time.Second})
+		s, err := m.DialWithConfig(*dialAddr, &nknsdk.SessionConfig{DialTimeout: 5 * time.Second})
 		if err != nil {
 			log.Fatal(err)
 		}

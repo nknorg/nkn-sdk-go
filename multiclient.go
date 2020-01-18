@@ -20,8 +20,9 @@ import (
 )
 
 const (
-	identifierRe  = "^__\\d+__$"
-	SessionIDSize = 8 // in bytes
+	identifierRe         = "^__\\d+__$"
+	SessionIDSize        = 8 // in bytes
+	acceptSessionBufSize = 128
 )
 
 type MultiClient struct {
@@ -114,7 +115,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 		Address:       addr,
 		OnConnect:     onConnect,
 		OnMessage:     onMessage,
-		acceptSession: make(chan *ncp.Session, 128),
+		acceptSession: make(chan *ncp.Session, acceptSessionBufSize),
 		sessions:      make(map[string]*ncp.Session, 0),
 		onClose:       make(chan struct{}, 0),
 	}
@@ -339,36 +340,33 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, data []byte) error {
 	remoteAddr, remoteClientID := removeIdentifier(src)
 	sessionKey := sessionKey(remoteAddr, sessionID)
+	var err error
 
 	m.Lock()
 	session, ok := m.sessions[sessionKey]
 	if !ok {
-		session, err := m.newSession(remoteAddr, sessionID, &m.config.SessionConfig)
+		session, err = m.newSession(remoteAddr, sessionID, &m.config.SessionConfig)
 		if err != nil {
 			m.Unlock()
 			return err
 		}
-
 		m.sessions[sessionKey] = session
-		m.Unlock()
+	}
+	m.Unlock()
 
-		err = session.ReceiveWith(localClientID, remoteClientID, data)
-		if err != nil {
-			return err
-		}
+	err = session.ReceiveWith(localClientID, remoteClientID, data)
+	if err != nil {
+		return err
+	}
 
+	if !ok {
 		select {
 		case m.acceptSession <- session:
 		default:
 			log.Println("Accept session channel full, discard request...")
 		}
-	} else {
-		m.Unlock()
-		err := session.ReceiveWith(localClientID, remoteClientID, data)
-		if err != nil {
-			return err
-		}
 	}
+
 	return nil
 }
 
