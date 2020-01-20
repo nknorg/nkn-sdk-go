@@ -1,8 +1,6 @@
-package nkn_sdk_go
+package nkn
 
 import (
-	"time"
-
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/pb"
 	"github.com/nknorg/nkn/program"
@@ -30,7 +28,7 @@ type Wallet struct {
 
 type Subscription struct {
 	Meta      string
-	ExpiresAt uint32
+	ExpiresAt int32 // changed to signed int for gomobile compatibility
 }
 
 type balance struct {
@@ -42,8 +40,8 @@ type nonce struct {
 	NonceInTxPool uint64 `json:"nonceInTxPool"`
 }
 
-func NewWallet(account *vault.Account, configs ...WalletConfig) (*Wallet, error) {
-	config, err := MergeWalletConfig(configs)
+func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
+	config, err := MergeWalletConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +61,7 @@ func NewWallet(account *vault.Account, configs ...WalletConfig) (*Wallet, error)
 	}()
 	wallet := &Wallet{
 		config:    config,
-		account:   account,
+		account:   account.Account,
 		txChannel: txChannel,
 	}
 	return wallet, nil
@@ -84,7 +82,7 @@ func (w *Wallet) signTransaction(tx *transaction.Transaction) error {
 	return nil
 }
 
-func (w *Wallet) SendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
+func (w *Wallet) sendRawTransaction(tx *transaction.Transaction) (string, error, int32) {
 	txIdChan := make(chan string)
 	errChan := make(chan *errWithCode)
 	w.txChannel <- &queuedTx{tx, txIdChan, errChan}
@@ -94,6 +92,17 @@ func (w *Wallet) SendRawTransaction(tx *transaction.Transaction) (string, error,
 	case err := <-errChan:
 		return "", err.err, err.code
 	}
+}
+
+func (w *Wallet) SendRawTransaction(tx *transaction.Transaction) (string, error) {
+	txId, err, _ := w.sendRawTransaction(tx)
+	return txId, err
+}
+
+// nonce is changed to signed int for gomobile compatibility
+func (w *Wallet) GetNonce() (int64, error) {
+	nonce, err := w.getNonce()
+	return int64(nonce), err
 }
 
 func (w *Wallet) getNonce() (uint64, error) {
@@ -124,42 +133,36 @@ func (w *Wallet) getHeight() (uint32, error) {
 	return height, nil
 }
 
-func getFee(fee []string) (common.Fixed64, error) {
-	if len(fee) == 0 {
-		return 0, nil
-	}
-	return common.StringToFixed64(fee[0])
-}
-
-func (w *Wallet) Balance() (common.Fixed64, error) {
+func (w *Wallet) Balance() (*Amount, error) {
 	address, err := w.account.ProgramHash.ToAddress()
 	if err != nil {
-		return common.Fixed64(-1), err
+		return nil, err
 	}
 	return w.BalanceByAddress(address)
 }
 
-func (w *Wallet) BalanceByAddress(address string) (common.Fixed64, error) {
+func (w *Wallet) BalanceByAddress(address string) (*Amount, error) {
 	var balance balance
 	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return common.StringToFixed64(balance.Amount)
+	return NewAmount(balance.Amount)
 }
 
-func (w *Wallet) Transfer(address string, value string, fee ...string) (string, error) {
+func (w *Wallet) Transfer(address string, value string, fee string) (string, error) {
 	outputValue, err := common.StringToFixed64(value)
 	if err != nil {
 		return "", err
 	}
+
 	programHash, err := common.ToScriptHash(address)
 	if err != nil {
 		return "", err
 	}
 
-	_fee, err := getFee(fee)
+	_fee, err := common.StringToFixed64(fee)
 	if err != nil {
 		return "", err
 	}
@@ -178,34 +181,34 @@ func (w *Wallet) Transfer(address string, value string, fee ...string) (string, 
 		return "", err
 	}
 
-	id, err, _ := w.SendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
 	return id, err
 }
 
-func (w *Wallet) NewNanoPay(address string, fee string, duration ...uint32) (*NanoPay, error) {
-	_fee, err := common.StringToFixed64(fee)
+// duration is changed to signed int for gomobile compatibility
+func (w *Wallet) NewNanoPay(address string, fee string, duration int) (*NanoPay, error) {
+	_fee, err := NewAmount(fee)
 	if err != nil {
 		return nil, err
 	}
-	return NewNanoPay(w, address, _fee, duration...)
+	return NewNanoPay(w, address, _fee, duration)
 }
 
-func (w *Wallet) NewNanoPayClaimer(claimInterval time.Duration, errChan chan error, address ...string) (*NanoPayClaimer, error) {
-	if len(address) > 0 {
-		return NewNanoPayClaimer(w, address[0], claimInterval, errChan)
-	}
-	return NewNanoPayClaimer(w, "", claimInterval, errChan)
+func (w *Wallet) NewNanoPayClaimer(claimIntervalMs int32, onError *OnError, address string) (*NanoPayClaimer, error) {
+	return NewNanoPayClaimer(w, address, claimIntervalMs, onError)
 }
 
-func (w *Wallet) RegisterName(name string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *Wallet) RegisterName(name string, fee string) (string, error) {
+	_fee, err := common.StringToFixed64(fee)
 	if err != nil {
 		return "", err
 	}
+
 	nonce, err := w.getNonce()
 	if err != nil {
 		return "", err
 	}
+
 	tx, err := transaction.NewRegisterNameTransaction(w.account.PublicKey.EncodePoint(), name, nonce, _fee)
 	if err != nil {
 		return "", err
@@ -215,12 +218,12 @@ func (w *Wallet) RegisterName(name string, fee ...string) (string, error) {
 		return "", err
 	}
 
-	id, err, _ := w.SendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
 	return id, err
 }
 
-func (w *Wallet) DeleteName(name string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *Wallet) DeleteName(name string, fee string) (string, error) {
+	_fee, err := common.StringToFixed64(fee)
 	if err != nil {
 		return "", err
 	}
@@ -237,12 +240,13 @@ func (w *Wallet) DeleteName(name string, fee ...string) (string, error) {
 		return "", err
 	}
 
-	id, err, _ := w.SendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
 	return id, err
 }
 
-func (w *Wallet) Subscribe(identifier string, topic string, duration uint32, meta string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+// duration is changed to signed int for gomobile compatibility
+func (w *Wallet) Subscribe(identifier string, topic string, duration int, meta string, fee string) (string, error) {
+	_fee, err := common.StringToFixed64(fee)
 	if err != nil {
 		return "", err
 	}
@@ -254,7 +258,7 @@ func (w *Wallet) Subscribe(identifier string, topic string, duration uint32, met
 		w.account.PublicKey.EncodePoint(),
 		identifier,
 		topic,
-		duration,
+		uint32(duration),
 		meta,
 		nonce,
 		_fee,
@@ -267,12 +271,12 @@ func (w *Wallet) Subscribe(identifier string, topic string, duration uint32, met
 		return "", err
 	}
 
-	id, err, _ := w.SendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
 	return id, err
 }
 
-func (w *Wallet) Unsubscribe(identifier string, topic string, fee ...string) (string, error) {
-	_fee, err := getFee(fee)
+func (w *Wallet) Unsubscribe(identifier string, topic string, fee string) (string, error) {
+	_fee, err := common.StringToFixed64(fee)
 	if err != nil {
 		return "", err
 	}
@@ -295,7 +299,7 @@ func (w *Wallet) Unsubscribe(identifier string, topic string, fee ...string) (st
 		return "", err
 	}
 
-	id, err, _ := w.SendRawTransaction(tx)
+	id, err, _ := w.sendRawTransaction(tx)
 	return id, err
 }
 
@@ -320,7 +324,8 @@ func (w *Wallet) GetSubscription(topic string, subscriber string) (*Subscription
 	return subscription, nil
 }
 
-func getSubscribers(address string, topic string, offset, limit uint32, meta, txPool bool) (map[string]string, map[string]string, error) {
+// offset and limit are changed to signed int for gomobile compatibility
+func getSubscribers(address string, topic string, offset, limit int, meta, txPool bool) (map[string]string, map[string]string, error) {
 	var result map[string]interface{}
 	err, _ := call(address, "getsubscribers", map[string]interface{}{
 		"topic":  topic,
@@ -356,12 +361,22 @@ func getSubscribers(address string, topic string, offset, limit uint32, meta, tx
 	return subscribers, subscribersInTxPool, nil
 }
 
-func (w *Wallet) GetSubscribers(topic string, offset, limit uint32, meta, txPool bool) (map[string]string, map[string]string, error) {
-	return getSubscribers(w.config.GetRandomSeedRPCServerAddr(), topic, offset, limit, meta, txPool)
+// offset and limit are changed to signed int for gomobile compatibility
+func (w *Wallet) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+	subscribers, subscribersInTxPool, err := getSubscribers(w.config.GetRandomSeedRPCServerAddr(), topic, offset, limit, meta, txPool)
+	if err != nil {
+		return nil, err
+	}
+	s := &Subscribers{
+		Subscribers:         NewStringMap(subscribers),
+		SubscribersInTxPool: NewStringMap(subscribersInTxPool),
+	}
+	return s, nil
 }
 
-func (w *Wallet) GetSubscribersCount(topic string) (uint32, error) {
-	var count uint32
+// count is changed to signed int for gomobile compatibility
+func (w *Wallet) GetSubscribersCount(topic string) (int, error) {
+	var count int
 	err, _ := call(w.config.GetRandomSeedRPCServerAddr(), "getsubscriberscount", map[string]interface{}{
 		"topic": topic,
 	}, &count)

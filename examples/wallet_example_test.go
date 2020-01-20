@@ -5,23 +5,17 @@ import (
 	"log"
 	"testing"
 
-	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/crypto"
-	"github.com/nknorg/nkn/vault"
-
 	nknsdk "github.com/nknorg/nkn-sdk-go"
 )
 
 func TestWallet(t *testing.T) {
 	err := func() error {
-		seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
-		privateKey := crypto.GetPrivateKeyFromSeed(seed)
-		account, err := vault.NewAccountWithPrivatekey(privateKey)
+		account, err := nknsdk.NewAccount(nil)
 		if err != nil {
 			return err
 		}
 
-		w, err := nknsdk.NewWallet(account)
+		w, err := nknsdk.NewWallet(account, nil)
 		if err != nil {
 			return err
 		}
@@ -39,7 +33,7 @@ func TestWallet(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		txid, err := w.Transfer(address, "100")
+		txid, err := w.Transfer(address, "100", "0")
 		if err != nil {
 			return err
 		}
@@ -61,7 +55,7 @@ func TestWallet(t *testing.T) {
 		//log.Println("success:", txid)
 
 		// Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks
-		txid, err = w.Subscribe("identifier", "topic", 10, "meta")
+		txid, err = w.Subscribe("identifier", "topic", 10, "meta", "0")
 		if err != nil {
 			return err
 		}

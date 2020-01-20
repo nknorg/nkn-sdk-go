@@ -1,4 +1,4 @@
-package nkn_sdk_go
+package nkn
 
 import (
 	"bytes"
@@ -14,34 +14,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nknorg/nkn/crypto/ed25519"
-	"github.com/patrickmn/go-cache"
-	"golang.org/x/crypto/nacl/box"
-
-	"github.com/nknorg/nkn-sdk-go/payloads"
-
 	"github.com/gogo/protobuf/proto"
 	"github.com/gorilla/websocket"
+	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/api/common"
 	"github.com/nknorg/nkn/crypto"
+	"github.com/nknorg/nkn/crypto/ed25519"
 	"github.com/nknorg/nkn/pb"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/nknorg/nkn/vault"
+	"github.com/patrickmn/go-cache"
+	"golang.org/x/crypto/nacl/box"
 )
-
-const (
-	nonceSize     = 24
-	sharedKeySize = 32
-)
-
-type Message struct {
-	Src       string
-	Data      []byte
-	Type      payloads.PayloadType
-	Encrypted bool
-	Pid       []byte
-	Reply     func([]byte) error
-}
 
 type Client struct {
 	config            *ClientConfig
@@ -50,9 +34,9 @@ type Client struct {
 	curveSecretKey    *[sharedKeySize]byte
 	Address           string
 	addressID         []byte
-	OnConnect         chan struct{}
-	OnMessage         chan *Message
-	OnBlock           chan *BlockInfo
+	OnConnect         *OnConnect
+	OnMessage         *OnMessage
+	OnBlock           *OnBlock
 	sigChainBlockHash string
 	reconnectChan     chan struct{}
 	responseChannels  *cache.Cache
@@ -82,12 +66,12 @@ type SetClientResult struct {
 }
 
 type HeaderInfo struct {
-	Version          uint32 `json:"version"`
+	Version          int32  `json:"version"` // changed to signed int for gomobile compatibility
 	PrevBlockHash    string `json:"prevBlockHash"`
 	TransactionsRoot string `json:"transactionsRoot"`
 	StateRoot        string `json:"stateRoot"`
 	Timestamp        int64  `json:"timestamp"`
-	Height           uint32 `json:"height"`
+	Height           int32  `json:"height"` // changed to signed int for gomobile compatibility
 	RandomBeacon     string `json:"randomBeacon"`
 	WinnerHash       string `json:"winnerHash"`
 	WinnerType       string `json:"winnerType"`
@@ -105,7 +89,7 @@ type ProgramInfo struct {
 type TxnInfo struct {
 	TxType      string        `json:"txType"`
 	PayloadData string        `json:"payloadData"`
-	Nonce       uint64        `json:"nonce"`
+	Nonce       int64         `json:"nonce"` // changed to signed int for gomobile compatibility
 	Fee         int64         `json:"fee"`
 	Attributes  string        `json:"attributes"`
 	Programs    []ProgramInfo `json:"programs"`
@@ -113,10 +97,16 @@ type TxnInfo struct {
 }
 
 type BlockInfo struct {
-	Header       HeaderInfo `json:"header"`
-	Transactions []TxnInfo  `json:"transactions"`
-	Size         int        `json:"size"`
-	Hash         string     `json:"hash"`
+	Header       *HeaderInfo `json:"header"`
+	Transactions []TxnInfo   `json:"transactions"`
+	Size         int         `json:"size"`
+	Hash         string      `json:"hash"`
+}
+
+func NewBlockInfo() *BlockInfo {
+	return &BlockInfo{
+		Header: &HeaderInfo{},
+	}
 }
 
 func (c *Client) IsClosed() bool {
@@ -130,9 +120,9 @@ func (c *Client) Close() {
 	defer c.Unlock()
 	if !c.closed {
 		c.closed = true
-		close(c.OnConnect)
-		close(c.OnMessage)
-		close(c.OnBlock)
+		close(c.OnConnect.C)
+		close(c.OnMessage.C)
+		close(c.OnBlock.C)
 		close(c.reconnectChan)
 		c.conn.Close()
 	}
@@ -177,26 +167,6 @@ func (c *Client) getOrComputeSharedKey(remotePublicKey []byte) (*[sharedKeySize]
 	c.Unlock()
 
 	return sharedKey, nil
-}
-
-func encrypt(message []byte, sharedKey *[sharedKeySize]byte) ([]byte, []byte, error) {
-	encrypted := make([]byte, len(message)+box.Overhead)
-	var nonce [nonceSize]byte
-	if _, err := rand.Read(nonce[:]); err != nil {
-		return nil, nil, err
-	}
-	box.SealAfterPrecomputation(encrypted[:0], message, &nonce, sharedKey)
-	return encrypted, nonce[:], nil
-}
-
-func decrypt(message []byte, nonce [nonceSize]byte, sharedKey *[sharedKeySize]byte) ([]byte, error) {
-	decrypted := make([]byte, len(message)-box.Overhead)
-	_, ok := box.OpenAfterPrecomputation(decrypted[:0], message, &nonce, sharedKey)
-	if !ok {
-		return nil, errors.New("decrypt message failed")
-	}
-
-	return decrypted, nil
 }
 
 func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte, error) {
@@ -248,33 +218,33 @@ func (c *Client) encryptPayload(msg *payloads.Payload, dests []string) ([][]byte
 		}
 
 		return msgs, nil
-	} else {
-		_, destPubkey, _, err := address.ParseClientAddress(dests[0])
-		if err != nil {
-			return nil, err
-		}
-
-		sharedKey, err := c.getOrComputeSharedKey(destPubkey)
-		if err != nil {
-			return nil, err
-		}
-
-		encrypted, nonce, err := encrypt(rawPayload, sharedKey)
-		if err != nil {
-			return nil, err
-		}
-
-		data, err := proto.Marshal(&payloads.Message{
-			Payload:      encrypted,
-			Encrypted:    true,
-			Nonce:        nonce,
-			EncryptedKey: nil,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{data}, nil
 	}
+
+	_, destPubkey, _, err := address.ParseClientAddress(dests[0])
+	if err != nil {
+		return nil, err
+	}
+
+	sharedKey, err := c.getOrComputeSharedKey(destPubkey)
+	if err != nil {
+		return nil, err
+	}
+
+	encrypted, nonce, err := encrypt(rawPayload, sharedKey)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := proto.Marshal(&payloads.Message{
+		Payload:      encrypted,
+		Encrypted:    true,
+		Nonce:        nonce,
+		EncryptedKey: nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return [][]byte{data}, nil
 }
 
 func (c *Client) decryptPayload(msg *payloads.Message, srcAddr string) ([]byte, error) {
@@ -375,10 +345,8 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			select {
-			case c.OnConnect <- struct{}{}:
-			default:
-			}
+			nodeInfo := c.GetNodeInfo()
+			c.OnConnect.receive(nodeInfo)
 		case "updateSigChainBlockHash":
 			var sigChainBlockHash string
 			if err := json.Unmarshal(*msg["Result"], &sigChainBlockHash); err != nil {
@@ -386,8 +354,8 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			}
 			c.sigChainBlockHash = sigChainBlockHash
 		case "sendRawBlock":
-			var blockInfo BlockInfo
-			if err := json.Unmarshal(*msg["Result"], &blockInfo); err != nil {
+			blockInfo := NewBlockInfo()
+			if err := json.Unmarshal(*msg["Result"], blockInfo); err != nil {
 				return err
 			}
 
@@ -397,11 +365,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			select {
-			case c.OnBlock <- &blockInfo:
-			default:
-				log.Println("Block chan full, discarding block")
-			}
+			c.OnBlock.receive(blockInfo)
 		}
 	case websocket.BinaryMessage:
 		clientMsg := &pb.ClientMessage{}
@@ -461,7 +425,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				msg = &Message{
 					Src:       inboundMsg.Src,
 					Data:      data,
-					Type:      payload.Type,
+					Type:      int32(payload.Type),
 					Encrypted: payloadMsg.Encrypted,
 					Pid:       payload.Pid,
 				}
@@ -469,13 +433,10 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			if len(payload.ReplyToPid) > 0 {
 				pidString := string(payload.ReplyToPid)
-				respChan, ok := c.responseChannels.Get(pidString)
+				onReply, ok := c.responseChannels.Get(pidString)
 				if ok {
 					c.responseChannels.Delete(pidString)
-					select {
-					case respChan.(chan *Message) <- msg:
-					default:
-					}
+					onReply.(*OnMessage).receive(msg, false)
 				}
 				return nil
 			}
@@ -484,7 +445,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			msg.Reply = func(response []byte) error {
+			msg.reply = func(response []byte) error {
 				pid := payload.Pid
 				var payload *payloads.Payload
 				var err error
@@ -508,11 +469,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			select {
-			case c.OnMessage <- msg:
-			default:
-				log.Println("Message chan full, discarding msg")
-			}
+			c.OnMessage.receive(msg, true)
 		}
 	}
 
@@ -522,7 +479,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 	urlString := (&url.URL{Scheme: "ws", Host: nodeInfo.Address}).String()
 	dialer := websocket.DefaultDialer
-	dialer.HandshakeTimeout = c.config.WsHandshakeTimeout
+	dialer.HandshakeTimeout = time.Duration(c.config.WsHandshakeTimeout) * time.Millisecond
 
 	conn, _, err := dialer.Dial(urlString, nil)
 	if err != nil {
@@ -584,7 +541,7 @@ func (c *Client) connect(maxRetries int) error {
 	for retry := 1; maxRetries == 0 || retry <= maxRetries; retry++ {
 		if retry > 1 {
 			log.Printf("Retry in %v...\n", retryInterval)
-			time.Sleep(retryInterval)
+			time.Sleep(time.Duration(retryInterval) * time.Millisecond)
 			retryInterval *= 2
 			if retryInterval > c.config.MaxReconnectInterval {
 				retryInterval = c.config.MaxReconnectInterval
@@ -627,7 +584,7 @@ func (c *Client) handleReconnect() {
 		}
 
 		log.Printf("Reconnect in %v...\n", c.config.MinReconnectInterval)
-		time.Sleep(c.config.MinReconnectInterval)
+		time.Sleep(time.Duration(c.config.MinReconnectInterval) * time.Millisecond)
 
 		err := c.connect(0)
 		if err != nil {
@@ -643,14 +600,13 @@ func addressToID(addr string) []byte {
 	return id[:]
 }
 
-func NewClient(account *vault.Account, identifier string, configs ...ClientConfig) (*Client, error) {
-	config, err := MergeClientConfig(configs)
+func NewClient(account *Account, identifier string, config *ClientConfig) (*Client, error) {
+	config, err := MergeClientConfig(config)
 	if err != nil {
 		return nil, err
 	}
 
-	pk := account.PubKey().EncodePoint()
-
+	pk := account.PubKey()
 	var sk [ed25519.PrivateKeySize]byte
 	copy(sk[:], account.PrivKey())
 	curveSecretKey := ed25519.PrivateKeyToCurve25519PrivateKey(&sk)
@@ -658,16 +614,16 @@ func NewClient(account *vault.Account, identifier string, configs ...ClientConfi
 	addr := address.MakeAddressString(pk, identifier)
 	c := Client{
 		config:           config,
-		account:          account,
+		account:          account.Account,
 		publicKey:        pk,
 		curveSecretKey:   curveSecretKey,
 		Address:          addr,
 		addressID:        addressToID(addr),
-		OnConnect:        make(chan struct{}, 1),
-		OnMessage:        make(chan *Message, config.MsgChanLen),
-		OnBlock:          make(chan *BlockInfo, config.BlockChanLen),
+		OnConnect:        NewOnConnect(1, nil),
+		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
+		OnBlock:          NewOnBlock(int(config.BlockChanLen), nil),
 		reconnectChan:    make(chan struct{}, 0),
-		responseChannels: cache.New(config.MsgCacheExpiration, config.MsgCacheExpiration),
+		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
 		sharedKeys:       make(map[string]*[sharedKeySize]byte),
 	}
 
@@ -751,8 +707,8 @@ func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
 	}, nil
 }
 
-func (c *Client) Send(dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
-	config, err := MergeMessageConfig(&c.config.MessageConfig, configs)
+func (c *Client) Send(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+	config, err := MergeMessageConfig(c.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -762,15 +718,15 @@ func (c *Client) Send(dests []string, data []byte, configs ...*MessageConfig) (c
 		return nil, err
 	}
 
-	if err := c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := c.send(dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
 	pidString := string(payload.Pid)
-	respChan := make(chan *Message, 1)
-	c.responseChannels.Add(pidString, respChan, cache.DefaultExpiration)
+	onReply := NewOnMessage(1, nil)
+	c.responseChannels.Add(pidString, onReply, cache.DefaultExpiration)
 
-	return respChan, nil
+	return onReply, nil
 }
 
 func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
@@ -912,13 +868,13 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	return err
 }
 
-func publish(c clientInterface, topic string, data []byte, configs ...*MessageConfig) error {
-	config, err := MergeMessageConfig(&c.getConfig().MessageConfig, configs)
+func publish(c clientInterface, topic string, data []byte, config *MessageConfig) error {
+	config, err := MergeMessageConfig(c.getConfig().MessageConfig, config)
 	if err != nil {
 		return err
 	}
 
-	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, uint32(config.Offset), uint32(config.Limit), false, config.TxPool)
+	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, int(config.Offset), int(config.Limit), false, config.TxPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber, _ := range subscribers {
 		dests = append(dests, subscriber)
@@ -938,8 +894,8 @@ func publish(c clientInterface, topic string, data []byte, configs ...*MessageCo
 	return c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds)
 }
 
-func (c *Client) Publish(topic string, data []byte, configs ...*MessageConfig) error {
-	return publish(c, topic, data, configs...)
+func (c *Client) Publish(topic string, data []byte, config *MessageConfig) error {
+	return publish(c, topic, data, config)
 }
 
 func (c *Client) SetWriteDeadline(deadline time.Time) error {

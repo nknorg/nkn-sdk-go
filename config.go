@@ -1,4 +1,4 @@
-package nkn_sdk_go
+package nkn
 
 import (
 	"math/rand"
@@ -55,63 +55,40 @@ var DefaultSeedRPCServerAddr = []string{
 	"http://mainnet-seed-0044.nkn.org:30003",
 }
 
-var DefaultClientConfig = ClientConfig{
-	SeedRPCServerAddr:       DefaultSeedRPCServerAddr,
-	MaxHoldingSeconds:       0,
-	MsgChanLen:              1024,
-	BlockChanLen:            1,
-	ConnectRetries:          3,
-	MsgCacheExpiration:      300 * time.Second,
-	MsgCacheCleanupInterval: 60 * time.Second,
-	WsHandshakeTimeout:      5 * time.Second,
-	MaxReconnectInterval:    time.Minute,
-	MessageConfig:           DefaultMessageConfig,
-	SessionConfig:           DefaultSessionConfig,
-}
-
-var DefaultMessageConfig = MessageConfig{
-	Unencrypted:       false,
-	NoAck:             false,
-	MaxHoldingSeconds: 0,
-	Offset:            0,
-	Limit:             1000,
-	TxPool:            false,
-}
-
-var DefaultSessionConfig = SessionConfig{
-	SessionWindowSize:            4 << 20,
-	MTU:                          1024,
-	InitialConnectionWindowSize:  16,
-	MaxConnectionWindowSize:      256,
-	MinConnectionWindowSize:      1,
-	MaxAckSeqListSize:            32,
-	NonStream:                    false,
-	FlushInterval:                10 * time.Millisecond,
-	CloseDelay:                   100 * time.Millisecond,
-	InitialRetransmissionTimeout: 5 * time.Second,
-	MaxRetransmissionTimeout:     10 * time.Second,
-	SendAckInterval:              50 * time.Millisecond,
-	CheckTimeoutInterval:         50 * time.Millisecond,
-	DialTimeout:                  0,
-}
-
-var DefaultWalletConfig = WalletConfig{
-	SeedRPCServerAddr: DefaultSeedRPCServerAddr,
-}
-
 type ClientConfig struct {
-	SeedRPCServerAddr       []string
+	SeedRPCServerAddr       *StringArray
 	MaxHoldingSeconds       int32
 	MsgChanLen              int32
 	BlockChanLen            int32
 	ConnectRetries          int32
-	MsgCacheExpiration      time.Duration
-	MsgCacheCleanupInterval time.Duration
-	WsHandshakeTimeout      time.Duration
-	MinReconnectInterval    time.Duration
-	MaxReconnectInterval    time.Duration
-	MessageConfig           MessageConfig
-	SessionConfig           SessionConfig
+	MsgCacheExpiration      int32 // in millisecond
+	MsgCacheCleanupInterval int32 // in millisecond
+	WsHandshakeTimeout      int32 // in millisecond
+	MinReconnectInterval    int32 // in millisecond
+	MaxReconnectInterval    int32 // in millisecond
+	MessageConfig           *MessageConfig
+	SessionConfig           *SessionConfig
+}
+
+var defaultClientConfig = ClientConfig{
+	MaxHoldingSeconds:       0,
+	MsgChanLen:              1024,
+	BlockChanLen:            1,
+	ConnectRetries:          3,
+	MsgCacheExpiration:      300000,
+	MsgCacheCleanupInterval: 60000,
+	WsHandshakeTimeout:      5000,
+	MaxReconnectInterval:    60000,
+	MessageConfig:           nil,
+	SessionConfig:           nil,
+}
+
+func DefaultClientConfig() *ClientConfig {
+	clientConf := defaultClientConfig
+	clientConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	clientConf.MessageConfig = DefaultMessageConfig()
+	clientConf.SessionConfig = DefaultSessionConfig()
+	return &clientConf
 }
 
 type MessageConfig struct {
@@ -125,10 +102,55 @@ type MessageConfig struct {
 	TxPool bool
 }
 
+var defaultMessageConfig = MessageConfig{
+	Unencrypted:       false,
+	NoAck:             false,
+	MaxHoldingSeconds: 0,
+	Offset:            0,
+	Limit:             1000,
+	TxPool:            false,
+}
+
+func DefaultMessageConfig() *MessageConfig {
+	messageConf := defaultMessageConfig
+	return &messageConf
+}
+
+// SessionConfig alias is for gomobile compatibility
 type SessionConfig ncp.Config
 
+var defaultSessionConfig = SessionConfig{
+	NonStream:                    false,
+	SessionWindowSize:            4 << 20,
+	MTU:                          1024,
+	InitialConnectionWindowSize:  16,
+	MaxConnectionWindowSize:      256,
+	MinConnectionWindowSize:      1,
+	MaxAckSeqListSize:            32,
+	FlushInterval:                10,
+	CloseDelay:                   100,
+	InitialRetransmissionTimeout: 5000,
+	MaxRetransmissionTimeout:     10000,
+	SendAckInterval:              50,
+	CheckTimeoutInterval:         50,
+	DialTimeout:                  0,
+}
+
+func DefaultSessionConfig() *SessionConfig {
+	sessionConf := defaultSessionConfig
+	return &sessionConf
+}
+
 type WalletConfig struct {
-	SeedRPCServerAddr []string
+	SeedRPCServerAddr *StringArray
+}
+
+var defaultWalletConfig = WalletConfig{}
+
+func DefaultWalletConfig() *WalletConfig {
+	walletConf := defaultWalletConfig
+	walletConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	return &walletConf
 }
 
 func init() {
@@ -136,34 +158,34 @@ func init() {
 }
 
 func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
-	if len(config.SeedRPCServerAddr) == 0 {
+	if len(config.SeedRPCServerAddr.Elems) == 0 {
 		return ""
 	}
-	return config.SeedRPCServerAddr[rand.Intn(len(config.SeedRPCServerAddr))]
+	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
 }
 
 func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
-	if len(config.SeedRPCServerAddr) == 0 {
+	if len(config.SeedRPCServerAddr.Elems) == 0 {
 		return ""
 	}
-	return config.SeedRPCServerAddr[rand.Intn(len(config.SeedRPCServerAddr))]
+	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
 }
 
-func MergeClientConfig(conf []ClientConfig) (*ClientConfig, error) {
-	merged := DefaultClientConfig
-	if len(conf) > 0 {
-		err := mergo.Merge(&merged, &conf[0], mergo.WithOverride)
+func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
+	merged := DefaultClientConfig()
+	if conf != nil {
+		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &merged, nil
+	return merged, nil
 }
 
-func MergeMessageConfig(base *MessageConfig, conf []*MessageConfig) (*MessageConfig, error) {
+func MergeMessageConfig(base, conf *MessageConfig) (*MessageConfig, error) {
 	merged := *base
-	if len(conf) > 0 {
-		err := mergo.Merge(&merged, conf[0], mergo.WithOverride)
+	if conf != nil {
+		err := mergo.Merge(&merged, conf, mergo.WithOverride)
 		if err != nil {
 			return nil, err
 		}
@@ -182,13 +204,13 @@ func MergeSessionConfig(base, conf *SessionConfig) (*SessionConfig, error) {
 	return &merged, nil
 }
 
-func MergeWalletConfig(conf []WalletConfig) (*WalletConfig, error) {
-	merged := DefaultWalletConfig
-	if len(conf) > 0 {
-		err := mergo.Merge(&merged, &conf[0], mergo.WithOverride)
+func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
+	merged := DefaultWalletConfig()
+	if conf != nil {
+		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &merged, nil
+	return merged, nil
 }

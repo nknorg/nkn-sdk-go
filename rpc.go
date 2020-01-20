@@ -1,4 +1,4 @@
-package nkn_sdk_go
+package nkn
 
 import (
 	"encoding/json"

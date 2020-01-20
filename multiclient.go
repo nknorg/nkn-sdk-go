@@ -1,4 +1,4 @@
-package nkn_sdk_go
+package nkn
 
 import (
 	"errors"
@@ -10,13 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nknorg/nkn/util/address"
-	"github.com/nknorg/nkn/vault"
-
-	"github.com/patrickmn/go-cache"
-
 	"github.com/nknorg/ncp"
 	"github.com/nknorg/nkn-sdk-go/payloads"
+	"github.com/nknorg/nkn/util/address"
+	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -30,10 +27,10 @@ type MultiClient struct {
 	offset        int
 	Clients       map[int]*Client
 	DefaultClient *Client
-	addr          Addr
+	addr          *nknAddr
 	Address       string
-	OnConnect     chan struct{}
-	OnMessage     chan *Message
+	OnConnect     *OnConnect
+	OnMessage     *OnMessage
 	acceptSession chan *ncp.Session
 	onClose       chan struct{}
 
@@ -42,8 +39,8 @@ type MultiClient struct {
 	isClosed bool
 }
 
-func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients int, originalClient bool, configs ...ClientConfig) (*MultiClient, error) {
-	config, err := MergeClientConfig(configs)
+func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, originalClient bool, config *ClientConfig) (*MultiClient, error) {
+	config, err := MergeClientConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +61,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			client, err := NewClient(account, addIdentifier(baseIdentifier, i), configs...)
+			client, err := NewClient(account, addIdentifier(baseIdentifier, i), config)
 			if err != nil {
 				log.Println(err)
 				return
@@ -89,44 +86,43 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 
 	addr := address.MakeAddressString(account.PublicKey.EncodePoint(), baseIdentifier)
 
-	onConnect := make(chan struct{}, 1)
+	onConnect := NewOnConnect(1, nil)
 	go func() {
 		cases := make([]reflect.SelectCase, numClients)
 		for i := 0; i < numClients; i++ {
 			if clients[i-offset] != nil {
-				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(clients[i-offset].OnConnect)}
+				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(clients[i-offset].OnConnect.C)}
 			} else {
 				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv}
 			}
 		}
-		if _, _, ok := reflect.Select(cases); ok {
-			onConnect <- struct{}{}
+		if _, value, ok := reflect.Select(cases); ok {
+			nodeInfo := value.Interface().(*NodeInfo)
+			onConnect.receive(nodeInfo)
 		}
 	}()
-
-	onMessage := make(chan *Message, config.MsgChanLen)
 
 	m := &MultiClient{
 		config:        config,
 		offset:        offset,
 		Clients:       clients,
 		DefaultClient: defaultClient,
-		addr:          Addr{addr: addr},
+		addr:          &nknAddr{addr: addr},
 		Address:       addr,
 		OnConnect:     onConnect,
-		OnMessage:     onMessage,
+		OnMessage:     NewOnMessage(int(config.MsgChanLen), nil),
 		acceptSession: make(chan *ncp.Session, acceptSessionBufSize),
 		sessions:      make(map[string]*ncp.Session, 0),
 		onClose:       make(chan struct{}, 0),
 	}
 
-	msgCache := cache.New(config.MsgCacheExpiration, config.MsgCacheExpiration)
+	msgCache := cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond)
 
 	go func() {
 		cases := make([]reflect.SelectCase, numClients)
 		for i := 0; i < numClients; i++ {
 			if clients[i-offset] != nil {
-				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(clients[i-offset].OnMessage)}
+				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(clients[i-offset].OnMessage.C)}
 			} else {
 				cases[i] = reflect.SelectCase{Dir: reflect.SelectRecv}
 			}
@@ -141,7 +137,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 			}
 			if i, value, ok := reflect.Select(cases); ok {
 				msg := value.Interface().(*Message)
-				if msg.Type == payloads.SESSION {
+				if msg.Type == SessionType {
 					if !msg.Encrypted {
 						continue
 					}
@@ -160,7 +156,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 					msgCache.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
 					msg.Src, _ = removeIdentifier(msg.Src)
-					msg.Reply = func(response []byte) error {
+					msg.reply = func(response []byte) error {
 						pid := msg.Pid
 						var payload *payloads.Payload
 						var err error
@@ -177,7 +173,7 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 						}
 						return nil
 					}
-					onMessage <- msg
+					m.OnMessage.receive(msg, true)
 				}
 			}
 		}
@@ -186,13 +182,13 @@ func NewMultiClient(account *vault.Account, baseIdentifier string, numSubClients
 	return m, nil
 }
 
-func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
+func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	client, ok := m.Clients[clientID]
 	if !ok {
 		return nil, fmt.Errorf("clientID %d not found", clientID)
 	}
 
-	config, err := MergeMessageConfig(&m.config.MessageConfig, configs)
+	config, err := MergeMessageConfig(m.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -202,15 +198,15 @@ func (m *MultiClient) SendWithClient(clientID int, dests []string, data []byte, 
 		return nil, err
 	}
 
-	if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
 	pidString := string(payload.Pid)
-	respChan := make(chan *Message, 1)
-	client.responseChannels.Add(pidString, respChan, cache.DefaultExpiration)
+	onReply := NewOnMessage(1, nil)
+	client.responseChannels.Add(pidString, onReply, cache.DefaultExpiration)
 
-	return respChan, nil
+	return onReply, nil
 }
 
 func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
@@ -221,8 +217,8 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 	return client.send(processDest(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
-func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfig) (chan *Message, error) {
-	config, err := MergeMessageConfig(&m.config.MessageConfig, configs)
+func (m *MultiClient) Send(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+	config, err := MergeMessageConfig(m.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -232,21 +228,21 @@ func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfi
 		return nil, err
 	}
 
-	respChan := make(chan *Message, 1)
-	rawRespChan := make(chan *Message, 0)
+	onReply := NewOnMessage(1, nil)
+	onRawReply := NewOnMessage(0, nil)
 	success := make(chan struct{}, 0)
 	fail := make(chan struct{}, 0)
 
 	go func() {
 		sent := 0
 		for clientID, client := range m.Clients {
-			if err := m.sendWithClient(clientID, dests, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
+			if err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
 				select {
 				case success <- struct{}{}:
 				default:
 				}
 				sent++
-				client.responseChannels.Add(string(payload.Pid), rawRespChan, cache.DefaultExpiration)
+				client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
 			}
 		}
 		if sent == 0 {
@@ -256,14 +252,14 @@ func (m *MultiClient) Send(dests []string, data []byte, configs ...*MessageConfi
 			}
 		}
 
-		msg := <-rawRespChan
+		msg := <-onRawReply.C
 		msg.Src, _ = removeIdentifier(msg.Src)
-		respChan <- msg
+		onReply.receive(msg, false)
 	}()
 
 	select {
 	case <-success:
-		return respChan, nil
+		return onReply, nil
 	case <-fail:
 		return nil, errors.New("all clients failed to send msg")
 	}
@@ -296,8 +292,8 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	}
 }
 
-func (m *MultiClient) Publish(topic string, data []byte, configs ...*MessageConfig) error {
-	return publish(m, topic, data, configs...)
+func (m *MultiClient) Publish(topic string, data []byte, config *MessageConfig) error {
+	return publish(m, topic, data, config)
 }
 
 func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *SessionConfig) (*ncp.Session, error) {
@@ -309,7 +305,7 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 		clients[clientID] = client
 	}
 	sort.Strings(clientIDs)
-	return ncp.NewSession(m.addr, Addr{addr: remoteAddr}, clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
+	return ncp.NewSession(m.addr, &nknAddr{addr: remoteAddr}, clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
 			Type: payloads.SESSION,
 			Pid:  sessionID,
@@ -344,7 +340,7 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 	m.Lock()
 	session, ok := m.sessions[sessionKey]
 	if !ok {
-		session, err = m.newSession(remoteAddr, sessionID, &m.config.SessionConfig)
+		session, err = m.newSession(remoteAddr, sessionID, m.config.SessionConfig)
 		if err != nil {
 			m.Unlock()
 			return err
@@ -379,7 +375,7 @@ func (m *MultiClient) Dial(remoteAddr string) (*ncp.Session, error) {
 
 func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (*ncp.Session, error) {
 	var err error
-	config, err = MergeSessionConfig(&m.config.SessionConfig, config)
+	config, err = MergeSessionConfig(m.config.SessionConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -444,9 +440,11 @@ func (m *MultiClient) Close() error {
 		}
 	}
 
-	for _, client := range m.Clients {
-		client.Close()
-	}
+	time.AfterFunc(time.Duration(m.config.SessionConfig.CloseDelay)*time.Millisecond, func() {
+		for _, client := range m.Clients {
+			client.Close()
+		}
+	})
 
 	m.isClosed = true
 
