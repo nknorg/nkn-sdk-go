@@ -2,23 +2,23 @@
 
 Go implementation of NKN SDK.
 
-**Note: This repository is in the early development stage and may not have all
-functions working properly. It should be used only for testing now.**
+**Note: This repository is in the early development stage and may have breaking
+*changes in the future.**
 
 ## Client Usage
 
 Create a client with a generated key pair:
 
 ```go
-account, _ := vault.NewAccount()
-client, _ := NewClient(account, "")
+account, err := vault.NewAccount()
+client, err := NewClient(account, "")
 ```
 
 Or with an identifier (used to distinguish different clients sharing the same
 key pair):
 
 ```go
-client, _ := NewClient(account, "any string")
+client, err := NewClient(account, "any string")
 ```
 
 Get client key pair:
@@ -30,10 +30,10 @@ fmt.Println(account.PrivateKey, account.PublicKey)
 Create a client using an existing seed:
 
 ```go
-seed, _ := common.HexStringToBytes("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
+seed, err := hex.DecodeStrings("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
 privateKey := crypto.GetPrivateKeyFromSeed(seed)
-account, _ := vault.NewAccountWithPrivatekey(privateKey)
-client, _ := NewClient(account, "any string")
+account, err := vault.NewAccountWithPrivatekey(privateKey)
+client, err := NewClient(account, "any string")
 ```
 
 By default the client will use bootstrap RPC server (for getting node address)
@@ -41,7 +41,7 @@ provided by us. Any NKN full node can serve as a bootstrap RPC server. To create
 a client using customized bootstrap RPC server:
 
 ```go
-client, _ := NewClient(account, "any string", ClientConfig{SeedRPCServerAddr: "https://ip:port"})
+client, err := NewClient(account, "any string", ClientConfig{SeedRPCServerAddrs: []string{"https://ip:port"}})
 ```
 
 Private key should be kept **SECRET**! Never put it in version control system
@@ -56,7 +56,7 @@ fmt.Println(client.Address)
 Listen for connection established:
 
 ```go
-<- client.OnConnect
+<- client.OnConnect.C
 fmt.Println("Connection opened.")
 ```
 
@@ -75,24 +75,25 @@ response, err := client.Send([]string{"another client address"}, []byte{1, 2, 3,
 Or publish text message to a bucket 0 of specified topic:
 
 ```go
-client.Publish("topic", 0, []byte("hello world!"))
+client.Publish("topic", []byte("hello world!"))
 ```
 
 Receive data from other clients:
 
 ```go
-msg := <- client.OnMessage
+msg := <- client.OnMessage.C
 fmt.Println("Receive binary message from", msg.Src + ":", string(msg.Payload))
 msg.Reply([]byte("response"))
 ```
 
 Listen for new blocks mined:
 ```go
-block := <- client.OnBlock
+block := <- client.OnBlock.C
 fmt.Println("New block mined:", block.Header.Height)
 ```
 
 ## Multiclient Usage
+
 Multiclient creates multiple client instances by adding
 identifier prefix (`__0__.`, `__1__.`, `__2__.`, ...) to a nkn address and
 send/receive packets concurrently. This will greatly increase reliability and
@@ -105,8 +106,7 @@ initial configurations:
 ```go
 numSubClients := 3
 originalClient := false
-msgCacheExpiration := 300 * time.Second
-multiclient := NewMultiClient(account, identifier, numSubClient, originalClient, msgCacheExpiration)
+multiclient := NewMultiClient(account, identifier, numSubClient, originalClient)
 ```
 
 where `originalClient` controls whether a client with original identifier
@@ -130,16 +130,16 @@ to get the default client and `multiclient.Clients` to get all clients.
 
 Create wallet SDK:
 ```go
-account, _ := vault.NewAccount()
-w := NewWallet(account)
+account, err := vault.NewAccount()
+w, err := NewWallet(account)
 ```
 
 By default the wallet will use RPC server provided by us.
 Any NKN full node can serve as a RPC server. To create
 a wallet using customized RPC server:
 ```go
-account, _ := vault.NewAccount()
-w := NewWallet(account, WalletConfig{SeedRPCServerAddr: "https://ip:port"})
+account, err := vault.NewAccount()
+w, err := NewWallet(account, WalletConfig{SeedRPCServerAddrs: []string{"https://ip:port"}})
 ```
 
 Query asset balance for this wallet:
@@ -164,7 +164,7 @@ if err == nil {
 
 Transfer asset to some address:
 ```go
-address, _ := account.ProgramHash.ToAddress()
+address, err := account.ProgramHash.ToAddress()
 txid, err := w.Transfer(address, "100")
 if err == nil {
     log.Println("success:", txid)
@@ -218,7 +218,7 @@ if err == nil {
 
 Resolve name to wallet address:
 ```go
-address, _ := w.GetAddressByName("somename")
+address, err := w.GetAddressByName("somename")
 ```
 
 Subscribe to specified topic for this wallet for next 10 blocks:
@@ -243,18 +243,18 @@ if err == nil {
 
 Get subscription:
 ```go
-subscription, _ := w.GetSubscription("topic", "identifier.publickey")
+subscription, err := w.GetSubscription("topic", "identifier.publickey")
 fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
 ```
 
 Get 10 subscribers of specified topic starting from 0 offset, including those in tx pool (fetch meta):
 ```go
-subscribers, subscribersInTxPool, _ := w.GetSubscribers("topic", 0, 10, true, true)
+subscribers, subscribersInTxPool, err := w.GetSubscribers("topic", 0, 10, true, true)
 ```
 
 Get subscribers count for specified topic:
 ```go
-count, _ := w.GetSubscribersCount("topic")
+count, err := w.GetSubscribersCount("topic")
 ```
 
 ## Contributing

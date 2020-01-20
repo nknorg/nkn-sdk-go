@@ -1,4 +1,4 @@
-package nkn_sdk_go
+package nkn
 
 import (
 	"errors"
@@ -13,8 +13,6 @@ import (
 )
 
 const (
-	defaultDuration = 4320
-
 	// nano pay will be considered expired by the sender
 	// when it's less than specified amount of blocks
 	// until actual expiration
@@ -59,16 +57,18 @@ type NanoPayClaimer struct {
 	prevClaimedAmount common.Fixed64
 }
 
-func NewNanoPay(w *Wallet, address string, fee common.Fixed64, duration ...uint32) (*NanoPay, error) {
+// duration is changed to signed int for gomobile compatibility
+func NewNanoPay(w *Wallet, address string, fee *Amount, duration int) (*NanoPay, error) {
 	programHash, err := common.ToScriptHash(address)
 	if err != nil {
 		return nil, err
 	}
-	np := &NanoPay{w: w, address: address, fee: fee, receiver: programHash}
-	if len(duration) > 0 {
-		np.duration = duration[0]
-	} else {
-		np.duration = defaultDuration
+	np := &NanoPay{
+		w:        w,
+		address:  address,
+		fee:      fee.ToFixed64(),
+		receiver: programHash,
+		duration: uint32(duration),
 	}
 	return np, nil
 }
@@ -111,7 +111,7 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	return tx, nil
 }
 
-func NewNanoPayClaimer(w *Wallet, address string, claimInterval time.Duration, errChan chan error) (*NanoPayClaimer, error) {
+func NewNanoPayClaimer(w *Wallet, address string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
 	var receiver common.Uint160
 	var err error
 	if len(address) > 0 {
@@ -136,14 +136,15 @@ func NewNanoPayClaimer(w *Wallet, address string, claimInterval time.Duration, e
 			var err error
 			height, err := npc.w.getHeight()
 			if err != nil {
-				errChan <- err
+				onError.receive(err)
 				time.Sleep(time.Second)
 				continue
 			}
 			npc.Lock()
-			if npc.tx != nil && (npc.lastClaimTime.Add(claimInterval).Before(time.Now()) || npc.expiration <= height+forceFlushDelta) {
+			if npc.tx != nil && (npc.lastClaimTime.Add(time.Duration(claimIntervalMs)*time.Millisecond).Before(time.Now()) || npc.expiration <= height+forceFlushDelta) {
 				if err := npc.flush(); err != nil {
-					errChan <- npc.closeWithError(err)
+					err = npc.closeWithError(err)
+					onError.receive(err)
 					break
 				}
 			}
@@ -187,7 +188,7 @@ func (npc *NanoPayClaimer) closeWithError(err error) error {
 
 func (npc *NanoPayClaimer) flush() error {
 	if npc.tx != nil {
-		_, err, _ := npc.w.SendRawTransaction(npc.tx)
+		_, err, _ := npc.w.sendRawTransaction(npc.tx)
 		npc.tx = nil
 		npc.expiration = 0
 		npc.lastClaimTime = time.Now()
@@ -202,65 +203,65 @@ func (npc *NanoPayClaimer) Flush() error {
 	return npc.flush()
 }
 
-func (npc *NanoPayClaimer) Amount() common.Fixed64 {
+func (npc *NanoPayClaimer) Amount() *Amount {
 	npc.Lock()
 	defer npc.Unlock()
-	return npc.prevClaimedAmount + npc.amount
+	return &Amount{npc.prevClaimedAmount + npc.amount}
 }
 
-func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, error) {
+func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 	height, err := npc.w.getHeight()
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	payload, err := transaction.Unpack(tx.UnsignedTx.Payload)
 	if err != nil {
-		return 0, npc.closeWithError(err)
+		return nil, npc.closeWithError(err)
 	}
 	npPayload, ok := payload.(*pb.NanoPay)
 	if !ok {
-		return 0, npc.closeWithError(errors.New("not nano pay tx"))
+		return nil, npc.closeWithError(errors.New("not nano pay tx"))
 	}
 	recipient, err := common.Uint160ParseFromBytes(npPayload.Recipient)
 	if err != nil {
-		return 0, npc.closeWithError(err)
+		return nil, npc.closeWithError(err)
 	}
 	if recipient.CompareTo(npc.receiver) != 0 {
-		return 0, npc.closeWithError(errors.New("wrong nano pay recipient"))
+		return nil, npc.closeWithError(errors.New("wrong nano pay recipient"))
 	}
 	if err := chain.VerifyTransaction(tx, 0); err != nil {
-		return 0, npc.closeWithError(err)
+		return nil, npc.closeWithError(err)
 	}
 	sender, err := common.Uint160ParseFromBytes(npPayload.Sender)
 	if err != nil {
-		return 0, npc.closeWithError(err)
+		return nil, npc.closeWithError(err)
 	}
 	senderAddress, err := sender.ToAddress()
 	if err != nil {
-		return 0, npc.closeWithError(err)
+		return nil, npc.closeWithError(err)
 	}
 	senderBalance, err := npc.w.BalanceByAddress(senderAddress)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	npc.Lock()
 	defer npc.Unlock()
 	if npc.closed {
-		return 0, errors.New("attempt to use closed nano pay claimer")
+		return nil, errors.New("attempt to use closed nano pay claimer")
 	}
 	if npc.id == nil || *npc.id == npPayload.Id {
-		if senderBalance < npc.amount {
-			return 0, npc.closeWithError(errors.New("insufficient sender balance"))
+		if senderBalance.ToFixed64() < npc.amount {
+			return nil, npc.closeWithError(errors.New("insufficient sender balance"))
 		}
 	}
 	if npc.id != nil {
 		if *npc.id == npPayload.Id {
 			if npc.amount >= common.Fixed64(npPayload.Amount) {
-				return 0, npc.closeWithError(errors.New("nano pay balance decreased"))
+				return nil, npc.closeWithError(errors.New("nano pay balance decreased"))
 			}
 		} else {
 			if err := npc.flush(); err != nil {
-				return 0, npc.closeWithError(err)
+				return nil, npc.closeWithError(err)
 			}
 			npc.id = nil
 			npc.prevClaimedAmount += npc.amount
@@ -268,14 +269,14 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (common.Fixed64, e
 		}
 	}
 	if npPayload.TxnExpiration <= height+receiverExpirationDelta {
-		return 0, npc.closeWithError(errors.New("nano pay tx expired"))
+		return nil, npc.closeWithError(errors.New("nano pay tx expired"))
 	}
 	if npPayload.NanoPayExpiration <= height+receiverExpirationDelta {
-		return 0, npc.closeWithError(errors.New("nano pay expired"))
+		return nil, npc.closeWithError(errors.New("nano pay expired"))
 	}
 	npc.tx = tx
 	npc.id = &npPayload.Id
 	npc.expiration = npPayload.TxnExpiration
 	npc.amount = common.Fixed64(npPayload.Amount)
-	return npc.prevClaimedAmount + npc.amount, nil
+	return &Amount{npc.prevClaimedAmount + npc.amount}, nil
 }

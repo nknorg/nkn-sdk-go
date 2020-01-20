@@ -13,9 +13,6 @@ import (
 	"time"
 
 	nknsdk "github.com/nknorg/nkn-sdk-go"
-	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/crypto"
-	"github.com/nknorg/nkn/vault"
 )
 
 const (
@@ -107,28 +104,23 @@ func main() {
 
 	*numBytes *= 1 << 20
 
-	var account *vault.Account
-	var err error
-	if len(*seedHex) > 0 {
-		seed, err := common.HexStringToBytes(*seedHex)
-		if err != nil {
-			log.Fatal(err)
-		}
-		account, err = vault.NewAccountWithPrivatekey(crypto.GetPrivateKeyFromSeed(seed))
-		if err != nil {
-			log.Fatal(err)
-		}
-	} else {
-		account, err = vault.NewAccount()
-		if err != nil {
-			log.Fatal(err)
-		}
+	seed, err := hex.DecodeString(*seedHex)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	log.Println("Seed:", hex.EncodeToString(account.PrivateKey[:32]))
+	account, err := nknsdk.NewAccount(seed)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	log.Println("Seed:", hex.EncodeToString(account.Seed()))
+
+	clientConfig := &nknsdk.ClientConfig{ConnectRetries: 1}
+	sessionConfig := &nknsdk.SessionConfig{DialTimeout: 5000}
 
 	if *listen {
-		m, err := nknsdk.NewMultiClient(account, listenID, *numClients, false, nknsdk.ClientConfig{ConnectRetries: 1})
+		m, err := nknsdk.NewMultiClient(account, listenID, *numClients, false, clientConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -153,7 +145,7 @@ func main() {
 	}
 
 	if *dial {
-		m, err := nknsdk.NewMultiClient(account, dialID, *numClients, false, nknsdk.ClientConfig{ConnectRetries: 1})
+		m, err := nknsdk.NewMultiClient(account, dialID, *numClients, false, clientConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -162,7 +154,7 @@ func main() {
 			*dialAddr = listenID + "." + strings.SplitN(m.Addr().String(), ".", 2)[1]
 		}
 
-		s, err := m.DialWithConfig(*dialAddr, &nknsdk.SessionConfig{DialTimeout: 5 * time.Second})
+		s, err := m.DialWithConfig(*dialAddr, sessionConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
