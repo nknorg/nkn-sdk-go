@@ -6,7 +6,10 @@ import (
 	"log"
 	"net"
 	"reflect"
+	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,13 +20,16 @@ import (
 )
 
 const (
-	identifierRe         = "^__\\d+__$"
-	SessionIDSize        = 8 // in bytes
-	acceptSessionBufSize = 128
+	MultiClientIdentifierRe = "^__\\d+__$"
+	DefaultSessionAllowAddr = ".*"
+	SessionIDSize           = 8 // in bytes
+	acceptSessionBufSize    = 128
 )
 
 var (
-	ErrClosed = ncp.NewGenericError("use of closed network connection", true, true) // the error message is meant to be identical to error returned by net package
+	multiClientIdentifierRe = regexp.MustCompile(MultiClientIdentifierRe)
+	ErrClosed               = ncp.NewGenericError("use of closed network connection", true, true) // the error message is meant to be identical to error returned by net package
+	errAddrNotAllowed       = errors.New("address not allowed")
 )
 
 type MultiClient struct {
@@ -39,8 +45,9 @@ type MultiClient struct {
 	onClose       chan struct{}
 
 	sync.RWMutex
-	sessions map[string]*ncp.Session
-	isClosed bool
+	acceptAddrs []*regexp.Regexp
+	sessions    map[string]*ncp.Session
+	isClosed    bool
 }
 
 func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, originalClient bool, config *ClientConfig) (*MultiClient, error) {
@@ -336,6 +343,15 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 	}), (*ncp.Config)(config))
 }
 
+func (m *MultiClient) shouldAcceptAddr(addr string) bool {
+	for _, allowAddr := range m.acceptAddrs {
+		if allowAddr.MatchString(addr) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, data []byte) error {
 	remoteAddr, remoteClientID := removeIdentifier(src)
 	sessionKey := sessionKey(remoteAddr, sessionID)
@@ -344,6 +360,10 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 	m.Lock()
 	session, ok := m.sessions[sessionKey]
 	if !ok {
+		if !m.shouldAcceptAddr(remoteAddr) {
+			return errAddrNotAllowed
+		}
+
 		session, err = m.newSession(remoteAddr, sessionID, m.config.SessionConfig)
 		if err != nil {
 			m.Unlock()
@@ -371,6 +391,30 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 
 func (m *MultiClient) Addr() net.Addr {
 	return m.addr
+}
+
+func (m *MultiClient) Listen(addrsRe *StringArray) error {
+	var addrs []string
+	if addrsRe == nil {
+		addrs = []string{DefaultSessionAllowAddr}
+	} else {
+		addrs = addrsRe.Elems
+	}
+
+	var err error
+	acceptAddrs := make([]*regexp.Regexp, len(addrs))
+	for i := 0; i < len(acceptAddrs); i++ {
+		acceptAddrs[i], err = regexp.Compile(addrs[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	m.Lock()
+	m.acceptAddrs = acceptAddrs
+	m.Unlock()
+
+	return nil
 }
 
 func (m *MultiClient) Dial(remoteAddr string) (*ncp.Session, error) {
@@ -465,4 +509,21 @@ func (m *MultiClient) IsClosed() bool {
 
 func (m *MultiClient) getConfig() *ClientConfig {
 	return m.config
+}
+
+func addIdentifier(addr string, id int) string {
+	if id < 0 {
+		return addr
+	}
+	return addIdentifierPrefix(addr, "__"+strconv.Itoa(id)+"__")
+}
+
+func removeIdentifier(src string) (string, string) {
+	s := strings.SplitN(src, ".", 2)
+	if len(s) > 1 {
+		if multiClientIdentifierRe.MatchString(s[0]) {
+			return s[1], s[0]
+		}
+	}
+	return src, ""
 }
