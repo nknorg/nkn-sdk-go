@@ -15,23 +15,24 @@ func call(address string, action string, params map[string]interface{}, result i
 		return err, -1
 	}
 	if resp["error"] != nil {
-		error := make(map[string]interface{})
-		err := json.Unmarshal(*resp["error"], &error)
+		errResp := &struct {
+			Code    int32
+			Message string
+			Data    string
+		}{}
+		err := json.Unmarshal(*resp["error"], &errResp)
 		if err != nil {
 			return err, -1
 		}
-		var detailsCode int32
-		if resp["details"] != nil {
-			details := make(map[string]interface{})
-			err := json.Unmarshal(*resp["details"], &details)
-			if err != nil {
-				return err, -1
-			}
-			detailsCode = int32(details["code"].(float64))
-		} else {
-			detailsCode = -1
+		code := errResp.Code
+		if code < 0 {
+			code = -1
 		}
-		return errors.New(error["message"].(string)), detailsCode
+		msg := errResp.Message
+		if len(errResp.Data) > 0 {
+			msg += ": " + errResp.Data
+		}
+		return errors.New(msg), code
 	}
 
 	err = json.Unmarshal(*resp["result"], result)
