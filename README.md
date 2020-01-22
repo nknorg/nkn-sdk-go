@@ -268,10 +268,10 @@ subscription, err := w.GetSubscription("topic", "identifier.publickey")
 fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
 ```
 
-Get 10 subscribers of specified topic starting from 0 offset, including those in tx pool (fetch meta):
+Get 100 subscribers of specified topic starting from 0 offset, including those in tx pool (fetch meta):
 
 ```go
-subscribers, err := w.GetSubscribers("topic", 0, 10, true, true)
+subscribers, err := w.GetSubscribers("topic", 0, 100, true, true)
 fmt.Println(subscribers.Subscribers, subscribers.SubscribersInTxPool)
 ```
 
@@ -279,6 +279,23 @@ Get subscribers count for specified topic:
 
 ```go
 count, err := w.GetSubscribersCount("topic")
+```
+
+## Usage on iOS/Android
+
+This library is designed to work with
+[gomobile](https://godoc.org/golang.org/x/mobile/cmd/gomobile) and run natively
+on iOS/Android without any modification. You can use `gomobile bind` to compile
+it to Objective-C framework for iOS:
+
+```shell
+GO111MODULE=off gomobile bind -target=ios -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp github.com/nknorg/nkn/transaction
+```
+
+and Java AAR for Android:
+
+```shell
+GO111MODULE=off gomobile bind -target=android -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp github.com/nknorg/nkn/transaction
 ```
 
 ## Contributing
