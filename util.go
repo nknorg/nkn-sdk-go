@@ -2,6 +2,7 @@ package nkn
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"errors"
 	"log"
 	"math/big"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/crypto"
+	"github.com/nknorg/nkn/program"
+	"github.com/nknorg/nkn/util/address"
 	"github.com/nknorg/nkn/vault"
 )
 
@@ -64,6 +67,10 @@ func NewAccount(seed []byte) (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
+	_, err = account.ProgramHash.ToAddress()
+	if err != nil {
+		return nil, err
+	}
 	return &Account{account}, err
 }
 
@@ -73,6 +80,11 @@ func (account *Account) Seed() []byte {
 
 func (account *Account) PubKey() []byte {
 	return account.Account.PubKey().EncodePoint()
+}
+
+func (account *Account) WalletAddress() string {
+	addr, _ := account.ProgramHash.ToAddress()
+	return addr
 }
 
 func NewAmount(s string) (*Amount, error) {
@@ -307,4 +319,49 @@ func randUint64() uint64 {
 		}
 		return result.Uint64()
 	}
+}
+
+func addressToID(addr string) []byte {
+	id := sha256.Sum256([]byte(addr))
+	return id[:]
+}
+
+func ClientAddrToPubKey(clientAddr string) ([]byte, error) {
+	_, pk, _, err := address.ParseClientAddress(clientAddr)
+	if err != nil {
+		return nil, err
+	}
+	_, err = crypto.DecodePoint(pk)
+	if err != nil {
+		return nil, err
+	}
+	return pk, nil
+}
+
+func PubKeyToWalletAddr(pk []byte) (string, error) {
+	pubKey, err := crypto.DecodePoint(pk)
+	if err != nil {
+		return "", err
+	}
+	programHash, err := program.CreateProgramHash(pubKey)
+	if err != nil {
+		return "", err
+	}
+	return programHash.ToAddress()
+}
+
+func ClientAddrToWalletAddr(clientAddr string) (string, error) {
+	_, pk, _, err := address.ParseClientAddress(clientAddr)
+	if err != nil {
+		return "", err
+	}
+	pubKey, err := crypto.DecodePoint(pk)
+	if err != nil {
+		return "", err
+	}
+	programHash, err := program.CreateProgramHash(pubKey)
+	if err != nil {
+		return "", err
+	}
+	return programHash.ToAddress()
 }

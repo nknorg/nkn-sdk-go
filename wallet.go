@@ -23,6 +23,7 @@ type queuedTx struct {
 type Wallet struct {
 	config    *WalletConfig
 	account   *vault.Account
+	address   string
 	txChannel chan *queuedTx
 }
 
@@ -62,9 +63,14 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 	wallet := &Wallet{
 		config:    config,
 		account:   account.Account,
+		address:   account.WalletAddress(),
 		txChannel: txChannel,
 	}
 	return wallet, nil
+}
+
+func (w *Wallet) Address() string {
+	return w.address
 }
 
 func (w *Wallet) signTransaction(tx *transaction.Transaction) error {

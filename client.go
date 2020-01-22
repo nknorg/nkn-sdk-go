@@ -595,11 +595,6 @@ func (c *Client) handleReconnect() {
 	}
 }
 
-func addressToID(addr string) []byte {
-	id := sha256.Sum256([]byte(addr))
-	return id[:]
-}
-
 func NewClient(account *Account, identifier string, config *ClientConfig) (*Client, error) {
 	config, err := MergeClientConfig(config)
 	if err != nil {
