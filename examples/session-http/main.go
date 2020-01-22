@@ -48,6 +48,11 @@ func main() {
 			log.Fatal(err)
 		}
 
+		err = m.Listen(nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		go func() {
 			log.Println("Serving content at", m.Addr().String())
 			fs := http.FileServer(http.Dir(*serveDir))

@@ -6,8 +6,6 @@ import (
 	"errors"
 	"log"
 	"math/big"
-	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -108,6 +106,10 @@ func NewStringArray(elems ...string) *StringArray {
 
 func NewStringArrayFromString(s string) *StringArray {
 	return &StringArray{strings.Fields(s)}
+}
+
+func (sa *StringArray) Len() int {
+	return len(sa.Elems)
 }
 
 func (sa *StringArray) Append(s string) {
@@ -259,23 +261,6 @@ func addIdentifierPrefix(base, prefix string) string {
 		return base
 	}
 	return prefix + "." + base
-}
-
-func addIdentifier(addr string, id int) string {
-	if id < 0 {
-		return addr
-	}
-	return addIdentifierPrefix(addr, "__"+strconv.Itoa(id)+"__")
-}
-
-func removeIdentifier(src string) (string, string) {
-	s := strings.SplitN(src, ".", 2)
-	if len(s) > 1 {
-		if ok, _ := regexp.MatchString(identifierRe, s[0]); ok {
-			return s[1], s[0]
-		}
-	}
-	return src, ""
 }
 
 func processDest(dest []string, clientID int) []string {

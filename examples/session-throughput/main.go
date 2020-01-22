@@ -90,6 +90,7 @@ func write(sess net.Conn, numBytes int) error {
 		}
 	}
 	return nil
+
 }
 
 func main() {
@@ -121,6 +122,11 @@ func main() {
 
 	if *listen {
 		m, err := nknsdk.NewMultiClient(account, listenID, *numClients, false, clientConfig)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = m.Listen(nil)
 		if err != nil {
 			log.Fatal(err)
 		}
