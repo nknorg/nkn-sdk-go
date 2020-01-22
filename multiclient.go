@@ -22,6 +22,10 @@ const (
 	acceptSessionBufSize = 128
 )
 
+var (
+	ErrClosed = ncp.NewGenericError("use of closed network connection", true, true) // the error message is meant to be identical to error returned by net package
+)
+
 type MultiClient struct {
 	config        *ClientConfig
 	offset        int
@@ -143,7 +147,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 					}
 					err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.Pid, msg.Data)
 					if err != nil {
-						if err != ncp.SessionClosed {
+						if err != ncp.ErrSessionClosed {
 							log.Println(err)
 						}
 						continue
@@ -414,7 +418,7 @@ func (m *MultiClient) AcceptSession() (*ncp.Session, error) {
 			return session, nil
 		case _, ok := <-m.onClose:
 			if !ok {
-				return nil, ncp.Closed
+				return nil, ErrClosed
 			}
 		}
 	}
@@ -440,7 +444,7 @@ func (m *MultiClient) Close() error {
 		}
 	}
 
-	time.AfterFunc(time.Duration(m.config.SessionConfig.CloseDelay)*time.Millisecond, func() {
+	time.AfterFunc(time.Duration(m.config.SessionConfig.Linger)*time.Millisecond, func() {
 		for _, client := range m.Clients {
 			client.Close()
 		}

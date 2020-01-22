@@ -128,7 +128,7 @@ var defaultSessionConfig = SessionConfig{
 	MinConnectionWindowSize:      1,
 	MaxAckSeqListSize:            32,
 	FlushInterval:                10,
-	CloseDelay:                   100,
+	Linger:                       1000,
 	InitialRetransmissionTimeout: 5000,
 	MaxRetransmissionTimeout:     10000,
 	SendAckInterval:              50,
