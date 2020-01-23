@@ -419,7 +419,11 @@ func (m *MultiClient) Listen(addrsRe *StringArray) error {
 	return nil
 }
 
-func (m *MultiClient) Dial(remoteAddr string) (*ncp.Session, error) {
+func (m *MultiClient) Dial(remoteAddr string) (net.Conn, error) {
+	return m.DialSession(remoteAddr)
+}
+
+func (m *MultiClient) DialSession(remoteAddr string) (*ncp.Session, error) {
 	return m.DialWithConfig(remoteAddr, nil)
 }
 
