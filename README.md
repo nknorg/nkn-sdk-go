@@ -54,7 +54,7 @@ client, err := NewClient(account, "any string", conf)
 Get client NKN address, which is used to receive data from other clients:
 
 ```go
-fmt.Println(client.Address)
+fmt.Println(client.Address())
 ```
 
 Listen for connection established:

@@ -56,8 +56,8 @@ func TestClient(t *testing.T) {
 			msg.Reply([]byte("World"))
 		}()
 
-		log.Println("Send message from", fromClient.Address, "to", toClient.Address)
-		onReply, err := fromClient.Send(nknsdk.NewStringArray(toClient.Address), []byte("Hello"), nil)
+		log.Println("Send message from", fromClient.Address(), "to", toClient.Address())
+		onReply, err := fromClient.Send(nknsdk.NewStringArray(toClient.Address()), []byte("Hello"), nil)
 		if err != nil {
 			return err
 		}
