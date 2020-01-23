@@ -237,6 +237,8 @@ func (m *MultiClient) Send(dests *StringArray, data []byte, config *MessageConfi
 		return nil, err
 	}
 
+	var lock sync.Mutex
+	var errMsg []string
 	onReply := NewOnMessage(1, nil)
 	onRawReply := NewOnMessage(0, nil)
 	success := make(chan struct{}, 0)
@@ -252,6 +254,10 @@ func (m *MultiClient) Send(dests *StringArray, data []byte, config *MessageConfi
 				}
 				sent++
 				client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
+			} else {
+				lock.Lock()
+				errMsg = append(errMsg, err.Error())
+				lock.Unlock()
 			}
 		}
 		if sent == 0 {
@@ -270,11 +276,13 @@ func (m *MultiClient) Send(dests *StringArray, data []byte, config *MessageConfi
 	case <-success:
 		return onReply, nil
 	case <-fail:
-		return nil, errors.New("all clients failed to send msg")
+		return nil, errors.New(strings.Join(errMsg, "; "))
 	}
 }
 
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
+	var lock sync.Mutex
+	var errMsg []string
 	success := make(chan struct{}, 0)
 	fail := make(chan struct{}, 0)
 	go func() {
@@ -286,6 +294,10 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 				default:
 				}
 				sent++
+			} else {
+				lock.Lock()
+				errMsg = append(errMsg, err.Error())
+				lock.Unlock()
 			}
 		}
 		if sent == 0 {
@@ -297,7 +309,7 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	case <-success:
 		return nil
 	case <-fail:
-		return errors.New("all clients failed to send msg")
+		return errors.New(strings.Join(errMsg, "; "))
 	}
 }
 
