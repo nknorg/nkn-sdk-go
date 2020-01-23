@@ -246,12 +246,16 @@ func (c *OnError) receive(err error) {
 	}
 }
 
-type nknAddr struct {
+type ClientAddr struct {
 	addr string
 }
 
-func (addr nknAddr) Network() string { return "nkn" }
-func (addr nknAddr) String() string  { return addr.addr }
+func NewClientAddr(addr string) *ClientAddr {
+	return &ClientAddr{addr: addr}
+}
+
+func (addr ClientAddr) Network() string { return "nkn" }
+func (addr ClientAddr) String() string  { return addr.addr }
 
 func addIdentifierPrefix(base, prefix string) string {
 	if len(base) == 0 {

@@ -37,8 +37,7 @@ type MultiClient struct {
 	offset        int
 	Clients       map[int]*Client
 	DefaultClient *Client
-	addr          *nknAddr
-	Address       string
+	addr          *ClientAddr
 	OnConnect     *OnConnect
 	OnMessage     *OnMessage
 	acceptSession chan *ncp.Session
@@ -118,8 +117,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 		offset:        offset,
 		Clients:       clients,
 		DefaultClient: defaultClient,
-		addr:          &nknAddr{addr: addr},
-		Address:       addr,
+		addr:          NewClientAddr(addr),
 		OnConnect:     onConnect,
 		OnMessage:     NewOnMessage(int(config.MsgChanLen), nil),
 		acceptSession: make(chan *ncp.Session, acceptSessionBufSize),
@@ -316,7 +314,7 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 		clients[clientID] = client
 	}
 	sort.Strings(clientIDs)
-	return ncp.NewSession(m.addr, &nknAddr{addr: remoteAddr}, clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
+	return ncp.NewSession(m.addr, NewClientAddr(remoteAddr), clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
 			Type: payloads.SESSION,
 			Pid:  sessionID,
@@ -387,6 +385,10 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 	}
 
 	return nil
+}
+
+func (m *MultiClient) Address() string {
+	return m.addr.String()
 }
 
 func (m *MultiClient) Addr() net.Addr {

@@ -32,7 +32,7 @@ type Client struct {
 	account           *vault.Account
 	publicKey         []byte
 	curveSecretKey    *[sharedKeySize]byte
-	Address           string
+	address           string
 	addressID         []byte
 	OnConnect         *OnConnect
 	OnMessage         *OnMessage
@@ -107,6 +107,10 @@ func NewBlockInfo() *BlockInfo {
 	return &BlockInfo{
 		Header: &HeaderInfo{},
 	}
+}
+
+func (c *Client) Address() string {
+	return c.address
 }
 
 func (c *Client) IsClosed() bool {
@@ -500,7 +504,7 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 	go func() {
 		req := make(map[string]interface{})
 		req["Action"] = "setClient"
-		req["Addr"] = c.Address
+		req["Addr"] = c.Address()
 
 		c.Lock()
 		err := conn.WriteJSON(req)
@@ -549,7 +553,7 @@ func (c *Client) connect(maxRetries int) error {
 		}
 
 		var nodeInfo *NodeInfo
-		err, _ := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address}, &nodeInfo)
+		err, _ := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address()}, &nodeInfo)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -612,7 +616,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		account:          account.Account,
 		publicKey:        pk,
 		curveSecretKey:   curveSecretKey,
-		Address:          addr,
+		address:          addr,
 		addressID:        addressToID(addr),
 		OnConnect:        NewOnConnect(1, nil),
 		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
