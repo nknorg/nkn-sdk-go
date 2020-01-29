@@ -67,7 +67,7 @@ type ClientConfig struct {
 	MinReconnectInterval    int32 // in millisecond
 	MaxReconnectInterval    int32 // in millisecond
 	MessageConfig           *MessageConfig
-	SessionConfig           *SessionConfig
+	SessionConfig           *ncp.Config
 }
 
 var defaultClientConfig = ClientConfig{
@@ -116,29 +116,30 @@ func DefaultMessageConfig() *MessageConfig {
 	return &messageConf
 }
 
-// SessionConfig alias is for gomobile compatibility
-type SessionConfig ncp.Config
-
-var defaultSessionConfig = SessionConfig{
-	NonStream:                    false,
-	SessionWindowSize:            4 << 20,
-	MTU:                          1024,
-	InitialConnectionWindowSize:  16,
-	MaxConnectionWindowSize:      256,
-	MinConnectionWindowSize:      1,
-	MaxAckSeqListSize:            32,
-	FlushInterval:                10,
-	Linger:                       1000,
-	InitialRetransmissionTimeout: 5000,
-	MaxRetransmissionTimeout:     10000,
-	SendAckInterval:              50,
-	CheckTimeoutInterval:         50,
-	DialTimeout:                  0,
+var defaultSessionConfig = ncp.Config{
+	MTU: 1024,
 }
 
-func DefaultSessionConfig() *SessionConfig {
+func DefaultSessionConfig() *ncp.Config {
 	sessionConf := defaultSessionConfig
 	return &sessionConf
+}
+
+type DialConfig struct {
+	DialTimeout   int32 //in millisecond
+	SessionConfig *ncp.Config
+}
+
+var defaultDialConfig = DialConfig{
+	DialTimeout:   0,
+	SessionConfig: nil,
+}
+
+func DefaultDialConfig(baseSessionConfig *ncp.Config) *DialConfig {
+	dialConf := defaultDialConfig
+	sessionConfig := *baseSessionConfig
+	dialConf.SessionConfig = &sessionConfig
+	return &dialConf
 }
 
 type WalletConfig struct {
@@ -193,15 +194,15 @@ func MergeMessageConfig(base, conf *MessageConfig) (*MessageConfig, error) {
 	return &merged, nil
 }
 
-func MergeSessionConfig(base, conf *SessionConfig) (*SessionConfig, error) {
-	merged := *base
+func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConfig, error) {
+	merged := DefaultDialConfig(baseSessionConfig)
 	if conf != nil {
-		err := mergo.Merge(&merged, conf, mergo.WithOverride)
+		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return &merged, nil
+	return merged, nil
 }
 
 func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {

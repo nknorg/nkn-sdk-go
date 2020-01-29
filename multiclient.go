@@ -1,6 +1,7 @@
 package nkn
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log"
@@ -317,7 +318,7 @@ func (m *MultiClient) Publish(topic string, data []byte, config *MessageConfig) 
 	return publish(m, topic, data, config)
 }
 
-func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *SessionConfig) (*ncp.Session, error) {
+func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *ncp.Config) (*ncp.Session, error) {
 	clientIDs := make([]string, 0, len(m.Clients))
 	clients := make(map[string]*Client, len(m.Clients))
 	for id, client := range m.Clients {
@@ -350,7 +351,7 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *Se
 			}
 		}
 		return nil
-	}), (*ncp.Config)(config))
+	}), config)
 }
 
 func (m *MultiClient) shouldAcceptAddr(addr string) bool {
@@ -439,9 +440,8 @@ func (m *MultiClient) DialSession(remoteAddr string) (*ncp.Session, error) {
 	return m.DialWithConfig(remoteAddr, nil)
 }
 
-func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (*ncp.Session, error) {
-	var err error
-	config, err = MergeSessionConfig(m.config.SessionConfig, config)
+func (m *MultiClient) DialWithConfig(remoteAddr string, config *DialConfig) (*ncp.Session, error) {
+	config, err := MergeDialConfig(m.config.SessionConfig, config)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +451,7 @@ func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (
 		return nil, err
 	}
 	sessionKey := sessionKey(remoteAddr, sessionID)
-	session, err := m.newSession(remoteAddr, sessionID, config)
+	session, err := m.newSession(remoteAddr, sessionID, config.SessionConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -460,7 +460,13 @@ func (m *MultiClient) DialWithConfig(remoteAddr string, config *SessionConfig) (
 	m.sessions[sessionKey] = session
 	m.Unlock()
 
-	err = session.Dial()
+	ctx := context.Background()
+	var cancel context.CancelFunc
+	if config.DialTimeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(config.DialTimeout)*time.Millisecond)
+		defer cancel()
+	}
+	err = session.Dial(ctx)
 	if err != nil {
 		return nil, err
 	}
