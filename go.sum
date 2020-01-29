@@ -92,8 +92,8 @@ github.com/nknorg/go-nat v1.0.1 h1:4dFK0oDyqkIE0it03Y4pMgBQpl1Y0mrYHEp+j/nZ910=
 github.com/nknorg/go-nat v1.0.1/go.mod h1:dblX1Ac2j08rTUGs5CKCAfjHGN5eDFhbeqt2rccSP3Y=
 github.com/nknorg/go-portscanner v0.0.0-20181002101859-8493ef01db79 h1:AT5YRim0696HFnGSvFg0uOmSuo1X11roGBQhKB25PHE=
 github.com/nknorg/go-portscanner v0.0.0-20181002101859-8493ef01db79/go.mod h1:lTev9/EZpc4U3w/sp95T8UPeaav/0Hk+JjykVDuPaQs=
-github.com/nknorg/ncp v0.0.0-20200123081826-a3f64802fa62 h1:untMDDmyTi1iaKI7z9QCMzyT7KrK1mZifaugltmoVug=
-github.com/nknorg/ncp v0.0.0-20200123081826-a3f64802fa62/go.mod h1:O6GbAi7m0UEOf398D4Jyn0i7/xxNpE4J5XPDuso2o4k=
+github.com/nknorg/ncp v0.0.0-20200129000238-0d9d129194ac h1:X/vG85MYt4ZRMwJGOcbeax3RXDodW8wvsHNyhGgtzCY=
+github.com/nknorg/ncp v0.0.0-20200129000238-0d9d129194ac/go.mod h1:n1uHZhAV8obav21xq/fXwCGiOFrU1ybI+DUCfSrvmpw=
 github.com/nknorg/nkn v1.1.1-beta h1:hZ/J8Cd3/olViT5i426MN+cBWh6waDw4r6x74k3t5qw=
 github.com/nknorg/nkn v1.1.1-beta/go.mod h1:emHbJSdbnqzHwEB5X2Nn3ivyp2DmJWq68Nhuh2Pic5c=
 github.com/nknorg/nnet v0.0.0-20190915192011-8917c10a07e0 h1:9vdBzjDe86z0+LaoBb8Le9Ue7YsjHGDGWYORntr2dOY=
@@ -121,6 +121,8 @@ github.com/rdegges/go-ipify v0.0.0-20150526035502-2d94a6a86c40/go.mod h1:j4c6zEU
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0Q=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/stretchr/testify v1.4.0 h1:2E4SXV/wtOkTonXsotYi4li6zVWxYlZuYNCXe9XRJyk=
+github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/syndtr/goleveldb v1.0.0 h1:fBdIW9lB4Iz0n9khmH8w27SJ3QEJ7+IgjPEwGSZiFdE=
 github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpPAyBWyWuQ=
 github.com/templexxx/cpufeat v0.0.0-20180724012125-cef66df7f161 h1:89CEmDvlq/F7SJEOqkIdNDGJXrQIhuIx9D2DBXjavSU=
@@ -179,3 +181,5 @@ gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7/go.mod h1:dt/ZhP58zS4L8KSrWD
 gopkg.in/yaml.v2 v2.2.1/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.2 h1:ZCJp+EgiOT7lHqUV2J862kp8Qj64Jo6az82+3Td9dZw=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
+gopkg.in/yaml.v2 v2.2.8 h1:obN1ZagJSUGI0Ek/LBmuj4SNLPfIny3KsKFopxRdj10=
+gopkg.in/yaml.v2 v2.2.8/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
