@@ -466,6 +466,7 @@ func (m *MultiClient) DialWithConfig(remoteAddr string, config *DialConfig) (*nc
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(config.DialTimeout)*time.Millisecond)
 		defer cancel()
 	}
+
 	err = session.Dial(ctx)
 	if err != nil {
 		return nil, err
