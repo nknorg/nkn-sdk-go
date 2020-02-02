@@ -48,6 +48,8 @@ func main() {
 			log.Fatal(err)
 		}
 
+		<-m.OnConnect.C
+
 		err = m.Listen(nil)
 		if err != nil {
 			log.Fatal(err)
@@ -66,6 +68,8 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		<-m.OnConnect.C
 
 		if len(*dialAddr) == 0 {
 			*dialAddr = listenID + "." + strings.SplitN(m.Addr().String(), ".", 2)[1]

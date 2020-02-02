@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/imdario/mergo"
-	"github.com/nknorg/ncp"
+	ncp "github.com/nknorg/ncp-go"
 )
 
 var DefaultSeedRPCServerAddr = []string{

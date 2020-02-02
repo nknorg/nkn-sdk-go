@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nknorg/ncp"
+	ncp "github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/patrickmn/go-cache"
@@ -153,7 +153,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 					}
 					err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.Pid, msg.Data)
 					if err != nil {
-						if err != ncp.ErrSessionClosed {
+						if err != ncp.ErrSessionClosed && err != errAddrNotAllowed {
 							log.Println(err)
 						}
 						continue
