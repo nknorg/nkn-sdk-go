@@ -46,13 +46,13 @@ func read(sess net.Conn) error {
 			return err
 		}
 		for i := 0; i < n; i++ {
-			if b[i] != byte(bytesReceived%math.MaxUint8) {
-				return fmt.Errorf("byte %d should be %d, got %d", bytesReceived, bytesReceived%math.MaxUint8, b[i])
+			if b[i] != byte(bytesReceived%256) {
+				return fmt.Errorf("byte %d should be %d, got %d", bytesReceived, bytesReceived%256, b[i])
 			}
 			bytesReceived++
 		}
 		if ((bytesReceived - n) * 10 / numBytes) != (bytesReceived * 10 / numBytes) {
-			log.Println("Received", bytesReceived, "bytes", float64(bytesReceived)/math.Pow(2, 20)/(float64(time.Since(timeStart))/float64(time.Second)), "MB/s")
+			log.Println(sess.LocalAddr(), "received", bytesReceived, "bytes", float64(bytesReceived)/math.Pow(2, 20)/(float64(time.Since(timeStart))/float64(time.Second)), "MB/s")
 		}
 		if bytesReceived == numBytes {
 			log.Println("Finished receiving", bytesReceived, "bytes")
@@ -75,7 +75,7 @@ func write(sess net.Conn, numBytes int) error {
 	for i := 0; i < numBytes/1024; i++ {
 		b := make([]byte, 1024)
 		for j := 0; j < len(b); j++ {
-			b[j] = byte(bytesSent % math.MaxUint8)
+			b[j] = byte(bytesSent % 256)
 			bytesSent++
 		}
 		n, err := sess.Write(b)
@@ -86,7 +86,7 @@ func write(sess net.Conn, numBytes int) error {
 			return fmt.Errorf("sent %d instead of %d bytes", n, len(b))
 		}
 		if ((bytesSent - n) * 10 / numBytes) != (bytesSent * 10 / numBytes) {
-			log.Println("Sent", bytesSent, "bytes", float64(bytesSent)/math.Pow(2, 20)/(float64(time.Since(timeStart))/float64(time.Second)), "MB/s")
+			log.Println(sess.LocalAddr(), "sent", bytesSent, "bytes", float64(bytesSent)/math.Pow(2, 20)/(float64(time.Since(timeStart))/float64(time.Second)), "MB/s")
 		}
 	}
 	return nil
@@ -126,10 +126,14 @@ func main() {
 			log.Fatal(err)
 		}
 
+		<-m.OnConnect.C
+
 		err = m.Listen(nil)
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		log.Println("Listening at", m.Addr())
 
 		go func() {
 			for {
@@ -155,6 +159,9 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		<-m.OnConnect.C
+		time.Sleep(time.Second)
 
 		if len(*dialAddr) == 0 {
 			*dialAddr = listenID + "." + strings.SplitN(m.Addr().String(), ".", 2)[1]
