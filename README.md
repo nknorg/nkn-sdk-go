@@ -289,13 +289,13 @@ on iOS/Android without any modification. You can use `gomobile bind` to compile
 it to Objective-C framework for iOS:
 
 ```shell
-GO111MODULE=off gomobile bind -target=ios -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp github.com/nknorg/nkn/transaction
+gomobile bind -target=ios -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/transaction
 ```
 
 and Java AAR for Android:
 
 ```shell
-GO111MODULE=off gomobile bind -target=android -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp github.com/nknorg/nkn/transaction
+gomobile bind -target=android -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/transaction
 ```
 
 ## Contributing
