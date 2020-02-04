@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	nknsdk "github.com/nknorg/nkn-sdk-go"
+	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
 func TestClient(t *testing.T) {
 	err := func() error {
-		account, err := nknsdk.NewAccount(nil)
+		account, err := nkn.NewAccount(nil)
 		if err != nil {
 			return err
 		}
@@ -29,14 +29,14 @@ func TestClient(t *testing.T) {
 			return err
 		}
 
-		fromClient, err := nknsdk.NewMultiClient(account, hex.EncodeToString(fromIdentifier), 0, true, nil)
+		fromClient, err := nkn.NewMultiClient(account, hex.EncodeToString(fromIdentifier), 0, true, nil)
 		if err != nil {
 			return err
 		}
 		defer fromClient.Close()
 		<-fromClient.OnConnect.C
 
-		toClient, err := nknsdk.NewMultiClient(account, hex.EncodeToString(toIdentifier), 0, true, nil)
+		toClient, err := nkn.NewMultiClient(account, hex.EncodeToString(toIdentifier), 0, true, nil)
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func TestClient(t *testing.T) {
 		}()
 
 		log.Println("Send message from", fromClient.Address(), "to", toClient.Address())
-		onReply, err := fromClient.Send(nknsdk.NewStringArray(toClient.Address()), []byte("Hello"), nil)
+		onReply, err := fromClient.Send(nkn.NewStringArray(toClient.Address()), []byte("Hello"), nil)
 		if err != nil {
 			return err
 		}

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	nknsdk "github.com/nknorg/nkn-sdk-go"
+	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
 const (
@@ -33,17 +33,17 @@ func main() {
 		log.Fatal(err)
 	}
 
-	account, err := nknsdk.NewAccount(seed)
+	account, err := nkn.NewAccount(seed)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	log.Println("Seed:", hex.EncodeToString(account.Seed()))
 
-	clientConfig := &nknsdk.ClientConfig{ConnectRetries: 1}
+	clientConfig := &nkn.ClientConfig{ConnectRetries: 1}
 
 	if *listen {
-		m, err := nknsdk.NewMultiClient(account, listenID, *numClients, false, clientConfig)
+		m, err := nkn.NewMultiClient(account, listenID, *numClients, false, clientConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -64,7 +64,7 @@ func main() {
 	}
 
 	if *dial {
-		m, err := nknsdk.NewMultiClient(account, dialID, *numClients, false, clientConfig)
+		m, err := nkn.NewMultiClient(account, dialID, *numClients, false, clientConfig)
 		if err != nil {
 			log.Fatal(err)
 		}

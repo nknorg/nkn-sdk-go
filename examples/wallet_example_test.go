@@ -5,17 +5,17 @@ import (
 	"log"
 	"testing"
 
-	nknsdk "github.com/nknorg/nkn-sdk-go"
+	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
 func TestWallet(t *testing.T) {
 	err := func() error {
-		account, err := nknsdk.NewAccount(nil)
+		account, err := nkn.NewAccount(nil)
 		if err != nil {
 			return err
 		}
 
-		w, err := nknsdk.NewWallet(account, nil)
+		w, err := nkn.NewWallet(account, nil)
 		if err != nil {
 			return err
 		}
