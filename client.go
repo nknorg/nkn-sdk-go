@@ -423,9 +423,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			var msg *Message
 			switch payload.Type {
-			case payloads.TEXT, payloads.SESSION:
-				fallthrough
-			case payloads.BINARY:
+			case payloads.BINARY, payloads.TEXT, payloads.SESSION:
 				msg = &Message{
 					Src:       inboundMsg.Src,
 					Data:      data,
@@ -449,14 +447,19 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			msg.reply = func(response []byte) error {
+			msg.reply = func(data interface{}) error {
 				pid := payload.Pid
 				var payload *payloads.Payload
 				var err error
-				if response == nil {
+				switch v := data.(type) {
+				case []byte:
+					payload, err = newBinaryPayload(v, pid, false)
+				case string:
+					payload, err = newTextPayload(v, pid, false)
+				case nil:
 					payload, err = newAckPayload(pid)
-				} else {
-					payload, err = newBinaryPayload(response, pid, false)
+				default:
+					err = ErrInvalidPayloadType
 				}
 				if err != nil {
 					return err
@@ -693,6 +696,26 @@ func newBinaryPayload(data []byte, replyToPid []byte, noAck bool) (*payloads.Pay
 	}, nil
 }
 
+func newTextPayload(text string, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
+	pid := make([]byte, 8)
+	if _, err := rand.Read(pid); err != nil {
+		return nil, err
+	}
+
+	data, err := proto.Marshal(&payloads.TextData{Text: text})
+	if err != nil {
+		return nil, err
+	}
+
+	return &payloads.Payload{
+		Type:       payloads.TEXT,
+		Pid:        pid,
+		Data:       data,
+		ReplyToPid: replyToPid,
+		NoAck:      noAck,
+	}, nil
+}
+
 func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
 	pid := make([]byte, 8)
 	if _, err := rand.Read(pid); err != nil {
@@ -706,13 +729,21 @@ func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
 	}, nil
 }
 
-func (c *Client) Send(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(c.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
 	}
 
-	payload, err := newBinaryPayload(data, nil, config.NoAck)
+	var payload *payloads.Payload
+	switch v := data.(type) {
+	case []byte:
+		payload, err = newBinaryPayload(v, nil, config.NoAck)
+	case string:
+		payload, err = newTextPayload(v, nil, config.NoAck)
+	default:
+		err = ErrInvalidPayloadType
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -726,6 +757,16 @@ func (c *Client) Send(dests *StringArray, data []byte, config *MessageConfig) (*
 	c.responseChannels.Add(pidString, onReply, cache.DefaultExpiration)
 
 	return onReply, nil
+}
+
+// SendBinary is a wrapper of Send for gomobile compatibility
+func (c *Client) SendBinary(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+	return c.Send(dests, data, config)
+}
+
+// SendText is a wrapper of Send for gomobile compatibility
+func (c *Client) SendText(dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+	return c.Send(dests, data, config)
 }
 
 func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
@@ -867,25 +908,33 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	return err
 }
 
-func publish(c clientInterface, topic string, data []byte, config *MessageConfig) error {
+func publish(c clientInterface, topic string, data interface{}, config *MessageConfig) error {
 	config, err := MergeMessageConfig(c.getConfig().MessageConfig, config)
+	if err != nil {
+		return err
+	}
+
+	var payload *payloads.Payload
+	switch v := data.(type) {
+	case []byte:
+		payload, err = newBinaryPayload(v, nil, true)
+	case string:
+		payload, err = newTextPayload(v, nil, true)
+	default:
+		err = ErrInvalidPayloadType
+	}
 	if err != nil {
 		return err
 	}
 
 	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, int(config.Offset), int(config.Limit), false, config.TxPool)
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
-	for subscriber, _ := range subscribers {
+	for subscriber := range subscribers {
 		dests = append(dests, subscriber)
 	}
-	for subscriber, _ := range subscribersInTxPool {
+	for subscriber := range subscribersInTxPool {
 		dests = append(dests, subscriber)
 	}
-	if err != nil {
-		return err
-	}
-
-	payload, err := newBinaryPayload(data, nil, true)
 	if err != nil {
 		return err
 	}
@@ -893,8 +942,18 @@ func publish(c clientInterface, topic string, data []byte, config *MessageConfig
 	return c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds)
 }
 
-func (c *Client) Publish(topic string, data []byte, config *MessageConfig) error {
+func (c *Client) Publish(topic string, data interface{}, config *MessageConfig) error {
 	return publish(c, topic, data, config)
+}
+
+// PublishBinary is a wrapper of Publish for gomobile compatibility
+func (c *Client) PublishBinary(topic string, data []byte, config *MessageConfig) error {
+	return c.Publish(topic, data, config)
+}
+
+// PublishText is a wrapper of Publish for gomobile compatibility
+func (c *Client) PublishText(topic string, data string, config *MessageConfig) error {
+	return c.Publish(topic, data, config)
 }
 
 func (c *Client) SetWriteDeadline(deadline time.Time) error {

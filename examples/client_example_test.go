@@ -53,10 +53,12 @@ func TestClient(t *testing.T) {
 				isEncryptedStr = "encrypted"
 			}
 			log.Println("Receive", isEncryptedStr, "message", "\""+string(msg.Data)+"\"", "from", msg.Src, "after", timeReceived-timeSent, "ms")
+			// []byte("World") can be replaced with "World" for text payload type
 			msg.Reply([]byte("World"))
 		}()
 
 		log.Println("Send message from", fromClient.Address(), "to", toClient.Address())
+		// []byte("Hello") can be replaced with "Hello" for text payload type
 		onReply, err := fromClient.Send(nkn.NewStringArray(toClient.Address()), []byte("Hello"), nil)
 		if err != nil {
 			return err

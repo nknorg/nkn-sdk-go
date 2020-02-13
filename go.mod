@@ -11,4 +11,5 @@ require (
 	github.com/nknorg/nkn v1.1.1-beta
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413
+	golang.org/x/mobile v0.0.0-20200212152714-2b26a4705d24 // indirect
 )

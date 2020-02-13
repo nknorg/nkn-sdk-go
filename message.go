@@ -27,11 +27,21 @@ type Message struct {
 	Type      int32
 	Encrypted bool
 	Pid       []byte
-	reply     func([]byte) error
+	reply     func(interface{}) error
 }
 
-func (msg *Message) Reply(buf []byte) error {
-	return msg.reply(buf)
+func (msg *Message) Reply(data interface{}) error {
+	return msg.reply(data)
+}
+
+// ReplyBinary is a wrapper of Reply for gomobile compatibility
+func (msg *Message) ReplyBinary(data []byte) error {
+	return msg.Reply(data)
+}
+
+// ReplyText is a wrapper of Reply for gomobile compatibility
+func (msg *Message) ReplyText(data string) error {
+	return msg.Reply(data)
 }
 
 func encrypt(message []byte, sharedKey *[sharedKeySize]byte) ([]byte, []byte, error) {

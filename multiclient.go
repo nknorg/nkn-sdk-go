@@ -166,14 +166,19 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 					msgCache.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
 					msg.Src, _ = removeIdentifier(msg.Src)
-					msg.reply = func(response []byte) error {
+					msg.reply = func(data interface{}) error {
 						pid := msg.Pid
 						var payload *payloads.Payload
 						var err error
-						if response == nil {
+						switch v := data.(type) {
+						case []byte:
+							payload, err = newBinaryPayload(v, pid, false)
+						case string:
+							payload, err = newTextPayload(v, pid, false)
+						case nil:
 							payload, err = newAckPayload(pid)
-						} else {
-							payload, err = newBinaryPayload(response, pid, false)
+						default:
+							err = ErrInvalidPayloadType
 						}
 						if err != nil {
 							return err
@@ -192,7 +197,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 	return m, nil
 }
 
-func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	client, ok := m.Clients[clientID]
 	if !ok {
 		return nil, fmt.Errorf("clientID %d not found", clientID)
@@ -203,7 +208,15 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data []by
 		return nil, err
 	}
 
-	payload, err := newBinaryPayload(data, nil, config.NoAck)
+	var payload *payloads.Payload
+	switch v := data.(type) {
+	case []byte:
+		payload, err = newBinaryPayload(v, nil, config.NoAck)
+	case string:
+		payload, err = newTextPayload(v, nil, config.NoAck)
+	default:
+		err = ErrInvalidPayloadType
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +232,16 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data []by
 	return onReply, nil
 }
 
+// SendBinaryWithClient is a wrapper of SendWithClient for gomobile compatibility
+func (m *MultiClient) SendBinaryWithClient(clientID int, dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+	return m.SendWithClient(clientID, dests, data, config)
+}
+
+// SendTextWithClient is a wrapper of SendWithClient for gomobile compatibility
+func (m *MultiClient) SendTextWithClient(clientID int, dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+	return m.SendWithClient(clientID, dests, data, config)
+}
+
 func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	client, ok := m.Clients[clientID]
 	if !ok {
@@ -227,13 +250,21 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 	return client.send(processDest(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
-func (m *MultiClient) Send(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(m.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
 	}
 
-	payload, err := newBinaryPayload(data, nil, config.NoAck)
+	var payload *payloads.Payload
+	switch v := data.(type) {
+	case []byte:
+		payload, err = newBinaryPayload(v, nil, config.NoAck)
+	case string:
+		payload, err = newTextPayload(v, nil, config.NoAck)
+	default:
+		err = ErrInvalidPayloadType
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -281,6 +312,16 @@ func (m *MultiClient) Send(dests *StringArray, data []byte, config *MessageConfi
 	}
 }
 
+// SendBinary is a wrapper of Send for gomobile compatibility
+func (m *MultiClient) SendBinary(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+	return m.Send(dests, data, config)
+}
+
+// SendText is a wrapper of Send for gomobile compatibility
+func (m *MultiClient) SendText(dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+	return m.Send(dests, data, config)
+}
+
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	var lock sync.Mutex
 	var errMsg []string
@@ -314,8 +355,18 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	}
 }
 
-func (m *MultiClient) Publish(topic string, data []byte, config *MessageConfig) error {
+func (m *MultiClient) Publish(topic string, data interface{}, config *MessageConfig) error {
 	return publish(m, topic, data, config)
+}
+
+// PublishBinary is a wrapper of Publish for gomobile compatibility
+func (m *MultiClient) PublishBinary(topic string, data []byte, config *MessageConfig) error {
+	return m.Publish(topic, data, config)
+}
+
+// PublishText is a wrapper of Publish for gomobile compatibility
+func (m *MultiClient) PublishText(topic string, data string, config *MessageConfig) error {
+	return m.Publish(topic, data, config)
 }
 
 func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *ncp.Config) (*ncp.Session, error) {

@@ -21,8 +21,9 @@ const (
 )
 
 var (
-	zeroTime       time.Time
-	ErrKeyNotInMap = errors.New("key not in map") // for gomobile
+	zeroTime              time.Time
+	ErrKeyNotInMap        = errors.New("key not in map") // for gomobile
+	ErrInvalidPayloadType = errors.New("invalid payload type")
 )
 
 // Type wrapper for gomobile compatibility
