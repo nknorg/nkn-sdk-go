@@ -22,14 +22,13 @@ import (
 	"github.com/nknorg/nkn/crypto/ed25519"
 	"github.com/nknorg/nkn/pb"
 	"github.com/nknorg/nkn/util/address"
-	"github.com/nknorg/nkn/vault"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/nacl/box"
 )
 
 type Client struct {
 	config            *ClientConfig
-	account           *vault.Account
+	account           *Account
 	publicKey         []byte
 	curveSecretKey    *[sharedKeySize]byte
 	address           string
@@ -107,6 +106,51 @@ func NewBlockInfo() *BlockInfo {
 	return &BlockInfo{
 		Header: &HeaderInfo{},
 	}
+}
+
+func NewClient(account *Account, identifier string, config *ClientConfig) (*Client, error) {
+	config, err := MergeClientConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	pk := account.PubKey()
+	var sk [ed25519.PrivateKeySize]byte
+	copy(sk[:], account.PrivKey())
+	curveSecretKey := ed25519.PrivateKeyToCurve25519PrivateKey(&sk)
+
+	addr := address.MakeAddressString(pk, identifier)
+	c := Client{
+		config:           config,
+		account:          account,
+		publicKey:        pk,
+		curveSecretKey:   curveSecretKey,
+		address:          addr,
+		addressID:        addressToID(addr),
+		OnConnect:        NewOnConnect(1, nil),
+		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
+		OnBlock:          NewOnBlock(int(config.BlockChanLen), nil),
+		reconnectChan:    make(chan struct{}, 0),
+		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
+		sharedKeys:       make(map[string]*[sharedKeySize]byte),
+	}
+
+	go c.handleReconnect()
+
+	err = c.connect(int(c.config.ConnectRetries))
+	if err != nil {
+		return nil, err
+	}
+
+	return &c, nil
+}
+
+func (c *Client) Seed() []byte {
+	return c.account.Seed()
+}
+
+func (c *Client) PubKey() []byte {
+	return c.account.PubKey()
 }
 
 func (c *Client) Address() string {
@@ -556,7 +600,7 @@ func (c *Client) connect(maxRetries int) error {
 		}
 
 		var nodeInfo *NodeInfo
-		err, _ := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address()}, &nodeInfo)
+		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address()}, &nodeInfo)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -600,43 +644,6 @@ func (c *Client) handleReconnect() {
 			return
 		}
 	}
-}
-
-func NewClient(account *Account, identifier string, config *ClientConfig) (*Client, error) {
-	config, err := MergeClientConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	pk := account.PubKey()
-	var sk [ed25519.PrivateKeySize]byte
-	copy(sk[:], account.PrivKey())
-	curveSecretKey := ed25519.PrivateKeyToCurve25519PrivateKey(&sk)
-
-	addr := address.MakeAddressString(pk, identifier)
-	c := Client{
-		config:           config,
-		account:          account.Account,
-		publicKey:        pk,
-		curveSecretKey:   curveSecretKey,
-		address:          addr,
-		addressID:        addressToID(addr),
-		OnConnect:        NewOnConnect(1, nil),
-		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
-		OnBlock:          NewOnBlock(int(config.BlockChanLen), nil),
-		reconnectChan:    make(chan struct{}, 0),
-		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
-		sharedKeys:       make(map[string]*[sharedKeySize]byte),
-	}
-
-	go c.handleReconnect()
-
-	err = c.connect(int(c.config.ConnectRetries))
-	if err != nil {
-		return nil, err
-	}
-
-	return &c, nil
 }
 
 func (c *Client) sendReceipt(prevSignature []byte) error {

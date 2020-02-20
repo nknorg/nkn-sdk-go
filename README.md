@@ -175,15 +175,44 @@ Create wallet SDK:
 
 ```go
 account, err := NewAccount(nil)
-w, err := NewWallet(account, nil)
+w, err := NewWallet(account, &nkn.WalletConfig{Password: "password"})
 ```
 
-By default the wallet will use RPC server provided by us. Any NKN full node can
-serve as a RPC server. To create a wallet using customized RPC server:
+By default the wallet will use RPC server provided by `nkn.org`. Any NKN full
+node can serve as a RPC server. To create a wallet using customized RPC server:
 
 ```go
-conf := &WalletConfig{SeedRPCServerAddr: NewStringArray("https://ip:port", "https://ip:port", ...)}
+conf := &WalletConfig{
+  Password: "password",
+  SeedRPCServerAddr: NewStringArray("https://ip:port", "https://ip:port", ...),
+}
 w, err := NewWallet(account, conf)
+```
+
+Export wallet to JSON string, where sensitive contents are encrypted by password
+provided in config:
+
+```go
+walletJSON, err := w.ToJSON()
+```
+
+Load wallet from JSON string, note that the password needs to be the same as the
+one provided when creating wallet:
+
+```go
+walletFromJSON, err := nkn.WalletFromJSON(walletJSON, &nkn.WalletConfig{Password: "password"})
+```
+
+Verify whether an address is a valid NKN wallet address:
+
+```go
+err := nkn.VerifyWalletAddress(w.Address())
+```
+
+Verify password of the wallet:
+
+```go
+ok := w.VerifyPassword("password")
 ```
 
 Query asset balance for this wallet:
@@ -241,12 +270,6 @@ Delete name for this wallet:
 
 ```go
 txnHash, err = w.DeleteName("somename")
-```
-
-Resolve name to wallet address (NOT client address):
-
-```go
-address, err := w.GetAddressByName("somename")
 ```
 
 Subscribe to specified topic for this wallet for next 100 blocks:

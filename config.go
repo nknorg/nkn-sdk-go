@@ -144,6 +144,9 @@ func DefaultDialConfig(baseSessionConfig *ncp.Config) *DialConfig {
 
 type WalletConfig struct {
 	SeedRPCServerAddr *StringArray
+	Password          string
+	IV                []byte
+	MasterKey         []byte
 }
 
 var defaultWalletConfig = WalletConfig{}

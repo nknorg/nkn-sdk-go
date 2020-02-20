@@ -15,10 +15,23 @@ func TestWallet(t *testing.T) {
 			return err
 		}
 
-		w, err := nkn.NewWallet(account, nil)
+		w, err := nkn.NewWallet(account, &nkn.WalletConfig{Password: "password"})
 		if err != nil {
 			return err
 		}
+
+		walletJSON, err := w.ToJSON()
+		if err != nil {
+			return err
+		}
+
+		walletFromJSON, err := nkn.WalletFromJSON(walletJSON, &nkn.WalletConfig{Password: "password"})
+		if err != nil {
+			return err
+		}
+
+		log.Println("verify address:", nkn.VerifyWalletAddress(w.Address()) == nil)
+		log.Println("verify password:", walletFromJSON.VerifyPassword("password"))
 
 		// Query asset balance for this wallet
 		balance, err := w.Balance()

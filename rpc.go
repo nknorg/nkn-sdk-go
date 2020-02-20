@@ -7,12 +7,12 @@ import (
 	"github.com/nknorg/nkn/api/httpjson/client"
 )
 
-func call(address string, action string, params map[string]interface{}, result interface{}) (error, int32) {
+func call(address string, action string, params map[string]interface{}, result interface{}) (int32, error) {
 	data, err := client.Call(address, action, 0, params)
 	resp := make(map[string]*json.RawMessage)
 	err = json.Unmarshal(data, &resp)
 	if err != nil {
-		return err, -1
+		return -1, err
 	}
 	if resp["error"] != nil {
 		errResp := &struct {
@@ -22,7 +22,7 @@ func call(address string, action string, params map[string]interface{}, result i
 		}{}
 		err := json.Unmarshal(*resp["error"], &errResp)
 		if err != nil {
-			return err, -1
+			return -1, err
 		}
 		code := errResp.Code
 		if code < 0 {
@@ -32,12 +32,12 @@ func call(address string, action string, params map[string]interface{}, result i
 		if len(errResp.Data) > 0 {
 			msg += ": " + errResp.Data
 		}
-		return errors.New(msg), code
+		return code, errors.New(msg)
 	}
 
 	err = json.Unmarshal(*resp["result"], result)
 	if err != nil {
-		return err, 0
+		return 0, err
 	}
-	return nil, 0
+	return 0, nil
 }

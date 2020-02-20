@@ -78,7 +78,7 @@ func (account *Account) Seed() []byte {
 }
 
 func (account *Account) PubKey() []byte {
-	return account.Account.PubKey().EncodePoint()
+	return account.Account.PublicKey.EncodePoint()
 }
 
 func (account *Account) WalletAddress() string {
@@ -345,13 +345,10 @@ func ClientAddrToWalletAddr(clientAddr string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	pubKey, err := crypto.DecodePoint(pk)
-	if err != nil {
-		return "", err
-	}
-	programHash, err := program.CreateProgramHash(pubKey)
-	if err != nil {
-		return "", err
-	}
-	return programHash.ToAddress()
+	return PubKeyToWalletAddr(pk)
+}
+
+func VerifyWalletAddress(address string) error {
+	_, err := common.ToScriptHash(address)
+	return err
 }
