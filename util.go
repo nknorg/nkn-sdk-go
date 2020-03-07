@@ -268,14 +268,6 @@ func addIdentifierPrefix(base, prefix string) string {
 	return prefix + "." + base
 }
 
-func processDest(dest []string, clientID int) []string {
-	result := make([]string, len(dest))
-	for i, addr := range dest {
-		result[i] = addIdentifier(addr, clientID)
-	}
-	return result
-}
-
 func RandomBytes(numBytes int) ([]byte, error) {
 	b := make([]byte, numBytes)
 	if _, err := rand.Read(b); err != nil {

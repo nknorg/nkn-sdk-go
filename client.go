@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,6 +101,11 @@ type BlockInfo struct {
 	Transactions []TxnInfo   `json:"transactions"`
 	Size         int         `json:"size"`
 	Hash         string      `json:"hash"`
+}
+
+type RegistrantInfo struct {
+	Registrant string `json:"registrant"`
+	ExpiresAt  uint32 `json:"expiresAt"`
 }
 
 func NewBlockInfo() *BlockInfo {
@@ -776,10 +782,43 @@ func (c *Client) SendText(dests *StringArray, data string, config *MessageConfig
 	return c.Send(dests, data, config)
 }
 
+func (c *Client) processDest(dest string) (string, error) {
+	if len(dest) == 0 {
+		return "", errors.New("destination is empty")
+	}
+	addr := strings.Split(dest, ".")
+	if len(addr[len(addr)-1]) < 2*ed25519.PublicKeySize {
+		var registrantInfo *RegistrantInfo
+		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getregistrant", map[string]interface{}{"name": addr[len(addr)-1]}, &registrantInfo)
+		if err != nil {
+			return "", err
+		}
+		if len(registrantInfo.Registrant) == 0 {
+			return "", fmt.Errorf("%s is neither a valid public key nor a registered nam", addr[len(addr)-1])
+		}
+		addr[len(addr)-1] = registrantInfo.Registrant
+	}
+	return strings.Join(addr, "."), nil
+}
+
 func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	if maxHoldingSeconds < 0 {
 		maxHoldingSeconds = 0
 	}
+
+	processedDests := make([]string, 0, len(dests))
+	for _, dest := range dests {
+		processedDest, err := c.processDest(dest)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		processedDests = append(processedDests, processedDest)
+	}
+	if len(processedDests) == 0 {
+		return errors.New("all destinations are invalid")
+	}
+	dests = processedDests
 
 	var payloadMsgs [][]byte
 	outboundMsg := &pb.OutboundMessage{

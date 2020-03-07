@@ -52,20 +52,29 @@ func TestWallet(t *testing.T) {
 		}
 		log.Println("success:", txid)
 
-		//// Register name for this wallet
-		//txid, err = w.RegisterName("somename")
-		//if err != nil {
-		//	return err
-		//}
-		//log.Println("success:", txid)
-		//
-		//// Delete name for this wallet
-		//// This call will fail because a new account has no name
-		//txid, err = w.DeleteName("somename")
-		//if err != nil {
-		//	return err
-		//}
-		//log.Println("success:", txid)
+		// Register name for this wallet
+		// This call will fail because a new account has not enough balance to pay the registration fee
+		txid, err = w.RegisterName("somename", "0")
+		if err != nil {
+			return err
+		}
+		log.Println("success:", txid)
+
+		// Transfer name owned by this wallet to another public key
+		// This call will fail because a new account has no name
+		txid, err = w.TransferName("somename", []byte("recipient public key"), "0")
+		if err != nil {
+			return err
+		}
+		log.Println("success:", txid)
+
+		// Delete name owned by this wallet
+		// This call will fail because a new account has no name
+		txid, err = w.DeleteName("somename", "0")
+		if err != nil {
+			return err
+		}
+		log.Println("success:", txid)
 
 		// Subscribe to bucket 0 of specified topic for this wallet for next 10 blocks
 		txid, err = w.Subscribe("identifier", "topic", 10, "meta", "0")

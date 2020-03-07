@@ -29,14 +29,14 @@ func TestClient(t *testing.T) {
 			return err
 		}
 
-		fromClient, err := nkn.NewMultiClient(account, hex.EncodeToString(fromIdentifier), 0, true, nil)
+		fromClient, err := nkn.NewMultiClient(account, hex.EncodeToString(fromIdentifier), 4, false, nil)
 		if err != nil {
 			return err
 		}
 		defer fromClient.Close()
 		<-fromClient.OnConnect.C
 
-		toClient, err := nkn.NewMultiClient(account, hex.EncodeToString(toIdentifier), 0, true, nil)
+		toClient, err := nkn.NewMultiClient(account, hex.EncodeToString(toIdentifier), 4, false, nil)
 		if err != nil {
 			return err
 		}

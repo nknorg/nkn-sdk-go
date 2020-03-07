@@ -242,12 +242,20 @@ func (m *MultiClient) SendTextWithClient(clientID int, dests *StringArray, data 
 	return m.SendWithClient(clientID, dests, data, config)
 }
 
+func addMultiClientPrefix(dest []string, clientID int) []string {
+	result := make([]string, len(dest))
+	for i, addr := range dest {
+		result[i] = addIdentifier(addr, clientID)
+	}
+	return result
+}
+
 func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	client, ok := m.Clients[clientID]
 	if !ok {
 		return fmt.Errorf("clientID %d not found", clientID)
 	}
-	return client.send(processDest(dests, clientID), payload, encrypted, maxHoldingSeconds)
+	return client.send(addMultiClientPrefix(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
 func (m *MultiClient) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
@@ -272,20 +280,24 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	var lock sync.Mutex
 	var errMsg []string
 	onReply := NewOnMessage(1, nil)
-	onRawReply := NewOnMessage(0, nil)
+	onRawReply := NewOnMessage(1, nil)
 	success := make(chan struct{}, 0)
 	fail := make(chan struct{}, 0)
 
+	// response channel is added first to prevent some client fail to handle response if send finish before receive response
+	for _, client := range m.Clients {
+		client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
+	}
+
 	go func() {
 		sent := 0
-		for clientID, client := range m.Clients {
+		for clientID := range m.Clients {
 			if err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
 				select {
 				case success <- struct{}{}:
 				default:
 				}
 				sent++
-				client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
 			} else {
 				lock.Lock()
 				errMsg = append(errMsg, err.Error())

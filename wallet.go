@@ -14,6 +14,7 @@ import (
 	"github.com/nknorg/nkn/program"
 	"github.com/nknorg/nkn/signature"
 	"github.com/nknorg/nkn/transaction"
+	"github.com/nknorg/nkn/util/config"
 	"github.com/nknorg/nkn/vault"
 )
 
@@ -359,7 +360,31 @@ func (w *Wallet) RegisterName(name string, fee string) (string, error) {
 		return "", err
 	}
 
-	tx, err := transaction.NewRegisterNameTransaction(w.PubKey(), name, nonce, _fee)
+	tx, err := transaction.NewRegisterNameTransaction(w.PubKey(), name, nonce, config.MinNameRegistrationFee, _fee)
+	if err != nil {
+		return "", err
+	}
+
+	if err := w.signTransaction(tx); err != nil {
+		return "", err
+	}
+
+	id, err, _ := w.sendRawTransaction(tx)
+	return id, err
+}
+
+func (w *Wallet) TransferName(name string, recipient []byte, fee string) (string, error) {
+	_fee, err := common.StringToFixed64(fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce, err := w.getNonce()
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := transaction.NewTransferNameTransaction(w.PubKey(), recipient, name, nonce, _fee)
 	if err != nil {
 		return "", err
 	}
@@ -377,10 +402,12 @@ func (w *Wallet) DeleteName(name string, fee string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	nonce, err := w.getNonce()
 	if err != nil {
 		return "", err
 	}
+
 	tx, err := transaction.NewDeleteNameTransaction(w.PubKey(), name, nonce, _fee)
 	if err != nil {
 		return "", err
