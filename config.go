@@ -95,6 +95,7 @@ type MessageConfig struct {
 	Unencrypted       bool
 	NoAck             bool
 	MaxHoldingSeconds int32
+	MessageID         []byte
 
 	// for publish
 	Offset int32
@@ -106,6 +107,7 @@ var defaultMessageConfig = MessageConfig{
 	Unencrypted:       false,
 	NoAck:             false,
 	MaxHoldingSeconds: 0,
+	MessageID:         nil,
 	Offset:            0,
 	Limit:             1000,
 	TxPool:            false,

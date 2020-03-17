@@ -27,6 +27,10 @@ import (
 	"golang.org/x/crypto/nacl/box"
 )
 
+const (
+	MessageIDSize = 8 // in bytes
+)
+
 type Client struct {
 	config            *ClientConfig
 	account           *Account
@@ -503,9 +507,9 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				var err error
 				switch v := data.(type) {
 				case []byte:
-					payload, err = newBinaryPayload(v, pid, false)
+					payload, err = newBinaryPayload(v, nil, pid, false)
 				case string:
-					payload, err = newTextPayload(v, pid, false)
+					payload, err = newTextPayload(v, nil, pid, false)
 				case nil:
 					payload, err = newAckPayload(pid)
 				default:
@@ -694,10 +698,13 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	return err
 }
 
-func newBinaryPayload(data []byte, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
-	pid := make([]byte, 8)
-	if _, err := rand.Read(pid); err != nil {
-		return nil, err
+func newBinaryPayload(data, pid, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
+	if len(pid) == 0 && len(replyToPid) == 0 {
+		var err error
+		pid, err = RandomBytes(MessageIDSize)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &payloads.Payload{
@@ -709,10 +716,13 @@ func newBinaryPayload(data []byte, replyToPid []byte, noAck bool) (*payloads.Pay
 	}, nil
 }
 
-func newTextPayload(text string, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
-	pid := make([]byte, 8)
-	if _, err := rand.Read(pid); err != nil {
-		return nil, err
+func newTextPayload(text string, pid, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
+	if len(pid) == 0 && len(replyToPid) == 0 {
+		var err error
+		pid, err = RandomBytes(MessageIDSize)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	data, err := proto.Marshal(&payloads.TextData{Text: text})
@@ -730,14 +740,8 @@ func newTextPayload(text string, replyToPid []byte, noAck bool) (*payloads.Paylo
 }
 
 func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
-	pid := make([]byte, 8)
-	if _, err := rand.Read(pid); err != nil {
-		return nil, err
-	}
-
 	return &payloads.Payload{
 		Type:       payloads.ACK,
-		Pid:        pid,
 		ReplyToPid: replyToPid,
 	}, nil
 }
@@ -751,9 +755,9 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 	var payload *payloads.Payload
 	switch v := data.(type) {
 	case []byte:
-		payload, err = newBinaryPayload(v, nil, config.NoAck)
+		payload, err = newBinaryPayload(v, config.MessageID, nil, config.NoAck)
 	case string:
-		payload, err = newTextPayload(v, nil, config.NoAck)
+		payload, err = newTextPayload(v, config.MessageID, nil, config.NoAck)
 	default:
 		err = ErrInvalidPayloadType
 	}
@@ -963,9 +967,9 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 	var payload *payloads.Payload
 	switch v := data.(type) {
 	case []byte:
-		payload, err = newBinaryPayload(v, nil, true)
+		payload, err = newBinaryPayload(v, config.MessageID, nil, true)
 	case string:
-		payload, err = newTextPayload(v, nil, true)
+		payload, err = newTextPayload(v, config.MessageID, nil, true)
 	default:
 		err = ErrInvalidPayloadType
 	}

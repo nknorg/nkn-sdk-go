@@ -23,7 +23,7 @@ import (
 const (
 	MultiClientIdentifierRe = "^__\\d+__$"
 	DefaultSessionAllowAddr = ".*"
-	SessionIDSize           = 8 // in bytes
+	SessionIDSize           = MessageIDSize
 	acceptSessionBufSize    = 128
 )
 
@@ -172,9 +172,9 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 						var err error
 						switch v := data.(type) {
 						case []byte:
-							payload, err = newBinaryPayload(v, pid, false)
+							payload, err = newBinaryPayload(v, nil, pid, false)
 						case string:
-							payload, err = newTextPayload(v, pid, false)
+							payload, err = newTextPayload(v, nil, pid, false)
 						case nil:
 							payload, err = newAckPayload(pid)
 						default:
@@ -211,9 +211,9 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 	var payload *payloads.Payload
 	switch v := data.(type) {
 	case []byte:
-		payload, err = newBinaryPayload(v, nil, config.NoAck)
+		payload, err = newBinaryPayload(v, config.MessageID, nil, config.NoAck)
 	case string:
-		payload, err = newTextPayload(v, nil, config.NoAck)
+		payload, err = newTextPayload(v, config.MessageID, nil, config.NoAck)
 	default:
 		err = ErrInvalidPayloadType
 	}
@@ -267,9 +267,9 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	var payload *payloads.Payload
 	switch v := data.(type) {
 	case []byte:
-		payload, err = newBinaryPayload(v, nil, config.NoAck)
+		payload, err = newBinaryPayload(v, config.MessageID, nil, config.NoAck)
 	case string:
-		payload, err = newTextPayload(v, nil, config.NoAck)
+		payload, err = newTextPayload(v, config.MessageID, nil, config.NoAck)
 	default:
 		err = ErrInvalidPayloadType
 	}
