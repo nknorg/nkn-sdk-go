@@ -1,14 +1,13 @@
-package examples
+package main
 
 import (
 	"fmt"
 	"log"
-	"testing"
 
 	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
-func TestWallet(t *testing.T) {
+func main() {
 	err := func() error {
 		account, err := nkn.NewAccount(nil)
 		if err != nil {
