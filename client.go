@@ -23,12 +23,16 @@ import (
 	"github.com/nknorg/nkn/crypto/ed25519"
 	"github.com/nknorg/nkn/pb"
 	"github.com/nknorg/nkn/util/address"
+	"github.com/nknorg/nkn/util/config"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/nacl/box"
 )
 
 const (
-	MessageIDSize = 8 // in bytes
+	MessageIDSize  = 8 // in bytes
+	pingInterval   = 8 * time.Second
+	pongTimeout    = 10 * time.Second // should be greater than pingInterval
+	maxMessageSize = config.MaxClientMessageSize
 )
 
 type Client struct {
@@ -558,6 +562,33 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 		prevConn.Close()
 	}
 
+	conn.SetReadLimit(maxMessageSize)
+	conn.SetReadDeadline(time.Now().Add(pongTimeout))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongTimeout))
+		return nil
+	})
+
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(pingInterval)
+		defer ticker.Stop()
+		var err error
+		for {
+			select {
+			case <-ticker.C:
+				c.Lock()
+				err = conn.WriteMessage(websocket.PingMessage, nil)
+				c.Unlock()
+				if err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	go func() {
 		req := make(map[string]interface{})
 		req["Action"] = "setClient"
@@ -574,6 +605,7 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 	}()
 
 	go func() {
+		defer close(done)
 		for {
 			if c.IsClosed() {
 				return
@@ -585,6 +617,8 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 				c.reconnect()
 				return
 			}
+
+			conn.SetReadDeadline(time.Now().Add(pongTimeout))
 
 			err = c.handleMessage(msgType, data)
 			if err != nil {
