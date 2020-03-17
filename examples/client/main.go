@@ -1,17 +1,16 @@
-package examples
+package main
 
 import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log"
-	"testing"
 	"time"
 
 	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
-func TestClient(t *testing.T) {
+func main() {
 	err := func() error {
 		account, err := nkn.NewAccount(nil)
 		if err != nil {
