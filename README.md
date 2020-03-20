@@ -2,14 +2,12 @@
 
 Go implementation of NKN SDK.
 
-**Note: This repository is in the early development stage and may have breaking
-*changes in the future.**
-
 ## Client Usage
 
 NKN Client provides low level p2p messaging through NKN network. For most
-applications, it's more suitable to use multiclient (see section below) for
-better reliability, lower latency, and session mode support.
+applications, it's more suitable to use multiclient (see
+[multiclient](#multiclient) section below) for better reliability, lower
+latency, and session mode support.
 
 Create a client with a generated key pair:
 
