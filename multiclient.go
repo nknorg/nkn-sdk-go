@@ -166,27 +166,21 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 					msgCache.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
 					msg.Src, _ = removeIdentifier(msg.Src)
-					msg.reply = func(data interface{}) error {
-						pid := msg.Pid
-						var payload *payloads.Payload
-						var err error
-						switch v := data.(type) {
-						case []byte:
-							payload, err = newBinaryPayload(v, nil, pid, false)
-						case string:
-							payload, err = newTextPayload(v, nil, pid, false)
-						case nil:
-							payload, err = newAckPayload(pid)
-						default:
-							err = ErrInvalidPayloadType
+					if msg.NoAck {
+						msg.reply = func(data interface{}) error {
+							return nil
 						}
-						if err != nil {
-							return err
+					} else {
+						msg.reply = func(data interface{}) error {
+							payload, err := newReplyPayload(data, msg.Pid)
+							if err != nil {
+								return err
+							}
+							if err := m.send([]string{msg.Src}, payload, msg.Encrypted, 0); err != nil {
+								return err
+							}
+							return nil
 						}
-						if err := m.send([]string{msg.Src}, payload, msg.Encrypted, 0); err != nil {
-							return err
-						}
-						return nil
 					}
 					m.OnMessage.receive(msg, true)
 				}
@@ -208,15 +202,7 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 		return nil, err
 	}
 
-	var payload *payloads.Payload
-	switch v := data.(type) {
-	case []byte:
-		payload, err = newBinaryPayload(v, config.MessageID, nil, config.NoAck)
-	case string:
-		payload, err = newTextPayload(v, config.MessageID, nil, config.NoAck)
-	default:
-		err = ErrInvalidPayloadType
-	}
+	payload, err := newMessagePayload(data, config.MessageID, config.NoAck)
 	if err != nil {
 		return nil, err
 	}
@@ -225,9 +211,11 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 		return nil, err
 	}
 
-	pidString := string(payload.Pid)
-	onReply := NewOnMessage(1, nil)
-	client.responseChannels.Add(pidString, onReply, cache.DefaultExpiration)
+	var onReply *OnMessage
+	if !config.NoAck {
+		onReply = NewOnMessage(1, nil)
+		client.responseChannels.Add(string(payload.Pid), onReply, cache.DefaultExpiration)
+	}
 
 	return onReply, nil
 }
@@ -264,29 +252,26 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 		return nil, err
 	}
 
-	var payload *payloads.Payload
-	switch v := data.(type) {
-	case []byte:
-		payload, err = newBinaryPayload(v, config.MessageID, nil, config.NoAck)
-	case string:
-		payload, err = newTextPayload(v, config.MessageID, nil, config.NoAck)
-	default:
-		err = ErrInvalidPayloadType
-	}
+	payload, err := newMessagePayload(data, config.MessageID, config.NoAck)
 	if err != nil {
 		return nil, err
 	}
 
 	var lock sync.Mutex
 	var errMsg []string
-	onReply := NewOnMessage(1, nil)
-	onRawReply := NewOnMessage(1, nil)
+	var onReply, onRawReply *OnMessage
+
 	success := make(chan struct{}, 0)
 	fail := make(chan struct{}, 0)
 
-	// response channel is added first to prevent some client fail to handle response if send finish before receive response
-	for _, client := range m.Clients {
-		client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
+	if !config.NoAck {
+		onReply = NewOnMessage(1, nil)
+		onRawReply = NewOnMessage(1, nil)
+
+		// response channel is added first to prevent some client fail to handle response if send finish before receive response
+		for _, client := range m.Clients {
+			client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
+		}
 	}
 
 	go func() {
@@ -311,9 +296,11 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 			}
 		}
 
-		msg := <-onRawReply.C
-		msg.Src, _ = removeIdentifier(msg.Src)
-		onReply.receive(msg, false)
+		if !config.NoAck {
+			msg := <-onRawReply.C
+			msg.Src, _ = removeIdentifier(msg.Src)
+			onReply.receive(msg, false)
+		}
 	}()
 
 	select {

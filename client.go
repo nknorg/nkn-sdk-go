@@ -488,6 +488,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					Type:      int32(payload.Type),
 					Encrypted: payloadMsg.Encrypted,
 					Pid:       payload.Pid,
+					NoAck:     payload.NoAck,
 				}
 			}
 
@@ -505,27 +506,21 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			msg.reply = func(data interface{}) error {
-				pid := payload.Pid
-				var payload *payloads.Payload
-				var err error
-				switch v := data.(type) {
-				case []byte:
-					payload, err = newBinaryPayload(v, nil, pid, false)
-				case string:
-					payload, err = newTextPayload(v, nil, pid, false)
-				case nil:
-					payload, err = newAckPayload(pid)
-				default:
-					err = ErrInvalidPayloadType
+			if payload.NoAck {
+				msg.reply = func(data interface{}) error {
+					return nil
 				}
-				if err != nil {
-					return err
+			} else {
+				msg.reply = func(data interface{}) error {
+					payload, err := newReplyPayload(data, payload.Pid)
+					if err != nil {
+						return err
+					}
+					if err := c.send([]string{inboundMsg.Src}, payload, payloadMsg.Encrypted, 0); err != nil {
+						return err
+					}
+					return nil
 				}
-				if err := c.send([]string{inboundMsg.Src}, payload, payloadMsg.Encrypted, 0); err != nil {
-					return err
-				}
-				return nil
 			}
 
 			c.RLock()
@@ -732,69 +727,13 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	return err
 }
 
-func newBinaryPayload(data, pid, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
-	if len(pid) == 0 && len(replyToPid) == 0 {
-		var err error
-		pid, err = RandomBytes(MessageIDSize)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return &payloads.Payload{
-		Type:       payloads.BINARY,
-		Pid:        pid,
-		Data:       data,
-		ReplyToPid: replyToPid,
-		NoAck:      noAck,
-	}, nil
-}
-
-func newTextPayload(text string, pid, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
-	if len(pid) == 0 && len(replyToPid) == 0 {
-		var err error
-		pid, err = RandomBytes(MessageIDSize)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	data, err := proto.Marshal(&payloads.TextData{Text: text})
-	if err != nil {
-		return nil, err
-	}
-
-	return &payloads.Payload{
-		Type:       payloads.TEXT,
-		Pid:        pid,
-		Data:       data,
-		ReplyToPid: replyToPid,
-		NoAck:      noAck,
-	}, nil
-}
-
-func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
-	return &payloads.Payload{
-		Type:       payloads.ACK,
-		ReplyToPid: replyToPid,
-	}, nil
-}
-
 func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(c.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
 	}
 
-	var payload *payloads.Payload
-	switch v := data.(type) {
-	case []byte:
-		payload, err = newBinaryPayload(v, config.MessageID, nil, config.NoAck)
-	case string:
-		payload, err = newTextPayload(v, config.MessageID, nil, config.NoAck)
-	default:
-		err = ErrInvalidPayloadType
-	}
+	payload, err := newMessagePayload(data, config.MessageID, config.NoAck)
 	if err != nil {
 		return nil, err
 	}
@@ -803,9 +742,11 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 		return nil, err
 	}
 
-	pidString := string(payload.Pid)
-	onReply := NewOnMessage(1, nil)
-	c.responseChannels.Add(pidString, onReply, cache.DefaultExpiration)
+	var onReply *OnMessage
+	if !config.NoAck {
+		onReply = NewOnMessage(1, nil)
+		c.responseChannels.Add(string(payload.Pid), onReply, cache.DefaultExpiration)
+	}
 
 	return onReply, nil
 }
@@ -998,15 +939,7 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		return err
 	}
 
-	var payload *payloads.Payload
-	switch v := data.(type) {
-	case []byte:
-		payload, err = newBinaryPayload(v, config.MessageID, nil, true)
-	case string:
-		payload, err = newTextPayload(v, config.MessageID, nil, true)
-	default:
-		err = ErrInvalidPayloadType
-	}
+	payload, err := newMessagePayload(data, config.MessageID, true)
 	if err != nil {
 		return err
 	}
