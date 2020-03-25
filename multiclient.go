@@ -211,9 +211,8 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 		return nil, err
 	}
 
-	var onReply *OnMessage
+	onReply := NewOnMessage(1, nil)
 	if !config.NoReply {
-		onReply = NewOnMessage(1, nil)
 		client.responseChannels.Add(string(payload.MessageId), onReply, cache.DefaultExpiration)
 	}
 
@@ -259,20 +258,19 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 
 	var lock sync.Mutex
 	var errMsg []string
-	var onReply, onRawReply *OnMessage
-
-	success := make(chan struct{}, 0)
-	fail := make(chan struct{}, 0)
+	var onRawReply *OnMessage
+	onReply := NewOnMessage(1, nil)
 
 	if !config.NoReply {
-		onReply = NewOnMessage(1, nil)
 		onRawReply = NewOnMessage(1, nil)
-
 		// response channel is added first to prevent some client fail to handle response if send finish before receive response
 		for _, client := range m.Clients {
 			client.responseChannels.Add(string(payload.MessageId), onRawReply, cache.DefaultExpiration)
 		}
 	}
+
+	success := make(chan struct{}, 0)
+	fail := make(chan struct{}, 0)
 
 	go func() {
 		sent := 0
