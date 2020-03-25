@@ -31,10 +31,10 @@ message Message {
 
 message Payload {
   PayloadType type = 1;
-  bytes pid = 2;
+  bytes message_id = 2;
   bytes data = 3;
-  bytes reply_to_pid = 4;
-  bool no_ack = 5;
+  bytes reply_to_id = 4;
+  bool no_reply = 5;
 }
 
 message TextData {

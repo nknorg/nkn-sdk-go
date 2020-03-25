@@ -93,7 +93,7 @@ func DefaultClientConfig() *ClientConfig {
 
 type MessageConfig struct {
 	Unencrypted       bool
-	NoAck             bool
+	NoReply           bool
 	MaxHoldingSeconds int32
 	MessageID         []byte
 
@@ -105,7 +105,7 @@ type MessageConfig struct {
 
 var defaultMessageConfig = MessageConfig{
 	Unencrypted:       false,
-	NoAck:             false,
+	NoReply:           false,
 	MaxHoldingSeconds: 0,
 	MessageID:         nil,
 	Offset:            0,

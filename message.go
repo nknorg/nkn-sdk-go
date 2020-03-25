@@ -27,8 +27,8 @@ type Message struct {
 	Data      []byte
 	Type      int32
 	Encrypted bool
-	Pid       []byte
-	NoAck     bool
+	MessageId []byte
+	NoReply   bool
 	reply     func(interface{}) error
 }
 
@@ -66,28 +66,28 @@ func decrypt(message []byte, nonce [nonceSize]byte, sharedKey *[sharedKeySize]by
 	return decrypted, nil
 }
 
-func newBinaryPayload(data, pid, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
-	if len(pid) == 0 && len(replyToPid) == 0 {
+func newBinaryPayload(data, messageId, replyToId []byte, noReply bool) (*payloads.Payload, error) {
+	if len(messageId) == 0 && len(replyToId) == 0 {
 		var err error
-		pid, err = RandomBytes(MessageIDSize)
+		messageId, err = RandomBytes(MessageIDSize)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	return &payloads.Payload{
-		Type:       payloads.BINARY,
-		Pid:        pid,
-		Data:       data,
-		ReplyToPid: replyToPid,
-		NoAck:      noAck,
+		Type:      payloads.BINARY,
+		MessageId: messageId,
+		Data:      data,
+		ReplyToId: replyToId,
+		NoReply:   noReply,
 	}, nil
 }
 
-func newTextPayload(text string, pid, replyToPid []byte, noAck bool) (*payloads.Payload, error) {
-	if len(pid) == 0 && len(replyToPid) == 0 {
+func newTextPayload(text string, messageId, replyToId []byte, noReply bool) (*payloads.Payload, error) {
+	if len(messageId) == 0 && len(replyToId) == 0 {
 		var err error
-		pid, err = RandomBytes(MessageIDSize)
+		messageId, err = RandomBytes(MessageIDSize)
 		if err != nil {
 			return nil, err
 		}
@@ -99,40 +99,40 @@ func newTextPayload(text string, pid, replyToPid []byte, noAck bool) (*payloads.
 	}
 
 	return &payloads.Payload{
-		Type:       payloads.TEXT,
-		Pid:        pid,
-		Data:       data,
-		ReplyToPid: replyToPid,
-		NoAck:      noAck,
+		Type:      payloads.TEXT,
+		MessageId: messageId,
+		Data:      data,
+		ReplyToId: replyToId,
+		NoReply:   noReply,
 	}, nil
 }
 
-func newAckPayload(replyToPid []byte) (*payloads.Payload, error) {
+func newAckPayload(replyToId []byte) (*payloads.Payload, error) {
 	return &payloads.Payload{
-		Type:       payloads.ACK,
-		ReplyToPid: replyToPid,
+		Type:      payloads.ACK,
+		ReplyToId: replyToId,
 	}, nil
 }
 
-func newMessagePayload(data interface{}, pid []byte, noAck bool) (*payloads.Payload, error) {
+func newMessagePayload(data interface{}, messageId []byte, noReply bool) (*payloads.Payload, error) {
 	switch v := data.(type) {
 	case []byte:
-		return newBinaryPayload(v, pid, nil, noAck)
+		return newBinaryPayload(v, messageId, nil, noReply)
 	case string:
-		return newTextPayload(v, pid, nil, noAck)
+		return newTextPayload(v, messageId, nil, noReply)
 	default:
 		return nil, ErrInvalidPayloadType
 	}
 }
 
-func newReplyPayload(data interface{}, replyToPid []byte) (*payloads.Payload, error) {
+func newReplyPayload(data interface{}, replyToId []byte) (*payloads.Payload, error) {
 	switch v := data.(type) {
 	case []byte:
-		return newBinaryPayload(v, nil, replyToPid, false)
+		return newBinaryPayload(v, nil, replyToId, false)
 	case string:
-		return newTextPayload(v, nil, replyToPid, false)
+		return newTextPayload(v, nil, replyToId, false)
 	case nil:
-		return newAckPayload(replyToPid)
+		return newAckPayload(replyToId)
 	default:
 		return nil, ErrInvalidPayloadType
 	}
