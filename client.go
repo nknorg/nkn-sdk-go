@@ -742,9 +742,8 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 		return nil, err
 	}
 
-	var onReply *OnMessage
+	onReply := NewOnMessage(1, nil)
 	if !config.NoReply {
-		onReply = NewOnMessage(1, nil)
 		c.responseChannels.Add(string(payload.MessageId), onReply, cache.DefaultExpiration)
 	}
 
