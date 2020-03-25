@@ -487,16 +487,16 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					Data:      data,
 					Type:      int32(payload.Type),
 					Encrypted: payloadMsg.Encrypted,
-					Pid:       payload.Pid,
-					NoAck:     payload.NoAck,
+					MessageId: payload.MessageId,
+					NoReply:   payload.NoReply,
 				}
 			}
 
-			if len(payload.ReplyToPid) > 0 {
-				pidString := string(payload.ReplyToPid)
-				onReply, ok := c.responseChannels.Get(pidString)
+			if len(payload.ReplyToId) > 0 {
+				msgIDString := string(payload.ReplyToId)
+				onReply, ok := c.responseChannels.Get(msgIDString)
 				if ok {
-					c.responseChannels.Delete(pidString)
+					c.responseChannels.Delete(msgIDString)
 					onReply.(*OnMessage).receive(msg, false)
 				}
 				return nil
@@ -506,13 +506,13 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			if payload.NoAck {
+			if payload.NoReply {
 				msg.reply = func(data interface{}) error {
 					return nil
 				}
 			} else {
 				msg.reply = func(data interface{}) error {
-					payload, err := newReplyPayload(data, payload.Pid)
+					payload, err := newReplyPayload(data, payload.MessageId)
 					if err != nil {
 						return err
 					}
@@ -733,7 +733,7 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 		return nil, err
 	}
 
-	payload, err := newMessagePayload(data, config.MessageID, config.NoAck)
+	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
 	if err != nil {
 		return nil, err
 	}
@@ -743,9 +743,9 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 	}
 
 	var onReply *OnMessage
-	if !config.NoAck {
+	if !config.NoReply {
 		onReply = NewOnMessage(1, nil)
-		c.responseChannels.Add(string(payload.Pid), onReply, cache.DefaultExpiration)
+		c.responseChannels.Add(string(payload.MessageId), onReply, cache.DefaultExpiration)
 	}
 
 	return onReply, nil

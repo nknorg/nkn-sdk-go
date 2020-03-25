@@ -151,7 +151,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 					if !msg.Encrypted {
 						continue
 					}
-					err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.Pid, msg.Data)
+					err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.MessageId, msg.Data)
 					if err != nil {
 						if err != ncp.ErrSessionClosed && err != errAddrNotAllowed {
 							log.Println(err)
@@ -159,20 +159,20 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 						continue
 					}
 				} else {
-					cacheKey := string(msg.Pid)
+					cacheKey := string(msg.MessageId)
 					if _, ok := msgCache.Get(cacheKey); ok {
 						continue
 					}
 					msgCache.Set(cacheKey, struct{}{}, cache.DefaultExpiration)
 
 					msg.Src, _ = removeIdentifier(msg.Src)
-					if msg.NoAck {
+					if msg.NoReply {
 						msg.reply = func(data interface{}) error {
 							return nil
 						}
 					} else {
 						msg.reply = func(data interface{}) error {
-							payload, err := newReplyPayload(data, msg.Pid)
+							payload, err := newReplyPayload(data, msg.MessageId)
 							if err != nil {
 								return err
 							}
@@ -202,7 +202,7 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 		return nil, err
 	}
 
-	payload, err := newMessagePayload(data, config.MessageID, config.NoAck)
+	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
 	if err != nil {
 		return nil, err
 	}
@@ -212,9 +212,9 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 	}
 
 	var onReply *OnMessage
-	if !config.NoAck {
+	if !config.NoReply {
 		onReply = NewOnMessage(1, nil)
-		client.responseChannels.Add(string(payload.Pid), onReply, cache.DefaultExpiration)
+		client.responseChannels.Add(string(payload.MessageId), onReply, cache.DefaultExpiration)
 	}
 
 	return onReply, nil
@@ -252,7 +252,7 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 		return nil, err
 	}
 
-	payload, err := newMessagePayload(data, config.MessageID, config.NoAck)
+	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
 	if err != nil {
 		return nil, err
 	}
@@ -264,13 +264,13 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	success := make(chan struct{}, 0)
 	fail := make(chan struct{}, 0)
 
-	if !config.NoAck {
+	if !config.NoReply {
 		onReply = NewOnMessage(1, nil)
 		onRawReply = NewOnMessage(1, nil)
 
 		// response channel is added first to prevent some client fail to handle response if send finish before receive response
 		for _, client := range m.Clients {
-			client.responseChannels.Add(string(payload.Pid), onRawReply, cache.DefaultExpiration)
+			client.responseChannels.Add(string(payload.MessageId), onRawReply, cache.DefaultExpiration)
 		}
 	}
 
@@ -296,7 +296,7 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 			}
 		}
 
-		if !config.NoAck {
+		if !config.NoReply {
 			msg := <-onRawReply.C
 			msg.Src, _ = removeIdentifier(msg.Src)
 			onReply.receive(msg, false)
@@ -379,9 +379,9 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *nc
 	sort.Strings(clientIDs)
 	return ncp.NewSession(m.addr, NewClientAddr(remoteAddr), clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
-			Type: payloads.SESSION,
-			Pid:  sessionID,
-			Data: buf,
+			Type:      payloads.SESSION,
+			MessageId: sessionID,
+			Data:      buf,
 		}
 		client := clients[localClientID]
 		if writeTimeout > 0 {
