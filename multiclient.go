@@ -382,21 +382,9 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *nc
 			Data:      buf,
 		}
 		client := clients[localClientID]
-		if writeTimeout > 0 {
-			err := client.SetWriteDeadline(time.Now().Add(writeTimeout))
-			if err != nil {
-				return err
-			}
-		}
-		err := client.send([]string{addIdentifierPrefix(remoteAddr, remoteClientID)}, payload, true, 0)
+		err := client.sendTimeout([]string{addIdentifierPrefix(remoteAddr, remoteClientID)}, payload, true, 0, writeTimeout)
 		if err != nil {
 			return err
-		}
-		if writeTimeout > 0 {
-			err = client.SetWriteDeadline(zeroTime)
-			if err != nil {
-				return err
-			}
 		}
 		return nil
 	}), config)

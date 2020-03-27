@@ -573,6 +573,7 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 			select {
 			case <-ticker.C:
 				c.Lock()
+				conn.SetWriteDeadline(time.Now().Add(pingInterval))
 				err = conn.WriteMessage(websocket.PingMessage, nil)
 				c.Unlock()
 				if err != nil {
@@ -685,6 +686,17 @@ func (c *Client) handleReconnect() {
 	}
 }
 
+func (c *Client) writeMessage(buf []byte) error {
+	c.Lock()
+	c.conn.SetWriteDeadline(time.Now().Add(time.Duration(c.config.WsWriteTimeout) * time.Millisecond))
+	err := c.conn.WriteMessage(websocket.BinaryMessage, buf)
+	c.Unlock()
+	if err != nil {
+		c.reconnect()
+	}
+	return err
+}
+
 func (c *Client) sendReceipt(prevSignature []byte) error {
 	sigChainElem := &pb.SigChainElem{}
 	buff := bytes.NewBuffer(nil)
@@ -708,23 +720,18 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	if err != nil {
 		return err
 	}
+
 	clientMsg := &pb.ClientMessage{
 		MessageType:     pb.RECEIPT,
 		Message:         receiptData,
 		CompressionType: pb.COMPRESSION_NONE,
 	}
-	clientMsgData, err := proto.Marshal(clientMsg)
+	buf, err := proto.Marshal(clientMsg)
 	if err != nil {
 		return err
 	}
 
-	c.Lock()
-	err = c.conn.WriteMessage(websocket.BinaryMessage, clientMsgData)
-	c.Unlock()
-	if err != nil {
-		c.reconnect()
-	}
-	return err
+	return c.writeMessage(buf)
 }
 
 func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
@@ -779,11 +786,7 @@ func (c *Client) processDest(dest string) (string, error) {
 	return strings.Join(addr, "."), nil
 }
 
-func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
-	if maxHoldingSeconds < 0 {
-		maxHoldingSeconds = 0
-	}
-
+func (c *Client) processDests(dests []string) ([]string, error) {
 	processedDests := make([]string, 0, len(dests))
 	for _, dest := range dests {
 		processedDest, err := c.processDest(dest)
@@ -794,27 +797,29 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 		processedDests = append(processedDests, processedDest)
 	}
 	if len(processedDests) == 0 {
-		return errors.New("all destinations are invalid")
+		return nil, errors.New("all destinations are invalid")
 	}
-	dests = processedDests
+	return processedDests, nil
+}
 
-	var payloadMsgs [][]byte
+func (c *Client) newOutboundMessage(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) (*pb.OutboundMessage, error) {
 	outboundMsg := &pb.OutboundMessage{
 		Dests:             dests,
 		MaxHoldingSeconds: uint32(maxHoldingSeconds),
 	}
 
+	var payloadMsgs [][]byte
+	var err error
 	if encrypted {
-		var err error
 		payloadMsgs, err = c.encryptPayload(payload, dests)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		outboundMsg.Payloads = payloadMsgs
 	} else {
 		payloadData, err := proto.Marshal(payload)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		data, err := proto.Marshal(&payloads.Message{
 			Payload:      payloadData,
@@ -823,7 +828,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 			EncryptedKey: nil,
 		})
 		if err != nil {
-			return err
+			return nil, err
 		}
 		payloadMsgs = [][]byte{data}
 		outboundMsg.Payload = data
@@ -831,14 +836,14 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 
 	nodePk, err := hex.DecodeString(c.nodeInfo.PublicKey)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	sigChainElem := &pb.SigChainElem{
 		NextPubkey: nodePk,
 	}
 	buff := bytes.NewBuffer(nil)
 	if err := sigChainElem.SerializationUnsigned(buff); err != nil {
-		return err
+		return nil, err
 	}
 	sigChainElemSerialized := buff.Bytes()
 
@@ -854,7 +859,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	if c.sigChainBlockHash != "" {
 		sigChainBlockHash, err := hex.DecodeString(c.sigChainBlockHash)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		sigChain.BlockHash = sigChainBlockHash
 		outboundMsg.BlockHash = sigChainBlockHash
@@ -865,7 +870,7 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	for i, dest := range dests {
 		destID, destPubKey, _, err := address.ParseClientAddress(dest)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		sigChain.DestId = destID
 		sigChain.DestPubkey = destPubKey
@@ -876,41 +881,43 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 		}
 		buff := bytes.NewBuffer(nil)
 		if err := sigChain.SerializationMetadata(buff); err != nil {
-			return err
+			return nil, err
 		}
 		digest := sha256.Sum256(buff.Bytes())
 		digest = sha256.Sum256(append(digest[:], sigChainElemSerialized...))
 		signature, err := crypto.Sign(c.account.PrivateKey, digest[:])
 		if err != nil {
-			return err
+			return nil, err
 		}
 		signatures = append(signatures, signature)
 	}
 
 	outboundMsg.Signatures = signatures
 	outboundMsg.Nonce = nonce
+	return outboundMsg, nil
+}
 
-	outboundMsgData, err := proto.Marshal(outboundMsg)
-	if err != nil {
-		return err
-	}
-
+func (c *Client) newClientMessage(outboundMsg *pb.OutboundMessage) (*pb.ClientMessage, error) {
 	clientMsg := &pb.ClientMessage{
 		MessageType: pb.OUTBOUND_MESSAGE,
 	}
 
-	if len(payloadMsgs) > 1 {
-		clientMsg.CompressionType = pb.COMPRESSION_ZLIB
+	outboundMsgData, err := proto.Marshal(outboundMsg)
+	if err != nil {
+		return nil, err
+	}
 
+	if len(outboundMsg.Payloads) > 1 {
+		clientMsg.CompressionType = pb.COMPRESSION_ZLIB
 		var b bytes.Buffer
 		w := zlib.NewWriter(&b)
 		_, err = w.Write(outboundMsgData)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		err = w.Close()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		clientMsg.Message = b.Bytes()
 	} else {
@@ -918,18 +925,39 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 		clientMsg.Message = outboundMsgData
 	}
 
-	clientMsgData, err := proto.Marshal(clientMsg)
+	return clientMsg, nil
+}
+
+func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32, writeTimeout time.Duration) error {
+	if maxHoldingSeconds < 0 {
+		maxHoldingSeconds = 0
+	}
+
+	dests, err := c.processDests(dests)
 	if err != nil {
 		return err
 	}
 
-	c.Lock()
-	err = c.conn.WriteMessage(websocket.BinaryMessage, clientMsgData)
-	c.Unlock()
+	outboundMsg, err := c.newOutboundMessage(dests, payload, encrypted, maxHoldingSeconds)
 	if err != nil {
-		c.reconnect()
+		return err
 	}
-	return err
+
+	clientMsg, err := c.newClientMessage(outboundMsg)
+	if err != nil {
+		return err
+	}
+
+	buf, err := proto.Marshal(clientMsg)
+	if err != nil {
+		return err
+	}
+
+	return c.writeMessage(buf)
+}
+
+func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
+	return c.sendTimeout(dests, payload, encrypted, maxHoldingSeconds, time.Duration(c.config.WsWriteTimeout)*time.Millisecond)
 }
 
 func publish(c clientInterface, topic string, data interface{}, config *MessageConfig) error {
