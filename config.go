@@ -64,6 +64,7 @@ type ClientConfig struct {
 	MsgCacheExpiration      int32 // in millisecond
 	MsgCacheCleanupInterval int32 // in millisecond
 	WsHandshakeTimeout      int32 // in millisecond
+	WsWriteTimeout          int32 // in millisecond
 	MinReconnectInterval    int32 // in millisecond
 	MaxReconnectInterval    int32 // in millisecond
 	MessageConfig           *MessageConfig
@@ -78,6 +79,7 @@ var defaultClientConfig = ClientConfig{
 	MsgCacheExpiration:      300000,
 	MsgCacheCleanupInterval: 60000,
 	WsHandshakeTimeout:      5000,
+	WsWriteTimeout:          10000,
 	MaxReconnectInterval:    60000,
 	MessageConfig:           nil,
 	SessionConfig:           nil,
