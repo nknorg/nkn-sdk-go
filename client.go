@@ -29,10 +29,10 @@ import (
 )
 
 const (
-	MessageIDSize  = 8 // in bytes
-	pingInterval   = 8 * time.Second
-	pongTimeout    = 10 * time.Second // should be greater than pingInterval
-	maxMessageSize = config.MaxClientMessageSize
+	MessageIDSize        = 8       // in bytes
+	maxClientMessageSize = 4000000 // in bytes. NKN node is using 4*1024*1024 as limit (config.MaxClientMessageSize), we give some additional space for serialization overhead.
+	pingInterval         = 8 * time.Second
+	pongTimeout          = 10 * time.Second // should be greater than pingInterval
 )
 
 type Client struct {
@@ -557,7 +557,7 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 		prevConn.Close()
 	}
 
-	conn.SetReadLimit(maxMessageSize)
+	conn.SetReadLimit(config.MaxClientMessageSize)
 	conn.SetReadDeadline(time.Now().Add(pongTimeout))
 	conn.SetPongHandler(func(string) error {
 		conn.SetReadDeadline(time.Now().Add(pongTimeout))
@@ -802,20 +802,9 @@ func (c *Client) processDests(dests []string) ([]string, error) {
 	return processedDests, nil
 }
 
-func (c *Client) newOutboundMessage(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) (*pb.OutboundMessage, error) {
-	outboundMsg := &pb.OutboundMessage{
-		Dests:             dests,
-		MaxHoldingSeconds: uint32(maxHoldingSeconds),
-	}
-
-	var payloadMsgs [][]byte
-	var err error
+func (c *Client) newPayloads(dests []string, payload *payloads.Payload, encrypted bool) ([][]byte, error) {
 	if encrypted {
-		payloadMsgs, err = c.encryptPayload(payload, dests)
-		if err != nil {
-			return nil, err
-		}
-		outboundMsg.Payloads = payloadMsgs
+		return c.encryptPayload(payload, dests)
 	} else {
 		payloadData, err := proto.Marshal(payload)
 		if err != nil {
@@ -830,8 +819,15 @@ func (c *Client) newOutboundMessage(dests []string, payload *payloads.Payload, e
 		if err != nil {
 			return nil, err
 		}
-		payloadMsgs = [][]byte{data}
-		outboundMsg.Payload = data
+		return [][]byte{data}, nil
+	}
+}
+
+func (c *Client) newOutboundMessage(dests []string, plds [][]byte, encrypted bool, maxHoldingSeconds int32) (*pb.OutboundMessage, error) {
+	outboundMsg := &pb.OutboundMessage{
+		Dests:             dests,
+		Payloads:          plds,
+		MaxHoldingSeconds: uint32(maxHoldingSeconds),
 	}
 
 	nodePk, err := hex.DecodeString(c.nodeInfo.PublicKey)
@@ -874,10 +870,10 @@ func (c *Client) newOutboundMessage(dests []string, payload *payloads.Payload, e
 		}
 		sigChain.DestId = destID
 		sigChain.DestPubkey = destPubKey
-		if len(payloadMsgs) > 1 {
-			sigChain.DataSize = uint32(len(payloadMsgs[i]))
+		if len(plds) > 1 {
+			sigChain.DataSize = uint32(len(plds[i]))
 		} else {
-			sigChain.DataSize = uint32(len(payloadMsgs[0]))
+			sigChain.DataSize = uint32(len(plds[0]))
 		}
 		buff := bytes.NewBuffer(nil)
 		if err := sigChain.SerializationMetadata(buff); err != nil {
@@ -938,22 +934,75 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 		return err
 	}
 
-	outboundMsg, err := c.newOutboundMessage(dests, payload, encrypted, maxHoldingSeconds)
+	plds, err := c.newPayloads(dests, payload, encrypted)
 	if err != nil {
 		return err
 	}
 
-	clientMsg, err := c.newClientMessage(outboundMsg)
+	outboundMsgs := make([]*pb.OutboundMessage, 0, 1)
+	destList := make([]string, 0, len(dests))
+	pldList := make([][]byte, 0, len(plds))
+	if len(plds) > 1 {
+		var totalSize, size int
+		for i := range plds {
+			size = len(plds[i]) + len(dests[i]) + ed25519.SignatureSize
+			if size > maxClientMessageSize {
+				return fmt.Errorf("encoded message is greater than %v bytes", maxClientMessageSize)
+			}
+			if totalSize+size > maxClientMessageSize {
+				outboundMsg, err := c.newOutboundMessage(destList, pldList, encrypted, maxHoldingSeconds)
+				if err != nil {
+					return err
+				}
+				outboundMsgs = append(outboundMsgs, outboundMsg)
+				destList = make([]string, 0, len(destList))
+				pldList = make([][]byte, 0, len(pldList))
+				totalSize = 0
+			}
+			destList = append(destList, dests[i])
+			pldList = append(pldList, plds[i])
+			totalSize += size
+		}
+	} else {
+		size := len(plds[0])
+		for i := range dests {
+			size += len(dests[i]) + ed25519.SignatureSize
+		}
+		if size > maxClientMessageSize {
+			return fmt.Errorf("encoded message is greater than %v bytes", maxClientMessageSize)
+		}
+		destList = dests
+		pldList = plds
+	}
+
+	outboundMsg, err := c.newOutboundMessage(destList, pldList, encrypted, maxHoldingSeconds)
 	if err != nil {
 		return err
 	}
+	outboundMsgs = append(outboundMsgs, outboundMsg)
 
-	buf, err := proto.Marshal(clientMsg)
-	if err != nil {
-		return err
+	if len(outboundMsgs) > 1 {
+		log.Printf("Client message size is greater than %d bytes, split into %d batches.", maxClientMessageSize, len(outboundMsgs))
 	}
 
-	return c.writeMessage(buf)
+	for _, outboundMsg := range outboundMsgs {
+		clientMsg, err := c.newClientMessage(outboundMsg)
+		if err != nil {
+			return err
+		}
+
+		buf, err := proto.Marshal(clientMsg)
+		if err != nil {
+			return err
+		}
+
+		err = c.writeMessage(buf)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
