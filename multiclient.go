@@ -269,13 +269,14 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 		}
 	}
 
-	success := make(chan struct{}, 0)
-	fail := make(chan struct{}, 0)
+	success := make(chan struct{}, 1)
+	fail := make(chan struct{}, 1)
 
 	go func() {
 		sent := 0
 		for clientID := range m.Clients {
-			if err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err == nil {
+			err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds)
+			if err == nil {
 				select {
 				case success <- struct{}{}:
 				default:
@@ -322,12 +323,13 @@ func (m *MultiClient) SendText(dests *StringArray, data string, config *MessageC
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	var lock sync.Mutex
 	var errMsg []string
-	success := make(chan struct{}, 0)
-	fail := make(chan struct{}, 0)
+	success := make(chan struct{}, 1)
+	fail := make(chan struct{}, 1)
 	go func() {
 		sent := 0
 		for clientID := range m.Clients {
-			if err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds); err == nil {
+			err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds)
+			if err == nil {
 				select {
 				case success <- struct{}{}:
 				default:
@@ -340,7 +342,10 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 			}
 		}
 		if sent == 0 {
-			fail <- struct{}{}
+			select {
+			case fail <- struct{}{}:
+			default:
+			}
 		}
 	}()
 

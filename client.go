@@ -144,7 +144,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		OnConnect:        NewOnConnect(1, nil),
 		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
 		OnBlock:          NewOnBlock(int(config.BlockChanLen), nil),
-		reconnectChan:    make(chan struct{}, 0),
+		reconnectChan:    make(chan struct{}, 1),
 		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
 		sharedKeys:       make(map[string]*[sharedKeySize]byte),
 	}
@@ -805,22 +805,24 @@ func (c *Client) processDests(dests []string) ([]string, error) {
 func (c *Client) newPayloads(dests []string, payload *payloads.Payload, encrypted bool) ([][]byte, error) {
 	if encrypted {
 		return c.encryptPayload(payload, dests)
-	} else {
-		payloadData, err := proto.Marshal(payload)
-		if err != nil {
-			return nil, err
-		}
-		data, err := proto.Marshal(&payloads.Message{
-			Payload:      payloadData,
-			Encrypted:    false,
-			Nonce:        nil,
-			EncryptedKey: nil,
-		})
-		if err != nil {
-			return nil, err
-		}
-		return [][]byte{data}, nil
 	}
+
+	payloadData, err := proto.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := proto.Marshal(&payloads.Message{
+		Payload:      payloadData,
+		Encrypted:    false,
+		Nonce:        nil,
+		EncryptedKey: nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return [][]byte{data}, nil
 }
 
 func (c *Client) newOutboundMessage(dests []string, plds [][]byte, encrypted bool, maxHoldingSeconds int32) (*pb.OutboundMessage, error) {
