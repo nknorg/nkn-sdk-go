@@ -42,6 +42,8 @@ func main() {
 		defer toClient.Close()
 		<-toClient.OnConnect.C
 
+		time.Sleep(time.Second)
+
 		timeSent := time.Now().UnixNano() / int64(time.Millisecond)
 		var timeReceived int64
 		go func() {
