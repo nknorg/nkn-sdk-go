@@ -29,99 +29,65 @@ import (
 )
 
 const (
-	MessageIDSize        = 8       // in bytes
-	maxClientMessageSize = 4000000 // in bytes. NKN node is using 4*1024*1024 as limit (config.MaxClientMessageSize), we give some additional space for serialization overhead.
-	pingInterval         = 8 * time.Second
-	pongTimeout          = 10 * time.Second // should be greater than pingInterval
+	// MessageIDSize is the default message id size in bytes
+	MessageIDSize = 8
+
+	// Max client message size in bytes. NKN node is using 4*1024*1024 as limit
+	// (config.MaxClientMessageSize), we give some additional space for
+	// serialization overhead.
+	maxClientMessageSize = 4000000
+
+	// WebSocket ping interval.
+	pingInterval = 8 * time.Second
+
+	// WebSocket ping response timeout. Should be greater than pingInterval.
+	pongTimeout = 10 * time.Second
+
+	// Should match the setClient action string on node side.
+	setClientAction = "setClient"
 )
 
+// Client sends and receives data between any NKN clients regardless their
+// network condition without setting up a server or relying on any third party
+// services. Data are end to end encrypted by default. Typically you might want
+// to use multiclient instead of using client directly.
 type Client struct {
+	OnConnect *OnConnect // Event emitting channel when client connects to node and becomes ready to send messages. One should only use the first event of the channel.
+	OnMessage *OnMessage // Event emitting channel when client receives a message (not including reply or ACK).
+
 	config            *ClientConfig
 	account           *Account
 	publicKey         []byte
 	curveSecretKey    *[sharedKeySize]byte
 	address           string
 	addressID         []byte
-	OnConnect         *OnConnect
-	OnMessage         *OnMessage
-	OnBlock           *OnBlock
 	sigChainBlockHash string
 	reconnectChan     chan struct{}
 	responseChannels  *cache.Cache
 
-	sync.RWMutex
+	lock       sync.RWMutex
 	closed     bool
 	conn       *websocket.Conn
-	nodeInfo   *NodeInfo
+	node       *Node
 	urlString  string
 	sharedKeys map[string]*[sharedKeySize]byte
 }
 
+// clientInterface is the common interface of client and multiclient.
 type clientInterface interface {
 	getConfig() *ClientConfig
 	send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error
 }
 
-type NodeInfo struct {
-	Address   string `json:"addr"`
-	PublicKey string `json:"pubkey"`
-	Id        string `json:"id"`
+type setClientResult struct {
+	Node              *Node  `json:"node"`
+	SigChainBlockHash string `json:"sigChainBlockHash"`
 }
 
-type SetClientResult struct {
-	NodeInfo          *NodeInfo `json:"node"`
-	SigChainBlockHash string    `json:"sigChainBlockHash"`
-}
-
-type HeaderInfo struct {
-	Version          int32  `json:"version"` // changed to signed int for gomobile compatibility
-	PrevBlockHash    string `json:"prevBlockHash"`
-	TransactionsRoot string `json:"transactionsRoot"`
-	StateRoot        string `json:"stateRoot"`
-	Timestamp        int64  `json:"timestamp"`
-	Height           int32  `json:"height"` // changed to signed int for gomobile compatibility
-	RandomBeacon     string `json:"randomBeacon"`
-	WinnerHash       string `json:"winnerHash"`
-	WinnerType       string `json:"winnerType"`
-	SignerPk         string `json:"signerPk"`
-	SignerId         string `json:"signerId"`
-	Signature        string `json:"signature"`
-	Hash             string `json:"hash"`
-}
-
-type ProgramInfo struct {
-	Code      string `json:"code"`
-	Parameter string `json:"parameter"`
-}
-
-type TxnInfo struct {
-	TxType      string        `json:"txType"`
-	PayloadData string        `json:"payloadData"`
-	Nonce       int64         `json:"nonce"` // changed to signed int for gomobile compatibility
-	Fee         int64         `json:"fee"`
-	Attributes  string        `json:"attributes"`
-	Programs    []ProgramInfo `json:"programs"`
-	Hash        string        `json:"hash"`
-}
-
-type BlockInfo struct {
-	Header       *HeaderInfo `json:"header"`
-	Transactions []TxnInfo   `json:"transactions"`
-	Size         int         `json:"size"`
-	Hash         string      `json:"hash"`
-}
-
-type RegistrantInfo struct {
-	Registrant string `json:"registrant"`
-	ExpiresAt  uint32 `json:"expiresAt"`
-}
-
-func NewBlockInfo() *BlockInfo {
-	return &BlockInfo{
-		Header: &HeaderInfo{},
-	}
-}
-
+// NewClient creates a client with an account, an optional identifier, and a
+// optional client config. For any zero value field in config, the default
+// client config value will be used. If config is nil, the default client config
+// will be used.
 func NewClient(account *Account, identifier string, config *ClientConfig) (*Client, error) {
 	config, err := MergeClientConfig(config)
 	if err != nil {
@@ -129,11 +95,12 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 	}
 
 	pk := account.PubKey()
+	addr := address.MakeAddressString(pk, identifier)
+
 	var sk [ed25519.PrivateKeySize]byte
 	copy(sk[:], account.PrivKey())
 	curveSecretKey := ed25519.PrivateKeyToCurve25519PrivateKey(&sk)
 
-	addr := address.MakeAddressString(pk, identifier)
 	c := Client{
 		config:           config,
 		account:          account,
@@ -143,7 +110,6 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		addressID:        addressToID(addr),
 		OnConnect:        NewOnConnect(1, nil),
 		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
-		OnBlock:          NewOnBlock(int(config.BlockChanLen), nil),
 		reconnectChan:    make(chan struct{}, 1),
 		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
 		sharedKeys:       make(map[string]*[sharedKeySize]byte),
@@ -159,53 +125,69 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 	return &c, nil
 }
 
+// Seed returns the secret seed of the client. Secret seed can be used to create
+// client/wallet with the same key pair and should be kept secret and safe.
 func (c *Client) Seed() []byte {
 	return c.account.Seed()
 }
 
+// PubKey returns the public key of the client.
 func (c *Client) PubKey() []byte {
 	return c.account.PubKey()
 }
 
+// Address returns the NKN client address of the client. Client address is in
+// the form of
+//   identifier.pubKeyHex
+// if identifier is not an empty string, or
+//   pubKeyHex
+// if identifier is an empty string.
+//
+// Note that client address is different from wallet address using the same key
+// pair (account). Wallet address can be computed from client address, but NOT
+// vice versa.
 func (c *Client) Address() string {
 	return c.address
 }
 
+// IsClosed returns whether the client is closed and should not be used anymore.
 func (c *Client) IsClosed() bool {
-	c.RLock()
-	defer c.RUnlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	return c.closed
 }
 
+// Close closes the client.
 func (c *Client) Close() {
-	c.Lock()
-	defer c.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if !c.closed {
 		c.closed = true
 		close(c.OnConnect.C)
 		close(c.OnMessage.C)
-		close(c.OnBlock.C)
 		close(c.reconnectChan)
 		c.conn.Close()
 	}
 }
 
-func (c *Client) GetNodeInfo() *NodeInfo {
-	c.RLock()
-	defer c.RUnlock()
-	return c.nodeInfo
+// GetNode returns the node that client is currently connected to.
+func (c *Client) GetNode() *Node {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.node
 }
 
+// GetConn returns the current websocket connection client is using.
 func (c *Client) GetConn() *websocket.Conn {
-	c.RLock()
-	defer c.RUnlock()
+	c.lock.RLock()
+	defer c.lock.RUnlock()
 	return c.conn
 }
 
 func (c *Client) getOrComputeSharedKey(remotePublicKey []byte) (*[sharedKeySize]byte, error) {
-	c.RLock()
+	c.lock.RLock()
 	sharedKey, ok := c.sharedKeys[string(remotePublicKey)]
-	c.RUnlock()
+	c.lock.RUnlock()
 	if ok && sharedKey != nil {
 		return sharedKey, nil
 	}
@@ -224,9 +206,9 @@ func (c *Client) getOrComputeSharedKey(remotePublicKey []byte) (*[sharedKeySize]
 	sharedKey = new([sharedKeySize]byte)
 	box.Precompute(sharedKey, curve25519PublicKey, c.curveSecretKey)
 
-	c.Lock()
+	c.lock.Lock()
 	c.sharedKeys[string(remotePublicKey)] = sharedKey
-	c.Unlock()
+	c.lock.Unlock()
 
 	return sharedKey, nil
 }
@@ -378,56 +360,43 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 		}
 		if errCode != common.SUCCESS {
 			if errCode == common.WRONG_NODE {
-				var nodeInfo NodeInfo
-				if err := json.Unmarshal(*msg["Result"], &nodeInfo); err != nil {
+				var node Node
+				if err := json.Unmarshal(*msg["Result"], &node); err != nil {
 					return err
 				}
 				go func() {
-					err := c.connectToNode(&nodeInfo)
+					err := c.connectToNode(&node)
 					if err != nil {
 						c.reconnect()
 					}
 				}()
-			} else if action == "setClient" {
+			} else if action == setClientAction {
 				c.Close()
 			}
 			return errors.New(common.ErrMessage[errCode])
 		}
 		switch action {
-		case "setClient":
-			var setClientResult SetClientResult
-			if err := json.Unmarshal(*msg["Result"], &setClientResult); err != nil {
+		case setClientAction:
+			var result setClientResult
+			if err := json.Unmarshal(*msg["Result"], &result); err != nil {
 				return err
 			}
-			c.sigChainBlockHash = setClientResult.SigChainBlockHash
+			c.sigChainBlockHash = result.SigChainBlockHash
 
-			c.RLock()
-			defer c.RUnlock()
+			c.lock.RLock()
+			defer c.lock.RUnlock()
 			if c.closed {
 				return nil
 			}
 
-			nodeInfo := c.GetNodeInfo()
-			c.OnConnect.receive(nodeInfo)
+			node := c.GetNode()
+			c.OnConnect.receive(node)
 		case "updateSigChainBlockHash":
 			var sigChainBlockHash string
 			if err := json.Unmarshal(*msg["Result"], &sigChainBlockHash); err != nil {
 				return err
 			}
 			c.sigChainBlockHash = sigChainBlockHash
-		case "sendRawBlock":
-			blockInfo := NewBlockInfo()
-			if err := json.Unmarshal(*msg["Result"], blockInfo); err != nil {
-				return err
-			}
-
-			c.RLock()
-			defer c.RUnlock()
-			if c.closed {
-				return nil
-			}
-
-			c.OnBlock.receive(blockInfo)
 		}
 	case websocket.BinaryMessage:
 		clientMsg := &pb.ClientMessage{}
@@ -487,7 +456,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					Data:      data,
 					Type:      int32(payload.Type),
 					Encrypted: payloadMsg.Encrypted,
-					MessageId: payload.MessageId,
+					MessageID: payload.MessageId,
 					NoReply:   payload.NoReply,
 				}
 			}
@@ -523,8 +492,8 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				}
 			}
 
-			c.RLock()
-			defer c.RUnlock()
+			c.lock.RLock()
+			defer c.lock.RUnlock()
 			if c.closed {
 				return nil
 			}
@@ -536,8 +505,8 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 	return nil
 }
 
-func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
-	urlString := (&url.URL{Scheme: "ws", Host: nodeInfo.Address}).String()
+func (c *Client) connectToNode(node *Node) error {
+	urlString := (&url.URL{Scheme: "ws", Host: node.Address}).String()
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = time.Duration(c.config.WsHandshakeTimeout) * time.Millisecond
 
@@ -546,12 +515,12 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 		return err
 	}
 
-	c.Lock()
+	c.lock.Lock()
 	prevConn := c.conn
 	c.conn = conn
-	c.nodeInfo = nodeInfo
+	c.node = node
 	c.urlString = urlString
-	c.Unlock()
+	c.lock.Unlock()
 
 	if prevConn != nil {
 		prevConn.Close()
@@ -572,10 +541,10 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 		for {
 			select {
 			case <-ticker.C:
-				c.Lock()
+				c.lock.Lock()
 				conn.SetWriteDeadline(time.Now().Add(pingInterval))
 				err = conn.WriteMessage(websocket.PingMessage, nil)
-				c.Unlock()
+				c.lock.Unlock()
 				if err != nil {
 					return
 				}
@@ -590,9 +559,9 @@ func (c *Client) connectToNode(nodeInfo *NodeInfo) error {
 		req["Action"] = "setClient"
 		req["Addr"] = c.Address()
 
-		c.Lock()
+		c.lock.Lock()
 		err := conn.WriteJSON(req)
-		c.Unlock()
+		c.lock.Unlock()
 		if err != nil {
 			log.Println(err)
 			c.reconnect()
@@ -639,14 +608,14 @@ func (c *Client) connect(maxRetries int) error {
 			}
 		}
 
-		var nodeInfo *NodeInfo
-		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address()}, &nodeInfo)
+		var node *Node
+		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address()}, &node)
 		if err != nil {
 			log.Println(err)
 			continue
 		}
 
-		err = c.connectToNode(nodeInfo)
+		err = c.connectToNode(node)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -669,7 +638,7 @@ func (c *Client) reconnect() {
 }
 
 func (c *Client) handleReconnect() {
-	for _ = range c.reconnectChan {
+	for range c.reconnectChan {
 		if c.IsClosed() {
 			return
 		}
@@ -687,10 +656,10 @@ func (c *Client) handleReconnect() {
 }
 
 func (c *Client) writeMessage(buf []byte) error {
-	c.Lock()
+	c.lock.Lock()
 	c.conn.SetWriteDeadline(time.Now().Add(time.Duration(c.config.WsWriteTimeout) * time.Millisecond))
 	err := c.conn.WriteMessage(websocket.BinaryMessage, buf)
-	c.Unlock()
+	c.lock.Unlock()
 	if err != nil {
 		c.reconnect()
 	}
@@ -734,6 +703,9 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	return c.writeMessage(buf)
 }
 
+// Send sends bytes or string data to one or multiple destinations with an
+// optional config. Returned OnMessage channel will emit if a reply or ACK for
+// this message is received.
 func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(c.config.MessageConfig, config)
 	if err != nil {
@@ -757,12 +729,14 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 	return onReply, nil
 }
 
-// SendBinary is a wrapper of Send for gomobile compatibility
+// SendBinary is a wrapper of Send without interface type for gomobile
+// compatibility.
 func (c *Client) SendBinary(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
 }
 
-// SendText is a wrapper of Send for gomobile compatibility
+// SendText is a wrapper of Send without interface type for gomobile
+// compatibility.
 func (c *Client) SendText(dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
 }
@@ -773,15 +747,15 @@ func (c *Client) processDest(dest string) (string, error) {
 	}
 	addr := strings.Split(dest, ".")
 	if len(addr[len(addr)-1]) < 2*ed25519.PublicKeySize {
-		var registrantInfo *RegistrantInfo
-		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getregistrant", map[string]interface{}{"name": addr[len(addr)-1]}, &registrantInfo)
+		var reg *registrantInfo
+		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getregistrant", map[string]interface{}{"name": addr[len(addr)-1]}, &reg)
 		if err != nil {
 			return "", err
 		}
-		if len(registrantInfo.Registrant) == 0 {
+		if len(reg.Registrant) == 0 {
 			return "", fmt.Errorf("%s is neither a valid public key nor a registered nam", addr[len(addr)-1])
 		}
-		addr[len(addr)-1] = registrantInfo.Registrant
+		addr[len(addr)-1] = reg.Registrant
 	}
 	return strings.Join(addr, "."), nil
 }
@@ -832,7 +806,7 @@ func (c *Client) newOutboundMessage(dests []string, plds [][]byte, encrypted boo
 		MaxHoldingSeconds: uint32(maxHoldingSeconds),
 	}
 
-	nodePk, err := hex.DecodeString(c.nodeInfo.PublicKey)
+	nodePk, err := hex.DecodeString(c.node.PublicKey)
 	if err != nil {
 		return nil, err
 	}
@@ -1022,40 +996,62 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		return err
 	}
 
-	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, int(config.Offset), int(config.Limit), false, config.TxPool)
+	offset := int(config.Offset)
+	limit := int(config.Limit)
+	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, offset, limit, false, config.TxPool)
+	if err != nil {
+		return err
+	}
+
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber := range subscribers {
 		dests = append(dests, subscriber)
 	}
-	for subscriber := range subscribersInTxPool {
-		dests = append(dests, subscriber)
+
+	for len(subscribers) >= limit {
+		offset += limit
+		subscribers, _, err = getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, offset, limit, false, false)
+		if err != nil {
+			return err
+		}
+		for subscriber := range subscribers {
+			dests = append(dests, subscriber)
+		}
 	}
-	if err != nil {
-		return err
+
+	if config.TxPool {
+		for subscriber := range subscribersInTxPool {
+			dests = append(dests, subscriber)
+		}
 	}
 
 	return c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds)
 }
 
+// Publish sends bytes or string data to all subscribers of a topic with an
+// optional config.
 func (c *Client) Publish(topic string, data interface{}, config *MessageConfig) error {
 	return publish(c, topic, data, config)
 }
 
-// PublishBinary is a wrapper of Publish for gomobile compatibility
+// PublishBinary is a wrapper of Publish without interface type for gomobile
+// compatibility.
 func (c *Client) PublishBinary(topic string, data []byte, config *MessageConfig) error {
 	return c.Publish(topic, data, config)
 }
 
-// PublishText is a wrapper of Publish for gomobile compatibility
+// PublishText is a wrapper of Publish without interface type for gomobile
+// compatibility.
 func (c *Client) PublishText(topic string, data string, config *MessageConfig) error {
 	return c.Publish(topic, data, config)
 }
 
+// SetWriteDeadline sets the write deadline of the websocket connection.
 func (c *Client) SetWriteDeadline(deadline time.Time) error {
-	c.Lock()
-	defer c.Unlock()
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	if c.conn == nil {
-		return errors.New("nil websocker connection")
+		return errors.New("nil websocket connection")
 	}
 	return c.conn.SetWriteDeadline(deadline)
 }

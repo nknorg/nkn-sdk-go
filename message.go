@@ -14,7 +14,7 @@ const (
 	sharedKeySize = 32
 )
 
-// Payload type alias for gomobile compatibility
+// Payload type alias for gomobile compatibility.
 const (
 	BinaryType  = int32(payloads.BINARY)
 	TextType    = int32(payloads.TEXT)
@@ -22,26 +22,30 @@ const (
 	SessionType = int32(payloads.SESSION)
 )
 
+// Message contains the info of received message.
 type Message struct {
-	Src       string
-	Data      []byte
-	Type      int32
-	Encrypted bool
-	MessageId []byte
-	NoReply   bool
+	Src       string // Sender's NKN client address.
+	Data      []byte // Message data. If data type is string, one can call string() to convert it to original string data.
+	Type      int32  // Message data type.
+	Encrypted bool   // Whether message is encrypted.
+	MessageID []byte // Message ID.
+	NoReply   bool   // Indicating no reply or ACK should be sent.
 	reply     func(interface{}) error
 }
 
+// Reply sends bytes or string data as reply to message sender.
 func (msg *Message) Reply(data interface{}) error {
 	return msg.reply(data)
 }
 
-// ReplyBinary is a wrapper of Reply for gomobile compatibility
+// ReplyBinary is a wrapper of Reply without interface type for gomobile
+// compatibility.
 func (msg *Message) ReplyBinary(data []byte) error {
 	return msg.Reply(data)
 }
 
-// ReplyText is a wrapper of Reply for gomobile compatibility
+// ReplyText is a wrapper of Reply without interface type for gomobile
+// compatibility.
 func (msg *Message) ReplyText(data string) error {
 	return msg.Reply(data)
 }
