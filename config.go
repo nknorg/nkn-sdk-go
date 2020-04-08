@@ -8,6 +8,11 @@ import (
 	ncp "github.com/nknorg/ncp-go"
 )
 
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+// DefaultSeedRPCServerAddr is the default seed rpc server address list.
 var DefaultSeedRPCServerAddr = []string{
 	"http://mainnet-seed-0001.nkn.org:30003",
 	"http://mainnet-seed-0002.nkn.org:30003",
@@ -49,103 +54,112 @@ var DefaultSeedRPCServerAddr = []string{
 	"http://mainnet-seed-0038.nkn.org:30003",
 	"http://mainnet-seed-0039.nkn.org:30003",
 	"http://mainnet-seed-0040.nkn.org:30003",
-	"http://mainnet-seed-0041.nkn.org:30003",
-	"http://mainnet-seed-0042.nkn.org:30003",
-	"http://mainnet-seed-0043.nkn.org:30003",
-	"http://mainnet-seed-0044.nkn.org:30003",
 }
 
+// ClientConfig is the client configuration.
 type ClientConfig struct {
-	SeedRPCServerAddr       *StringArray
-	MaxHoldingSeconds       int32
-	MsgChanLen              int32
-	BlockChanLen            int32
-	ConnectRetries          int32
-	MsgCacheExpiration      int32 // in millisecond
-	MsgCacheCleanupInterval int32 // in millisecond
-	WsHandshakeTimeout      int32 // in millisecond
-	WsWriteTimeout          int32 // in millisecond
-	MinReconnectInterval    int32 // in millisecond
-	MaxReconnectInterval    int32 // in millisecond
-	MessageConfig           *MessageConfig
-	SessionConfig           *ncp.Config
+	SeedRPCServerAddr       *StringArray   // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
+	MsgChanLen              int32          // Channel length for received but unproccessed messages.
+	ConnectRetries          int32          // Connnect to node retries (including the initial connect). 0 means unlimited retries.
+	MsgCacheExpiration      int32          // Message cache expiration in millisecond for response channel, multiclient message id deduplicate, etc.
+	MsgCacheCleanupInterval int32          // Message cache cleanup interval in millisecond.
+	WsHandshakeTimeout      int32          // WebSocket handshake timeout in millisecond.
+	WsWriteTimeout          int32          // WebSocket write timeout in millisecond.
+	MinReconnectInterval    int32          // Min reconnect interval in millisecond.
+	MaxReconnectInterval    int32          // Max reconnect interval in millisecond.
+	MessageConfig           *MessageConfig // Default message config of the client if per-message config is not provided.
+	SessionConfig           *ncp.Config    // Default session config of the client if per-session config is not provided.
 }
 
-var defaultClientConfig = ClientConfig{
-	MaxHoldingSeconds:       0,
+// DefaultClientConfig is the default client config.
+var DefaultClientConfig = ClientConfig{
+	SeedRPCServerAddr:       nil,
 	MsgChanLen:              1024,
-	BlockChanLen:            1,
 	ConnectRetries:          3,
 	MsgCacheExpiration:      300000,
 	MsgCacheCleanupInterval: 60000,
 	WsHandshakeTimeout:      5000,
 	WsWriteTimeout:          10000,
-	MaxReconnectInterval:    60000,
+	MinReconnectInterval:    1000,
+	MaxReconnectInterval:    64000,
 	MessageConfig:           nil,
 	SessionConfig:           nil,
 }
 
-func DefaultClientConfig() *ClientConfig {
-	clientConf := defaultClientConfig
+// GetDefaultClientConfig returns the default client config with nil pointer
+// fields set to default.
+func GetDefaultClientConfig() *ClientConfig {
+	clientConf := DefaultClientConfig
 	clientConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
-	clientConf.MessageConfig = DefaultMessageConfig()
-	clientConf.SessionConfig = DefaultSessionConfig()
+	clientConf.MessageConfig = GetDefaultMessageConfig()
+	clientConf.SessionConfig = GetDefaultSessionConfig()
 	return &clientConf
 }
 
+// MessageConfig is the config for sending messages.
 type MessageConfig struct {
-	Unencrypted       bool
-	NoReply           bool
-	MaxHoldingSeconds int32
-	MessageID         []byte
+	Unencrypted       bool   // Whether message body should be unencrypted. It is not recommended to send unencrypted message as anyone in the middle can see the message content.
+	NoReply           bool   // Indicating the message will not have any reply or ACK, so client will not allocate any resources waiting for it.
+	MaxHoldingSeconds int32  // Message will be held at node for at most this time if the destination client is not online. Note that message might be released earlier than this time if node runs out of resources.
+	MessageID         []byte // Message ID. If nil, a random ID will be generated for each message. MessageID should be unique per message and has size MessageIDSize.
 
 	// for publish
-	Offset int32
-	Limit  int32
-	TxPool bool
+	TxPool bool  // Whether to include subscribers in txpool when publishing.
+	Offset int32 // Offset for getting subscribers.
+	Limit  int32 // Single request limit for getting subscribers
 }
 
-var defaultMessageConfig = MessageConfig{
+// DefaultMessageConfig is the default message config.
+var DefaultMessageConfig = MessageConfig{
 	Unencrypted:       false,
 	NoReply:           false,
 	MaxHoldingSeconds: 0,
 	MessageID:         nil,
+	TxPool:            false,
 	Offset:            0,
 	Limit:             1000,
-	TxPool:            false,
 }
 
-func DefaultMessageConfig() *MessageConfig {
-	messageConf := defaultMessageConfig
+// GetDefaultMessageConfig returns the default message config.
+func GetDefaultMessageConfig() *MessageConfig {
+	messageConf := DefaultMessageConfig
 	return &messageConf
 }
 
-var defaultSessionConfig = ncp.Config{
+// DefaultSessionConfig is the default session config. Unspecific fields here
+// will use the default config in https://github.com/nknorg/ncp-go.
+var DefaultSessionConfig = ncp.Config{
 	MTU: 1024,
 }
 
-func DefaultSessionConfig() *ncp.Config {
-	sessionConf := defaultSessionConfig
+// GetDefaultSessionConfig returns the default session config.
+func GetDefaultSessionConfig() *ncp.Config {
+	sessionConf := DefaultSessionConfig
 	return &sessionConf
 }
 
+// DialConfig is the dial config for session.
 type DialConfig struct {
-	DialTimeout   int32 //in millisecond
-	SessionConfig *ncp.Config
+	DialTimeout   int32       // Dial timeout in millisecond
+	SessionConfig *ncp.Config // Per-session session config that will override client session config.
 }
 
-var defaultDialConfig = DialConfig{
+// DefaultDialConfig is the default dial config.
+var DefaultDialConfig = DialConfig{
 	DialTimeout:   0,
 	SessionConfig: nil,
 }
 
-func DefaultDialConfig(baseSessionConfig *ncp.Config) *DialConfig {
-	dialConf := defaultDialConfig
+// GetDefaultDialConfig returns the default dial config with nil pointer fields
+// set to default.
+func GetDefaultDialConfig(baseSessionConfig *ncp.Config) *DialConfig {
+	dialConf := DefaultDialConfig
 	sessionConfig := *baseSessionConfig
 	dialConf.SessionConfig = &sessionConfig
 	return &dialConf
 }
 
+// WalletConfig is the wallet configuration.
 type WalletConfig struct {
 	SeedRPCServerAddr *StringArray
 	Password          string
@@ -153,18 +167,21 @@ type WalletConfig struct {
 	MasterKey         []byte
 }
 
-var defaultWalletConfig = WalletConfig{}
+// DefaultWalletConfig is the default wallet configuration.
+var DefaultWalletConfig = WalletConfig{
+	SeedRPCServerAddr: nil,
+}
 
-func DefaultWalletConfig() *WalletConfig {
-	walletConf := defaultWalletConfig
+// GetDefaultWalletConfig returns the default wallet config with nil pointer
+// fields set to default.
+func GetDefaultWalletConfig() *WalletConfig {
+	walletConf := DefaultWalletConfig
 	walletConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
 	return &walletConf
 }
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
+// GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
+// client config.
 func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
 	if len(config.SeedRPCServerAddr.Elems) == 0 {
 		return ""
@@ -172,6 +189,8 @@ func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
 	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
 }
 
+// GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
+// wallet config.
 func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
 	if len(config.SeedRPCServerAddr.Elems) == 0 {
 		return ""
@@ -179,8 +198,10 @@ func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
 	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
 }
 
+// MergeClientConfig merges a given client config with the default client config
+// recursively. Any non zero value fields will override the default config.
 func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
-	merged := DefaultClientConfig()
+	merged := GetDefaultClientConfig()
 	if conf != nil {
 		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {
@@ -190,6 +211,9 @@ func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
 	return merged, nil
 }
 
+// MergeMessageConfig merges a given message config with the default message
+// config recursively. Any non zero value fields will override the default
+// config.
 func MergeMessageConfig(base, conf *MessageConfig) (*MessageConfig, error) {
 	merged := *base
 	if conf != nil {
@@ -201,8 +225,10 @@ func MergeMessageConfig(base, conf *MessageConfig) (*MessageConfig, error) {
 	return &merged, nil
 }
 
+// MergeDialConfig merges a given dial config with the default dial config
+// recursively. Any non zero value fields will override the default config.
 func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConfig, error) {
-	merged := DefaultDialConfig(baseSessionConfig)
+	merged := GetDefaultDialConfig(baseSessionConfig)
 	if conf != nil {
 		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {
@@ -212,8 +238,10 @@ func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConf
 	return merged, nil
 }
 
+// MergeWalletConfig merges a given wallet config with the default wallet config
+// recursively. Any non zero value fields will override the default config.
 func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
-	merged := DefaultWalletConfig()
+	merged := GetDefaultWalletConfig()
 	if conf != nil {
 		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {

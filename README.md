@@ -1,8 +1,48 @@
 # nkn-sdk-go
 
-Go implementation of NKN SDK.
+Go implementation of NKN client and wallet SDK. The SDK consists of a
+few components:
 
-## Client Usage
+* [NKN Client](#client): Send and receive data for free between any NKN clients
+  regardless their network condition without setting up a server or relying on
+  any third party services. Data are end to end encrypted by default. Typically
+  you might want to use [multiclient](#multiclient) instead of using client
+  directly.
+
+* [NKN MultiClient](#multiclient): Send and receive data using multiple NKN
+  clients concurrently to improve reliability and latency. In addition, it
+  supports session mode, a reliable streaming protocol similar to TCP based
+  on [ncp](https://github.com/nknorg/ncp-go).
+
+* [NKN Wallet](#wallet): Wallet SDK for [NKN
+  blockchain](https://github.com/nknorg/nkn). It can be used to create wallet,
+  transfer token to NKN wallet address, register name, subscribe to topic,
+  etc.
+
+Advantages of using NKN client/multiclient for data transmission:
+
+* Network agnostic: Neither sender nor receiver needs to have public IP address
+  or port forwarding. NKN clients only establish outbound (websocket)
+  connections, so Internet access is all they need. This is ideal for client
+  side peer to peer communication.
+
+* Top level security: All data are end to end authenticated and encrypted. No
+  one else in the world except sender and receiver can see or modify the content
+  of the data. The same public key is used for both routing and encryption,
+  eliminating the possibility of man in the middle attack.
+
+* Decent performance: By aggregating multiple overlay paths concurrently,
+  multiclient can get ~100ms end to end latency and 10+mbps end to end session
+  throughput between international devices.
+
+* Everything is free, open source and decentralized. (If you are curious, node
+  relay traffic for clients for free to earn mining rewards in NKN blockchain.)
+
+Documentation:
+[https://godoc.org/github.com/nknorg/nkn-sdk-go](https://godoc.org/github.com/nknorg/nkn-sdk-go).
+
+
+## Client
 
 NKN Client provides low level p2p messaging through NKN network. For most
 applications, it's more suitable to use multiclient (see
@@ -89,7 +129,7 @@ fmt.Println("Receive message from", msg.Src + ":", string(msg.Payload))
 msg.Reply([]byte("response"))
 ```
 
-## Multiclient Usage
+## Multiclient
 
 Multiclient creates multiple client instances by adding identifier prefix
 (`__0__.`, `__1__.`, `__2__.`, ...) to a nkn address and send/receive packets
@@ -122,7 +162,7 @@ usage and examples. If you need low-level property or API, you can use
 `multiclient.DefaultClient` to get the default client and `multiclient.Clients`
 to get all clients.
 
-## Session Usage
+## Session
 
 Multiclient supports a reliable transmit protocol called session. It will be
 responsible for retransmission and ordering just like TCP. It uses multiple
@@ -167,7 +207,7 @@ n, err := session.Read(buf)
 n, err := session.Write(buf)
 ```
 
-## Wallet Usage
+## Wallet
 
 Create wallet SDK:
 
@@ -302,7 +342,7 @@ Get subscribers count for specified topic:
 count, err := w.GetSubscribersCount("topic")
 ```
 
-## Usage on iOS/Android
+## iOS/Android
 
 This library is designed to work with
 [gomobile](https://godoc.org/golang.org/x/mobile/cmd/gomobile) and run natively
@@ -318,6 +358,8 @@ and Java AAR for Android:
 ```shell
 gomobile bind -target=android -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/transaction
 ```
+
+It's recommended to use the latest version of gomobile that supports go modules.
 
 ## Contributing
 

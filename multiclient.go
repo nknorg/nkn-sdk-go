@@ -20,29 +20,42 @@ import (
 )
 
 const (
+	// MultiClientIdentifierRe is the regular expression to check whether an
+	// identifier is a multiclient protocol identifier.
 	MultiClientIdentifierRe = "^__\\d+__$"
+
+	// DefaultSessionAllowAddr is the default session allow address if none is
+	// provided when calling listen.
 	DefaultSessionAllowAddr = ".*"
-	SessionIDSize           = MessageIDSize
-	acceptSessionBufSize    = 128
+
+	// SessionIDSize is the default session id size in bytes.
+	SessionIDSize = MessageIDSize
+
+	// Channel length for session that is received but not accepted by user.
+	acceptSessionBufSize = 128
 )
 
 var (
 	multiClientIdentifierRe = regexp.MustCompile(MultiClientIdentifierRe)
-	ErrClosed               = ncp.NewGenericError("use of closed network connection", true, true) // the error message is meant to be identical to error returned by net package
 	errAddrNotAllowed       = errors.New("address not allowed")
 )
 
+// MultiClient sends and receives data using multiple NKN clients concurrently
+// to improve reliability and latency. In addition, it supports session mode, a
+// reliable streaming protocol similar to TCP based on ncp
+// (https://github.com/nknorg/ncp-go).
 type MultiClient struct {
+	OnConnect *OnConnect // Event emitting channel when at least one client connects to node and becomes ready to send messages. One should only use the first event of the channel.
+	OnMessage *OnMessage // Event emitting channel when at least one client receives a message (not including reply or ACK).
+
 	config        *ClientConfig
 	offset        int
 	addr          *ClientAddr
-	OnConnect     *OnConnect
-	OnMessage     *OnMessage
 	acceptSession chan *ncp.Session
 	onClose       chan struct{}
 	msgCache      *cache.Cache
 
-	sync.RWMutex
+	lock          sync.RWMutex
 	clients       map[int]*Client
 	defaultClient *Client
 	acceptAddrs   []*regexp.Regexp
@@ -52,6 +65,12 @@ type MultiClient struct {
 	sessions    map[string]*ncp.Session
 }
 
+// NewMultiClient creates a multiclient with an account, an optional identifier,
+// number of sub clients to create, whether to create original client without
+// identifier prefix, and a optional client config that will be applied to all
+// clients created. For any zero value field in config, the default client
+// config value will be used. If config is nil, the default client config will
+// be used.
 func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, originalClient bool, config *ClientConfig) (*MultiClient, error) {
 	config, err := MergeClientConfig(config)
 	if err != nil {
@@ -96,13 +115,13 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 				return
 			}
 
-			m.Lock()
+			m.lock.Lock()
 			m.clients[i] = client
 			if i < defaultClientIdx {
 				m.defaultClient = client
 				defaultClientIdx = i
 			}
-			m.Unlock()
+			m.lock.Unlock()
 
 			select {
 			case success <- struct{}{}:
@@ -111,8 +130,8 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 
 			wg.Done()
 
-			nodeInfo := <-client.OnConnect.C
-			m.OnConnect.receive(nodeInfo)
+			node := <-client.OnConnect.C
+			m.OnConnect.receive(node)
 
 			for {
 				select {
@@ -121,7 +140,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 						if !msg.Encrypted {
 							continue
 						}
-						err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.MessageId, msg.Data)
+						err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.MessageID, msg.Data)
 						if err != nil {
 							if err != ncp.ErrSessionClosed && err != errAddrNotAllowed {
 								log.Println(err)
@@ -129,7 +148,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 							continue
 						}
 					} else {
-						cacheKey := string(msg.MessageId)
+						cacheKey := string(msg.MessageID)
 						if _, ok := m.msgCache.Get(cacheKey); ok {
 							continue
 						}
@@ -142,7 +161,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 							}
 						} else {
 							msg.reply = func(data interface{}) error {
-								payload, err := newReplyPayload(data, msg.MessageId)
+								payload, err := newReplyPayload(data, msg.MessageID)
 								if err != nil {
 									return err
 								}
@@ -177,9 +196,28 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 	}
 }
 
+// Seed returns the secret seed of the multiclient. Secret seed can be used to
+// create client/wallet with the same key pair and should be kept secret and
+// safe.
+func (m *MultiClient) Seed() []byte {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.defaultClient.Seed()
+}
+
+// PubKey returns the public key of the multiclient.
+func (m *MultiClient) PubKey() []byte {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.defaultClient.PubKey()
+}
+
+// GetClients returns all clients of the multiclient with client index as key.
+// Subclients index starts from 0, and original client (if created) has index
+// -1.
 func (m *MultiClient) GetClients() map[int]*Client {
-	m.RLock()
-	defer m.RUnlock()
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	clients := make(map[int]*Client, len(m.clients))
 	for i, client := range m.clients {
 		clients[i] = client
@@ -187,18 +225,23 @@ func (m *MultiClient) GetClients() map[int]*Client {
 	return clients
 }
 
+// GetClient returns a client with a given index.
 func (m *MultiClient) GetClient(i int) *Client {
-	m.RLock()
-	defer m.RUnlock()
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	return m.clients[i]
 }
 
+// GetDefaultClient returns the default client, which is the client with
+// smallest index.
 func (m *MultiClient) GetDefaultClient() *Client {
-	m.RLock()
-	defer m.RUnlock()
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	return m.defaultClient
 }
 
+// SendWithClient sends bytes or string data to one or multiple destinations
+// using a specific client with given index.
 func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	client := m.GetClient(clientID)
 	if client == nil {
@@ -227,22 +270,16 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 	return onReply, nil
 }
 
-// SendBinaryWithClient is a wrapper of SendWithClient for gomobile compatibility
+// SendBinaryWithClient is a wrapper of SendWithClient without interface type
+// for gomobile compatibility.
 func (m *MultiClient) SendBinaryWithClient(clientID int, dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return m.SendWithClient(clientID, dests, data, config)
 }
 
-// SendTextWithClient is a wrapper of SendWithClient for gomobile compatibility
+// SendTextWithClient is a wrapper of SendWithClient without interface type for
+// gomobile compatibility.
 func (m *MultiClient) SendTextWithClient(clientID int, dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return m.SendWithClient(clientID, dests, data, config)
-}
-
-func addMultiClientPrefix(dest []string, clientID int) []string {
-	result := make([]string, len(dest))
-	for i, addr := range dest {
-		result[i] = addIdentifier(addr, clientID)
-	}
-	return result
 }
 
 func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
@@ -253,6 +290,9 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 	return client.send(addMultiClientPrefix(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
+// Send sends bytes or string data to one or multiple destinations with an
+// optional config. Returned OnMessage channel will emit if a reply or ACK for
+// this message is received.
 func (m *MultiClient) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(m.config.MessageConfig, config)
 	if err != nil {
@@ -319,12 +359,14 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	}
 }
 
-// SendBinary is a wrapper of Send for gomobile compatibility
+// SendBinary is a wrapper of Send without interface type for gomobile
+// compatibility.
 func (m *MultiClient) SendBinary(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return m.Send(dests, data, config)
 }
 
-// SendText is a wrapper of Send for gomobile compatibility
+// SendText is a wrapper of Send without interface type for gomobile
+// compatibility.
 func (m *MultiClient) SendText(dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return m.Send(dests, data, config)
 }
@@ -366,16 +408,20 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	}
 }
 
+// Publish sends bytes or string data to all subscribers of a topic with an
+// optional config.
 func (m *MultiClient) Publish(topic string, data interface{}, config *MessageConfig) error {
 	return publish(m, topic, data, config)
 }
 
-// PublishBinary is a wrapper of Publish for gomobile compatibility
+// PublishBinary is a wrapper of Publish without interface type for gomobile
+// compatibility.
 func (m *MultiClient) PublishBinary(topic string, data []byte, config *MessageConfig) error {
 	return m.Publish(topic, data, config)
 }
 
-// PublishText is a wrapper of Publish for gomobile compatibility
+// PublishText is a wrapper of Publish without interface type for gomobile
+// compatibility.
 func (m *MultiClient) PublishText(topic string, data string, config *MessageConfig) error {
 	return m.Publish(topic, data, config)
 }
@@ -452,14 +498,31 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 	return nil
 }
 
+// Address returns the NKN client address of the multiclient. Client address is
+// in the form of
+//   identifier.pubKeyHex
+// if identifier is not an empty string, or
+//   pubKeyHex
+// if identifier is an empty string.
+//
+// Note that client address is different from wallet address using the same key
+// pair (account). Wallet address can be computed from client address, but NOT
+// vice versa.
 func (m *MultiClient) Address() string {
 	return m.addr.String()
 }
 
+// Addr returns the NKN client address of the multiclient as net.Addr interface,
+// with Network() returns "nkn" and String() returns the same value as
+// multiclient.Address().
 func (m *MultiClient) Addr() net.Addr {
 	return m.addr
 }
 
+// Listen will make multiclient start accepting sessions from address that
+// matches any of the given regular expressions. If addrsRe is nil, any address
+// will be accepted. Each function call will overwrite previous listening
+// addresses.
 func (m *MultiClient) Listen(addrsRe *StringArray) error {
 	var addrs []string
 	if addrsRe == nil {
@@ -477,21 +540,27 @@ func (m *MultiClient) Listen(addrsRe *StringArray) error {
 		}
 	}
 
-	m.Lock()
+	m.lock.Lock()
 	m.acceptAddrs = acceptAddrs
-	m.Unlock()
+	m.lock.Unlock()
 
 	return nil
 }
 
+// Dial is the same as DialSession, but return type is net.Conn interface.
 func (m *MultiClient) Dial(remoteAddr string) (net.Conn, error) {
 	return m.DialSession(remoteAddr)
 }
 
+// DialSession dials a session to a remote client address using this
+// multiclient's dial config.
 func (m *MultiClient) DialSession(remoteAddr string) (*ncp.Session, error) {
 	return m.DialWithConfig(remoteAddr, nil)
 }
 
+// DialWithConfig dials a session with a dial config. For any zero value field
+// in config, this default dial config value of this multiclient will be used.
+// If config is nil, the default dial config of this multiclient will be used.
 func (m *MultiClient) DialWithConfig(remoteAddr string, config *DialConfig) (*ncp.Session, error) {
 	config, err := MergeDialConfig(m.config.SessionConfig, config)
 	if err != nil {
@@ -527,6 +596,9 @@ func (m *MultiClient) DialWithConfig(remoteAddr string, config *DialConfig) (*nc
 	return session, nil
 }
 
+// AcceptSession will wait and return the first incoming session from allowed
+// remote addresses. If multiclient is closed, it will return immediately with
+// ErrClosed.
 func (m *MultiClient) AcceptSession() (*ncp.Session, error) {
 	for {
 		select {
@@ -543,13 +615,18 @@ func (m *MultiClient) AcceptSession() (*ncp.Session, error) {
 	}
 }
 
+// Accept is the same as AcceptSession, but the return type is net.Conn
+// interface.
 func (m *MultiClient) Accept() (net.Conn, error) {
 	return m.AcceptSession()
 }
 
+// Close closes the multiclient, including all clients it created and all
+// sessions dialed and accepted. Calling close multiple times is allowed and
+// will not have any effect.
 func (m *MultiClient) Close() error {
-	m.Lock()
-	defer m.Unlock()
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
 	if m.isClosed {
 		return nil
@@ -578,14 +655,23 @@ func (m *MultiClient) Close() error {
 	return nil
 }
 
+// IsClosed returns whether this multiclient is closed.
 func (m *MultiClient) IsClosed() bool {
-	m.RLock()
-	defer m.RUnlock()
+	m.lock.RLock()
+	defer m.lock.RUnlock()
 	return m.isClosed
 }
 
 func (m *MultiClient) getConfig() *ClientConfig {
 	return m.config
+}
+
+func addMultiClientPrefix(dest []string, clientID int) []string {
+	result := make([]string, len(dest))
+	for i, addr := range dest {
+		result[i] = addIdentifier(addr, clientID)
+	}
+	return result
 }
 
 func addIdentifier(addr string, id int) string {
