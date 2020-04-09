@@ -18,17 +18,6 @@ import (
 	"github.com/nknorg/nkn/vault"
 )
 
-type errWithCode struct {
-	err  error
-	code int32
-}
-
-type queuedTx struct {
-	tx     *transaction.Transaction
-	txHash chan string
-	err    chan *errWithCode
-}
-
 // Wallet manages assets, query state from blockchain, and send transactions to
 // blockchain.
 type Wallet struct {
@@ -40,7 +29,6 @@ type Wallet struct {
 	masterKeyEncrypted []byte
 	passwordHash       []byte
 	contractData       []byte
-	txChannel          chan *queuedTx
 }
 
 // NewWallet creates a wallet from an account and an optional config. For any
@@ -94,21 +82,6 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 		return nil, err
 	}
 
-	txChannel := make(chan *queuedTx)
-	go func() {
-		for {
-			queuedTx := <-txChannel
-			tx := queuedTx.tx
-			var txHash string
-			code, err := call(config.GetRandomSeedRPCServerAddr(), "sendrawtransaction", map[string]interface{}{"tx": common.BytesToHexString(tx.ToArray())}, &txHash)
-			if err != nil {
-				queuedTx.err <- &errWithCode{err, code}
-			} else {
-				queuedTx.txHash <- txHash
-			}
-		}
-	}()
-
 	wallet := &Wallet{
 		config:             config,
 		account:            account,
@@ -118,7 +91,6 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 		masterKeyEncrypted: masterKeyEncrypted,
 		passwordHash:       passwordHash[:],
 		contractData:       contract.ToArray(),
-		txChannel:          txChannel,
 	}
 
 	return wallet, nil
@@ -251,54 +223,24 @@ func (w *Wallet) signTransaction(tx *transaction.Transaction) error {
 	return nil
 }
 
-func (w *Wallet) sendRawTransaction(tx *transaction.Transaction) (string, int32, error) {
-	txHashChan := make(chan string)
-	errChan := make(chan *errWithCode)
-	w.txChannel <- &queuedTx{tx, txHashChan, errChan}
-	select {
-	case txHash := <-txHashChan:
-		return txHash, 0, nil
-	case err := <-errChan:
-		return "", err.code, err.err
-	}
-}
-
 // SendRawTransaction sends a signed transaction to blockchain and returns
 // the hex string of transaction hash.
-func (w *Wallet) SendRawTransaction(tx *transaction.Transaction) (string, error) {
-	txHash, _, err := w.sendRawTransaction(tx)
-	return txHash, err
+func (w *Wallet) SendRawTransaction(txn *transaction.Transaction) (string, error) {
+	return SendRawTransaction(txn, w.config)
 }
 
-// GetNonce returns the next nonce of this wallet to use.
+// GetNonce returns the next nonce of this wallet to use. If txPool is false,
+// result only counts transactions in ledger; if txPool is true, transactions in
+// txPool are also counted.
 //
 // Nonce is changed to signed int for gomobile compatibility.
-func (w *Wallet) GetNonce() (int64, error) {
-	nonce, err := w.getNonce()
-	return int64(nonce), err
+func (w *Wallet) GetNonce(txPool bool) (int64, error) {
+	return GetNonce(w.address, txPool, w.config)
 }
 
-func (w *Wallet) getNonce() (uint64, error) {
-	var nonce nonce
-	_, err := call(w.config.GetRandomSeedRPCServerAddr(), "getnoncebyaddr", map[string]interface{}{"address": w.address}, &nonce)
-	if err != nil {
-		return 0, err
-	}
-
-	if nonce.NonceInTxPool > nonce.Nonce {
-		return nonce.NonceInTxPool, nil
-	}
-	return nonce.Nonce, nil
-}
-
-func (w *Wallet) getHeight() (uint32, error) {
-	var height uint32
-	_, err := call(w.config.GetRandomSeedRPCServerAddr(), "getlatestblockheight", map[string]interface{}{}, &height)
-	if err != nil {
-		return 0, err
-	}
-
-	return height, nil
+// GetHeight returns the latest block height.
+func (w *Wallet) GetHeight() (int32, error) {
+	return GetHeight(w.config)
 }
 
 // Balance returns the balance of this wallet.
@@ -308,13 +250,7 @@ func (w *Wallet) Balance() (*Amount, error) {
 
 // BalanceByAddress returns the balance of a wallet address.
 func (w *Wallet) BalanceByAddress(address string) (*Amount, error) {
-	var balance balance
-	_, err := call(w.config.GetRandomSeedRPCServerAddr(), "getbalancebyaddr", map[string]interface{}{"address": address}, &balance)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewAmount(balance.Amount)
+	return GetBalance(address, w.config)
 }
 
 // Transfer sends asset to a wallet address with a transaction fee. Both amount
@@ -336,12 +272,12 @@ func (w *Wallet) Transfer(address, amount, fee string) (string, error) {
 		return "", err
 	}
 
-	nonce, err := w.getNonce()
+	nonce, err := w.GetNonce(true)
 	if err != nil {
 		return "", err
 	}
 
-	tx, err := transaction.NewTransferAssetTransaction(w.account.ProgramHash, programHash, nonce, amountFixed64, _fee)
+	tx, err := transaction.NewTransferAssetTransaction(w.account.ProgramHash, programHash, uint64(nonce), amountFixed64, _fee)
 	if err != nil {
 		return "", err
 	}
@@ -350,8 +286,7 @@ func (w *Wallet) Transfer(address, amount, fee string) (string, error) {
 		return "", err
 	}
 
-	id, _, err := w.sendRawTransaction(tx)
-	return id, err
+	return w.SendRawTransaction(tx)
 }
 
 // NewNanoPay is a shortcut for NewNanoPay using this wallet as sender.
@@ -364,7 +299,10 @@ func (w *Wallet) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPa
 // NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this wallet's RPC
 // server address.
 func (w *Wallet) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
-	return NewNanoPayClaimer(w, recipientAddress, claimIntervalMs, onError)
+	if len(recipientAddress) == 0 {
+		recipientAddress = w.Address()
+	}
+	return NewNanoPayClaimer(recipientAddress, claimIntervalMs, onError, w.config)
 }
 
 // RegisterName registers a name for this wallet's public key at the cost of 10
@@ -378,12 +316,12 @@ func (w *Wallet) RegisterName(name, fee string) (string, error) {
 		return "", err
 	}
 
-	nonce, err := w.getNonce()
+	nonce, err := w.GetNonce(true)
 	if err != nil {
 		return "", err
 	}
 
-	tx, err := transaction.NewRegisterNameTransaction(w.PubKey(), name, nonce, config.MinNameRegistrationFee, _fee)
+	tx, err := transaction.NewRegisterNameTransaction(w.PubKey(), name, uint64(nonce), config.MinNameRegistrationFee, _fee)
 	if err != nil {
 		return "", err
 	}
@@ -392,8 +330,7 @@ func (w *Wallet) RegisterName(name, fee string) (string, error) {
 		return "", err
 	}
 
-	id, _, err := w.sendRawTransaction(tx)
-	return id, err
+	return w.SendRawTransaction(tx)
 }
 
 // TransferName transfers a name owned by this wallet to another public key with
@@ -404,12 +341,12 @@ func (w *Wallet) TransferName(name string, recipientPubKey []byte, fee string) (
 		return "", err
 	}
 
-	nonce, err := w.getNonce()
+	nonce, err := w.GetNonce(true)
 	if err != nil {
 		return "", err
 	}
 
-	tx, err := transaction.NewTransferNameTransaction(w.PubKey(), recipientPubKey, name, nonce, _fee)
+	tx, err := transaction.NewTransferNameTransaction(w.PubKey(), recipientPubKey, name, uint64(nonce), _fee)
 	if err != nil {
 		return "", err
 	}
@@ -418,8 +355,7 @@ func (w *Wallet) TransferName(name string, recipientPubKey []byte, fee string) (
 		return "", err
 	}
 
-	id, _, err := w.sendRawTransaction(tx)
-	return id, err
+	return w.SendRawTransaction(tx)
 }
 
 // DeleteName deletes a name owned by this wallet with a given transaction fee.
@@ -429,12 +365,12 @@ func (w *Wallet) DeleteName(name, fee string) (string, error) {
 		return "", err
 	}
 
-	nonce, err := w.getNonce()
+	nonce, err := w.GetNonce(true)
 	if err != nil {
 		return "", err
 	}
 
-	tx, err := transaction.NewDeleteNameTransaction(w.PubKey(), name, nonce, _fee)
+	tx, err := transaction.NewDeleteNameTransaction(w.PubKey(), name, uint64(nonce), _fee)
 	if err != nil {
 		return "", err
 	}
@@ -443,8 +379,7 @@ func (w *Wallet) DeleteName(name, fee string) (string, error) {
 		return "", err
 	}
 
-	id, _, err := w.sendRawTransaction(tx)
-	return id, err
+	return w.SendRawTransaction(tx)
 }
 
 // Subscribe to a topic with an identifier for a number of blocks. Client using
@@ -459,7 +394,7 @@ func (w *Wallet) Subscribe(identifier, topic string, duration int, meta, fee str
 	if err != nil {
 		return "", err
 	}
-	nonce, err := w.getNonce()
+	nonce, err := w.GetNonce(true)
 	if err != nil {
 		return "", err
 	}
@@ -469,7 +404,7 @@ func (w *Wallet) Subscribe(identifier, topic string, duration int, meta, fee str
 		topic,
 		uint32(duration),
 		meta,
-		nonce,
+		uint64(nonce),
 		_fee,
 	)
 	if err != nil {
@@ -480,8 +415,7 @@ func (w *Wallet) Subscribe(identifier, topic string, duration int, meta, fee str
 		return "", err
 	}
 
-	id, _, err := w.sendRawTransaction(tx)
-	return id, err
+	return w.SendRawTransaction(tx)
 }
 
 // Unsubscribe from a topic for an identifier. Client using the same key pair
@@ -491,7 +425,7 @@ func (w *Wallet) Unsubscribe(identifier string, topic string, fee string) (strin
 	if err != nil {
 		return "", err
 	}
-	nonce, err := w.getNonce()
+	nonce, err := w.GetNonce(true)
 	if err != nil {
 		return "", err
 	}
@@ -499,7 +433,7 @@ func (w *Wallet) Unsubscribe(identifier string, topic string, fee string) (strin
 		w.PubKey(),
 		identifier,
 		topic,
-		nonce,
+		uint64(nonce),
 		_fee,
 	)
 	if err != nil {
@@ -510,88 +444,5 @@ func (w *Wallet) Unsubscribe(identifier string, topic string, fee string) (strin
 		return "", err
 	}
 
-	id, _, err := w.sendRawTransaction(tx)
-	return id, err
-}
-
-// GetSubscription gets the subscription details of a subscriber in a topic.
-func (w *Wallet) GetSubscription(topic string, subscriber string) (*Subscription, error) {
-	var subscription *Subscription
-	_, err := call(w.config.GetRandomSeedRPCServerAddr(), "getsubscription", map[string]interface{}{
-		"topic":      topic,
-		"subscriber": subscriber,
-	}, &subscription)
-	if err != nil {
-		return nil, err
-	}
-	return subscription, nil
-}
-
-// Offset and limit are changed to signed int for gomobile compatibility
-func getSubscribers(address string, topic string, offset, limit int, meta, txPool bool) (map[string]string, map[string]string, error) {
-	var result map[string]interface{}
-	_, err := call(address, "getsubscribers", map[string]interface{}{
-		"topic":  topic,
-		"offset": offset,
-		"limit":  limit,
-		"meta":   meta,
-		"txPool": txPool,
-	}, &result)
-	if err != nil {
-		return nil, nil, err
-	}
-	subscribers := make(map[string]string)
-	subscribersInTxPool := make(map[string]string)
-	if meta {
-		for subscriber, meta := range result["subscribers"].(map[string]interface{}) {
-			subscribers[subscriber] = meta.(string)
-		}
-		if txPool {
-			for subscriber, meta := range result["subscribersInTxPool"].(map[string]interface{}) {
-				subscribersInTxPool[subscriber] = meta.(string)
-			}
-		}
-	} else {
-		for _, subscriber := range result["subscribers"].([]interface{}) {
-			subscribers[subscriber.(string)] = ""
-		}
-		if txPool {
-			for _, subscriber := range result["subscribersInTxPool"].([]interface{}) {
-				subscribersInTxPool[subscriber.(string)] = ""
-			}
-		}
-	}
-	return subscribers, subscribersInTxPool, nil
-}
-
-// GetSubscribers gets the subscribers of a topic with a offset and max number
-// of results (limit). If meta is true, results contain each subscriber's
-// metadata. If txPool is true, results contain subscribers in txPool. Enabling
-// this will get subscribers sooner after they send subscribe transactions, but
-// might affect the correctness of subscribers because transactions in txpool is
-// not guaranteed to be packed into a block.
-//
-// Offset and limit are changed to signed int for gomobile compatibility
-func (w *Wallet) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
-	subscribers, subscribersInTxPool, err := getSubscribers(w.config.GetRandomSeedRPCServerAddr(), topic, offset, limit, meta, txPool)
-	if err != nil {
-		return nil, err
-	}
-	s := &Subscribers{
-		Subscribers:         NewStringMap(subscribers),
-		SubscribersInTxPool: NewStringMap(subscribersInTxPool),
-	}
-	return s, nil
-}
-
-// GetSubscribersCount returns the number of subscribers of a topic (not
-// including txPool).
-//
-// Count is changed to signed int for gomobile compatibility
-func (w *Wallet) GetSubscribersCount(topic string) (int, error) {
-	var count int
-	_, err := call(w.config.GetRandomSeedRPCServerAddr(), "getsubscriberscount", map[string]interface{}{
-		"topic": topic,
-	}, &count)
-	return count, err
+	return w.SendRawTransaction(tx)
 }

@@ -129,6 +129,27 @@ fmt.Println("Receive message from", msg.Src + ":", string(msg.Payload))
 msg.Reply([]byte("response"))
 ```
 
+Get 100 subscribers of specified topic starting from 0 offset, including those
+in tx pool (fetch meta):
+
+```go
+subscribers, err := client.GetSubscribers("topic", 0, 100, true, true)
+fmt.Println(subscribers.Subscribers, subscribers.SubscribersInTxPool)
+```
+
+Get subscribers count for specified topic:
+
+```go
+count, err := client.GetSubscribersCount("topic")
+```
+
+Get subscription:
+
+```go
+subscription, err := client.GetSubscription("topic", "identifier.publickey")
+fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
+```
+
 ## Multiclient
 
 Multiclient creates multiple client instances by adding identifier prefix
@@ -213,7 +234,7 @@ Create wallet SDK:
 
 ```go
 account, err := NewAccount(nil)
-w, err := NewWallet(account, &nkn.WalletConfig{Password: "password"})
+wallet, err := NewWallet(account, &nkn.WalletConfig{Password: "password"})
 ```
 
 By default the wallet will use RPC server provided by `nkn.org`. Any NKN full
@@ -224,14 +245,14 @@ conf := &WalletConfig{
   Password: "password",
   SeedRPCServerAddr: NewStringArray("https://ip:port", "https://ip:port", ...),
 }
-w, err := NewWallet(account, conf)
+wallet, err := NewWallet(account, conf)
 ```
 
 Export wallet to JSON string, where sensitive contents are encrypted by password
 provided in config:
 
 ```go
-walletJSON, err := w.ToJSON()
+walletJSON, err := wallet.ToJSON()
 ```
 
 Load wallet from JSON string, note that the password needs to be the same as the
@@ -244,19 +265,19 @@ walletFromJSON, err := nkn.WalletFromJSON(walletJSON, &nkn.WalletConfig{Password
 Verify whether an address is a valid NKN wallet address:
 
 ```go
-err := nkn.VerifyWalletAddress(w.Address())
+err := nkn.VerifyWalletAddress(wallet.Address())
 ```
 
 Verify password of the wallet:
 
 ```go
-ok := w.VerifyPassword("password")
+ok := wallet.VerifyPassword("password")
 ```
 
 Query asset balance for this wallet:
 
 ```go
-balance, err := w.Balance()
+balance, err := wallet.Balance()
 if err == nil {
     log.Println("asset balance:", balance.String())
 } else {
@@ -267,13 +288,13 @@ if err == nil {
 Query asset balance for address:
 
 ```go
-balance, err := w.BalanceByAddress("NKNxxxxx")
+balance, err := wallet.BalanceByAddress("NKNxxxxx")
 ```
 
 Transfer asset to some address:
 
 ```go
-txnHash, err := w.Transfer(account.WalletAddress(), "100", "0")
+txnHash, err := wallet.Transfer(account.WalletAddress(), "100", "0")
 ```
 
 Open nano pay channel to specified address:
@@ -282,7 +303,7 @@ Open nano pay channel to specified address:
 // you can pass channel duration (in unit of blocks) after address and txn fee
 // after expired new channel (with new id) will be created under-the-hood
 // this means that receiver need to claim old channel and reset amount calculation
-np, err := w.NewNanoPay(address, "0", 4320)
+np, err := wallet.NewNanoPay(address, "0", 4320)
 ```
 
 Increment channel balance by 100 NKN:
@@ -295,51 +316,31 @@ Then you can pass the transaction to receiver, who can send transaction to
 on-chain later:
 
 ```go
-txnHash, err := w.SendRawTransaction(txn)
+txnHash, err := wallet.SendRawTransaction(txn)
 ```
 
 Register name for this wallet:
 
 ```go
-txnHash, err = w.RegisterName("somename")
+txnHash, err = wallet.RegisterName("somename")
 ```
 
 Delete name for this wallet:
 
 ```go
-txnHash, err = w.DeleteName("somename")
+txnHash, err = wallet.DeleteName("somename")
 ```
 
 Subscribe to specified topic for this wallet for next 100 blocks:
 
 ```go
-txnHash, err = w.Subscribe("identifier", "topic", 100, "meta", "0")
+txnHash, err = wallet.Subscribe("identifier", "topic", 100, "meta", "0")
 ```
 
 Unsubscribe from specified topic:
 
 ```go
-txnHash, err = w.Unsubscribe("identifier", "topic", "0")
-```
-
-Get subscription:
-
-```go
-subscription, err := w.GetSubscription("topic", "identifier.publickey")
-fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
-```
-
-Get 100 subscribers of specified topic starting from 0 offset, including those in tx pool (fetch meta):
-
-```go
-subscribers, err := w.GetSubscribers("topic", 0, 100, true, true)
-fmt.Println(subscribers.Subscribers, subscribers.SubscribersInTxPool)
-```
-
-Get subscribers count for specified topic:
-
-```go
-count, err := w.GetSubscribersCount("topic")
+txnHash, err = wallet.Unsubscribe("identifier", "topic", "0")
 ```
 
 ## iOS/Android

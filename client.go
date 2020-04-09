@@ -608,8 +608,7 @@ func (c *Client) connect(maxRetries int) error {
 			}
 		}
 
-		var node *Node
-		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getwsaddr", map[string]interface{}{"address": c.Address()}, &node)
+		node, err := GetWsAddr(c.Address(), c.config)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -747,8 +746,7 @@ func (c *Client) processDest(dest string) (string, error) {
 	}
 	addr := strings.Split(dest, ".")
 	if len(addr[len(addr)-1]) < 2*ed25519.PublicKeySize {
-		var reg *registrantInfo
-		_, err := call(c.config.GetRandomSeedRPCServerAddr(), "getregistrant", map[string]interface{}{"name": addr[len(addr)-1]}, &reg)
+		reg, err := GetRegistrant(addr[len(addr)-1], c.config)
 		if err != nil {
 			return "", err
 		}
@@ -998,10 +996,13 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 
 	offset := int(config.Offset)
 	limit := int(config.Limit)
-	subscribers, subscribersInTxPool, err := getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, offset, limit, false, config.TxPool)
+	res, err := GetSubscribers(topic, offset, limit, false, config.TxPool, c.getConfig())
 	if err != nil {
 		return err
 	}
+
+	subscribers := res.Subscribers.Map
+	subscribersInTxPool := res.SubscribersInTxPool.Map
 
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber := range subscribers {
@@ -1010,11 +1011,11 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 
 	for len(subscribers) >= limit {
 		offset += limit
-		subscribers, _, err = getSubscribers(c.getConfig().GetRandomSeedRPCServerAddr(), topic, offset, limit, false, false)
+		res, err = GetSubscribers(topic, offset, limit, false, false, c.getConfig())
 		if err != nil {
 			return err
 		}
-		for subscriber := range subscribers {
+		for subscriber := range res.Subscribers.Map {
 			dests = append(dests, subscriber)
 		}
 	}
@@ -1058,4 +1059,29 @@ func (c *Client) SetWriteDeadline(deadline time.Time) error {
 
 func (c *Client) getConfig() *ClientConfig {
 	return c.config
+}
+
+// GetSubscribers gets the subscribers of a topic with a offset and max number
+// of results (limit). If meta is true, results contain each subscriber's
+// metadata. If txPool is true, results contain subscribers in txPool. Enabling
+// this will get subscribers sooner after they send subscribe transactions, but
+// might affect the correctness of subscribers because transactions in txpool is
+// not guaranteed to be packed into a block.
+//
+// Offset and limit are changed to signed int for gomobile compatibility
+func (c *Client) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+	return GetSubscribers(topic, offset, limit, meta, txPool, c.config)
+}
+
+// GetSubscription gets the subscription details of a subscriber in a topic.
+func (c *Client) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+	return GetSubscription(topic, subscriber, c.config)
+}
+
+// GetSubscribersCount returns the number of subscribers of a topic (not
+// including txPool).
+//
+// Count is changed to signed int for gomobile compatibility
+func (c *Client) GetSubscribersCount(topic string) (int, error) {
+	return GetSubscribersCount(topic, c.config)
 }
