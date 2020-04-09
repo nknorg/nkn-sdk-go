@@ -45,9 +45,9 @@ type NanoPay struct {
 // NanoPayClaimer accepts NanoPay updates and send the latest state to
 // blockchain periodically.
 type NanoPayClaimer struct {
-	w                    *Wallet
 	recipientAddress     string
 	recipientProgramHash common.Uint160
+	rpcConfig            RPCConfigInterface
 
 	lock              sync.Mutex
 	amount            common.Fixed64
@@ -92,15 +92,15 @@ func (np *NanoPay) Recipient() string {
 // NanoPay transaction. Delta is the string representation of the amount in unit
 // of NKN to avoid precision loss. For example, "0.1" will be parsed as 0.1 NKN.
 func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, error) {
-	height, err := np.senderWallet.getHeight()
+	height, err := np.senderWallet.GetHeight()
 	if err != nil {
 		return nil, err
 	}
 
 	np.lock.Lock()
-	if np.expiration == 0 || np.expiration <= height+senderExpirationDelta {
+	if np.expiration == 0 || np.expiration <= uint32(height)+senderExpirationDelta {
 		np.id = randUint64()
-		np.expiration = height + np.duration
+		np.expiration = uint32(height) + np.duration
 		np.amount = 0
 	}
 
@@ -130,27 +130,19 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	return tx, nil
 }
 
-// NewNanoPayClaimer creates a NanoPayClaimer with a given wallet, recipient
-// wallet address, claim interval in millisecond, and onError channel. If
-// recipient address is empty, wallet's address will be used as recipient
-// address.
-func NewNanoPayClaimer(w *Wallet, recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
-	var receiver common.Uint160
-	var err error
-	if len(recipientAddress) > 0 {
-		receiver, err = common.ToScriptHash(recipientAddress)
-	} else {
-		receiver = w.account.ProgramHash
-		recipientAddress, err = receiver.ToAddress()
-	}
+// NewNanoPayClaimer creates a NanoPayClaimer with a given recipient wallet
+// address, claim interval in millisecond, onError channel, and an optional
+// rpcConfig that is used for making RPC requests.
+func NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError, rpcConfig RPCConfigInterface) (*NanoPayClaimer, error) {
+	receiver, err := common.ToScriptHash(recipientAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	npc := &NanoPayClaimer{
-		w:                    w,
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: receiver,
+		rpcConfig:            rpcConfig,
 	}
 
 	go func() {
@@ -173,16 +165,16 @@ func NewNanoPayClaimer(w *Wallet, recipientAddress string, claimIntervalMs int32
 
 			now := time.Now()
 			if now.Before(npc.lastClaimTime.Add(time.Duration(claimIntervalMs) * time.Millisecond)) {
-				height, err := npc.w.getHeight()
+				height, err := GetHeight(npc.rpcConfig)
 				if err != nil {
 					onError.receive(err)
 					continue
 				}
 
-				if expiration > height+forceFlushDelta {
+				if expiration > uint32(height)+forceFlushDelta {
 					sleepDuration := lastClaimTime.Add(time.Duration(claimIntervalMs) * time.Millisecond).Sub(now)
-					if sleepDuration > time.Duration(expiration-height-forceFlushDelta)*config.ConsensusDuration {
-						sleepDuration = time.Duration(expiration-height-forceFlushDelta) * config.ConsensusDuration
+					if sleepDuration > time.Duration(expiration-uint32(height)-forceFlushDelta)*config.ConsensusDuration {
+						sleepDuration = time.Duration(expiration-uint32(height)-forceFlushDelta) * config.ConsensusDuration
 					}
 					time.Sleep(sleepDuration)
 					continue
@@ -240,7 +232,7 @@ func (npc *NanoPayClaimer) flush() error {
 		return nil
 	}
 
-	_, _, err := npc.w.sendRawTransaction(npc.tx)
+	_, err := SendRawTransaction(npc.tx, npc.rpcConfig)
 	if err != nil {
 		return err
 	}
@@ -273,7 +265,7 @@ func (npc *NanoPayClaimer) Amount() *Amount {
 // new NanoPay, and previous NanoPay state will be flushed and sent to chain
 // before accepting new one.
 func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
-	height, err := npc.w.getHeight()
+	height, err := GetHeight(npc.rpcConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +303,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 		return nil, npc.closeWithError(err)
 	}
 
-	senderBalance, err := npc.w.BalanceByAddress(senderAddress)
+	senderBalance, err := GetBalance(senderAddress, npc.rpcConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -344,11 +336,11 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 		}
 	}
 
-	if npPayload.TxnExpiration <= height+receiverExpirationDelta {
+	if npPayload.TxnExpiration <= uint32(height)+receiverExpirationDelta {
 		return nil, npc.closeWithError(errors.New("nano pay tx expired"))
 	}
 
-	if npPayload.NanoPayExpiration <= height+receiverExpirationDelta {
+	if npPayload.NanoPayExpiration <= uint32(height)+receiverExpirationDelta {
 		return nil, npc.closeWithError(errors.New("nano pay expired"))
 	}
 

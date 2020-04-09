@@ -180,6 +180,24 @@ func GetDefaultWalletConfig() *WalletConfig {
 	return &walletConf
 }
 
+// RPCConfig is the rpc call configuration.
+type RPCConfig struct {
+	SeedRPCServerAddr *StringArray
+}
+
+// DefaultRPCConfig is the default rpc configuration.
+var DefaultRPCConfig = RPCConfig{
+	SeedRPCServerAddr: nil,
+}
+
+// GetDefaultRPCConfig returns the default rpc config with nil pointer fields
+// set to default.
+func GetDefaultRPCConfig() *RPCConfig {
+	rpcConf := DefaultRPCConfig
+	rpcConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	return &rpcConf
+}
+
 // GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
 // client config.
 func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
@@ -192,6 +210,15 @@ func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
 // GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
 // wallet config.
 func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
+	if len(config.SeedRPCServerAddr.Elems) == 0 {
+		return ""
+	}
+	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
+}
+
+// GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
+// rpc config.
+func (config *RPCConfig) GetRandomSeedRPCServerAddr() string {
 	if len(config.SeedRPCServerAddr.Elems) == 0 {
 		return ""
 	}
