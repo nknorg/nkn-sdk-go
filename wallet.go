@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
 
 	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/crypto"
@@ -106,7 +104,7 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 	}
 
 	if walletData.Version < vault.MinCompatibleWalletVersion || walletData.Version > vault.MaxCompatibleWalletVersion {
-		return nil, fmt.Errorf("invalid wallet version %v, should be between %v and %v", walletData.Version, vault.MinCompatibleWalletVersion, vault.MaxCompatibleWalletVersion)
+		return nil, ErrInvalidWalletVersion
 	}
 
 	if config == nil {
@@ -120,7 +118,7 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 	}
 	pkh := sha256.Sum256(passwordKey)
 	if !bytes.Equal(pkh[:], passwordKeyHash) {
-		return nil, errors.New("password wrong")
+		return nil, ErrWrongPassword
 	}
 
 	iv, err := hex.DecodeString(walletData.IV)

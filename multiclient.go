@@ -2,8 +2,6 @@ package nkn
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log"
 	"net"
 	"regexp"
@@ -13,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	multierror "github.com/hashicorp/go-multierror"
 	ncp "github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/util/address"
@@ -37,7 +36,6 @@ const (
 
 var (
 	multiClientIdentifierRe = regexp.MustCompile(MultiClientIdentifierRe)
-	errAddrNotAllowed       = errors.New("address not allowed")
 )
 
 // MultiClient sends and receives data using multiple NKN clients concurrently
@@ -142,7 +140,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 						}
 						err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.MessageID, msg.Data)
 						if err != nil {
-							if err != ncp.ErrSessionClosed && err != errAddrNotAllowed {
+							if err != ncp.ErrSessionClosed && err != ErrAddrNotAllowed {
 								log.Println(err)
 							}
 							continue
@@ -192,7 +190,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 	case <-success:
 		return m, nil
 	case <-fail:
-		return nil, errors.New("failed to create any client")
+		return nil, ErrCreateClientFailed
 	}
 }
 
@@ -245,7 +243,7 @@ func (m *MultiClient) GetDefaultClient() *Client {
 func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	client := m.GetClient(clientID)
 	if client == nil {
-		return nil, fmt.Errorf("client %d is not created or not ready", clientID)
+		return nil, ErrNilClient
 	}
 
 	config, err := MergeMessageConfig(m.config.MessageConfig, config)
@@ -285,7 +283,7 @@ func (m *MultiClient) SendTextWithClient(clientID int, dests *StringArray, data 
 func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	client := m.GetClient(clientID)
 	if client == nil {
-		return fmt.Errorf("client %d is not created or not ready", clientID)
+		return ErrNilClient
 	}
 	return client.send(addMultiClientPrefix(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
@@ -305,7 +303,7 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	}
 
 	var lock sync.Mutex
-	var errMsg []string
+	var errs error
 	var onRawReply *OnMessage
 	onReply := NewOnMessage(1, nil)
 	clients := m.GetClients()
@@ -333,7 +331,7 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 				sent++
 			} else {
 				lock.Lock()
-				errMsg = append(errMsg, err.Error())
+				errs = multierror.Append(errs, err)
 				lock.Unlock()
 			}
 		}
@@ -355,7 +353,7 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	case <-success:
 		return onReply, nil
 	case <-fail:
-		return nil, errors.New(strings.Join(errMsg, "; "))
+		return nil, errs
 	}
 }
 
@@ -373,7 +371,7 @@ func (m *MultiClient) SendText(dests *StringArray, data string, config *MessageC
 
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	var lock sync.Mutex
-	var errMsg []string
+	var errs error
 	success := make(chan struct{}, 1)
 	fail := make(chan struct{}, 1)
 	go func() {
@@ -388,7 +386,7 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 				sent++
 			} else {
 				lock.Lock()
-				errMsg = append(errMsg, err.Error())
+				errs = multierror.Append(errs, err)
 				lock.Unlock()
 			}
 		}
@@ -404,7 +402,7 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	case <-success:
 		return nil
 	case <-fail:
-		return errors.New(strings.Join(errMsg, "; "))
+		return errs
 	}
 }
 
@@ -470,7 +468,7 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 	if !ok {
 		if !m.shouldAcceptAddr(remoteAddr) {
 			m.sessionLock.Unlock()
-			return errAddrNotAllowed
+			return ErrAddrNotAllowed
 		}
 
 		session, err = m.newSession(remoteAddr, sessionID, m.config.SessionConfig)

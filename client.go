@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/url"
 	"strings"
@@ -193,14 +192,14 @@ func (c *Client) getOrComputeSharedKey(remotePublicKey []byte) (*[sharedKeySize]
 	}
 
 	if len(remotePublicKey) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("public key length is %d, expecting %d", len(remotePublicKey), ed25519.PublicKeySize)
+		return nil, ErrInvalidPubkeySize
 	}
 
 	var pk [ed25519.PublicKeySize]byte
 	copy(pk[:], remotePublicKey)
 	curve25519PublicKey, ok := ed25519.PublicKeyToCurve25519PublicKey(&pk)
 	if !ok {
-		return nil, fmt.Errorf("converting public key %x to curve25519 public key failed", remotePublicKey)
+		return nil, ErrInvalidPubkey
 	}
 
 	sharedKey = new([sharedKeySize]byte)
@@ -373,7 +372,10 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			} else if action == setClientAction {
 				c.Close()
 			}
-			return errors.New(common.ErrMessage[errCode])
+			return errorWithCode{
+				err:  errors.New(common.ErrMessage[errCode]),
+				code: int32(errCode),
+			}
 		}
 		switch action {
 		case setClientAction:
@@ -623,7 +625,7 @@ func (c *Client) connect(maxRetries int) error {
 		return nil
 	}
 
-	return errors.New("max retry reached, connect failed")
+	return ErrConnectFailed
 }
 
 func (c *Client) reconnect() {
@@ -742,7 +744,7 @@ func (c *Client) SendText(dests *StringArray, data string, config *MessageConfig
 
 func (c *Client) processDest(dest string) (string, error) {
 	if len(dest) == 0 {
-		return "", errors.New("destination is empty")
+		return "", ErrNoDestination
 	}
 	addr := strings.Split(dest, ".")
 	if len(addr[len(addr)-1]) < 2*ed25519.PublicKeySize {
@@ -751,7 +753,7 @@ func (c *Client) processDest(dest string) (string, error) {
 			return "", err
 		}
 		if len(reg.Registrant) == 0 {
-			return "", fmt.Errorf("%s is neither a valid public key nor a registered nam", addr[len(addr)-1])
+			return "", ErrInvalidPubkeyOrName
 		}
 		addr[len(addr)-1] = reg.Registrant
 	}
@@ -769,7 +771,7 @@ func (c *Client) processDests(dests []string) ([]string, error) {
 		processedDests = append(processedDests, processedDest)
 	}
 	if len(processedDests) == 0 {
-		return nil, errors.New("all destinations are invalid")
+		return nil, ErrInvalidDestination
 	}
 	return processedDests, nil
 }
@@ -921,7 +923,7 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 		for i := range plds {
 			size = len(plds[i]) + len(dests[i]) + ed25519.SignatureSize
 			if size > maxClientMessageSize {
-				return fmt.Errorf("encoded message is greater than %v bytes", maxClientMessageSize)
+				return ErrMessageOversize
 			}
 			if totalSize+size > maxClientMessageSize {
 				outboundMsg, err := c.newOutboundMessage(destList, pldList, encrypted, maxHoldingSeconds)
@@ -943,7 +945,7 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 			size += len(dests[i]) + ed25519.SignatureSize
 		}
 		if size > maxClientMessageSize {
-			return fmt.Errorf("encoded message is greater than %v bytes", maxClientMessageSize)
+			return ErrMessageOversize
 		}
 		destList = dests
 		pldList = plds
@@ -1052,7 +1054,7 @@ func (c *Client) SetWriteDeadline(deadline time.Time) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	if c.conn == nil {
-		return errors.New("nil websocket connection")
+		return ErrNilWebsocketConn
 	}
 	return c.conn.SetWriteDeadline(deadline)
 }
