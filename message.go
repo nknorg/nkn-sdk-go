@@ -2,7 +2,6 @@ package nkn
 
 import (
 	"crypto/rand"
-	"errors"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/nknorg/nkn-sdk-go/payloads"
@@ -64,16 +63,16 @@ func decrypt(message []byte, nonce [nonceSize]byte, sharedKey *[sharedKeySize]by
 	decrypted := make([]byte, len(message)-box.Overhead)
 	_, ok := box.OpenAfterPrecomputation(decrypted[:0], message, &nonce, sharedKey)
 	if !ok {
-		return nil, errors.New("decrypt message failed")
+		return nil, ErrDecryptFailed
 	}
 
 	return decrypted, nil
 }
 
-func newBinaryPayload(data, messageId, replyToId []byte, noReply bool) (*payloads.Payload, error) {
-	if len(messageId) == 0 && len(replyToId) == 0 {
+func newBinaryPayload(data, messageID, replyToID []byte, noReply bool) (*payloads.Payload, error) {
+	if len(messageID) == 0 && len(replyToID) == 0 {
 		var err error
-		messageId, err = RandomBytes(MessageIDSize)
+		messageID, err = RandomBytes(MessageIDSize)
 		if err != nil {
 			return nil, err
 		}
@@ -81,17 +80,17 @@ func newBinaryPayload(data, messageId, replyToId []byte, noReply bool) (*payload
 
 	return &payloads.Payload{
 		Type:      payloads.BINARY,
-		MessageId: messageId,
+		MessageId: messageID,
 		Data:      data,
-		ReplyToId: replyToId,
+		ReplyToId: replyToID,
 		NoReply:   noReply,
 	}, nil
 }
 
-func newTextPayload(text string, messageId, replyToId []byte, noReply bool) (*payloads.Payload, error) {
-	if len(messageId) == 0 && len(replyToId) == 0 {
+func newTextPayload(text string, messageID, replyToID []byte, noReply bool) (*payloads.Payload, error) {
+	if len(messageID) == 0 && len(replyToID) == 0 {
 		var err error
-		messageId, err = RandomBytes(MessageIDSize)
+		messageID, err = RandomBytes(MessageIDSize)
 		if err != nil {
 			return nil, err
 		}
@@ -104,39 +103,39 @@ func newTextPayload(text string, messageId, replyToId []byte, noReply bool) (*pa
 
 	return &payloads.Payload{
 		Type:      payloads.TEXT,
-		MessageId: messageId,
+		MessageId: messageID,
 		Data:      data,
-		ReplyToId: replyToId,
+		ReplyToId: replyToID,
 		NoReply:   noReply,
 	}, nil
 }
 
-func newAckPayload(replyToId []byte) (*payloads.Payload, error) {
+func newAckPayload(replyToID []byte) (*payloads.Payload, error) {
 	return &payloads.Payload{
 		Type:      payloads.ACK,
-		ReplyToId: replyToId,
+		ReplyToId: replyToID,
 	}, nil
 }
 
-func newMessagePayload(data interface{}, messageId []byte, noReply bool) (*payloads.Payload, error) {
+func newMessagePayload(data interface{}, messageID []byte, noReply bool) (*payloads.Payload, error) {
 	switch v := data.(type) {
 	case []byte:
-		return newBinaryPayload(v, messageId, nil, noReply)
+		return newBinaryPayload(v, messageID, nil, noReply)
 	case string:
-		return newTextPayload(v, messageId, nil, noReply)
+		return newTextPayload(v, messageID, nil, noReply)
 	default:
 		return nil, ErrInvalidPayloadType
 	}
 }
 
-func newReplyPayload(data interface{}, replyToId []byte) (*payloads.Payload, error) {
+func newReplyPayload(data interface{}, replyToID []byte) (*payloads.Payload, error) {
 	switch v := data.(type) {
 	case []byte:
-		return newBinaryPayload(v, nil, replyToId, false)
+		return newBinaryPayload(v, nil, replyToID, false)
 	case string:
-		return newTextPayload(v, nil, replyToId, false)
+		return newTextPayload(v, nil, replyToID, false)
 	case nil:
-		return newAckPayload(replyToId)
+		return newAckPayload(replyToID)
 	default:
 		return nil, ErrInvalidPayloadType
 	}

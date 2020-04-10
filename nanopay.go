@@ -1,7 +1,6 @@
 package nkn
 
 import (
-	"errors"
 	"sync"
 	"time"
 
@@ -277,7 +276,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 
 	npPayload, ok := payload.(*pb.NanoPay)
 	if !ok {
-		return nil, npc.closeWithError(errors.New("not nano pay tx"))
+		return nil, npc.closeWithError(ErrNotNanoPay)
 	}
 
 	recipient, err := common.Uint160ParseFromBytes(npPayload.Recipient)
@@ -286,7 +285,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 	}
 
 	if recipient.CompareTo(npc.recipientProgramHash) != 0 {
-		return nil, npc.closeWithError(errors.New("wrong nano pay recipient"))
+		return nil, npc.closeWithError(ErrWrongRecipient)
 	}
 
 	if err := chain.VerifyTransaction(tx, 0); err != nil {
@@ -312,19 +311,19 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 	defer npc.lock.Unlock()
 
 	if npc.closed {
-		return nil, errors.New("attempt to use closed nano pay claimer")
+		return nil, ErrNanoPayClosed
 	}
 
 	if npc.id == nil || *npc.id == npPayload.Id {
 		if senderBalance.ToFixed64() < npc.amount {
-			return nil, npc.closeWithError(errors.New("insufficient sender balance"))
+			return nil, npc.closeWithError(ErrInsufficientBalance)
 		}
 	}
 
 	if npc.id != nil {
 		if *npc.id == npPayload.Id {
 			if npc.amount >= common.Fixed64(npPayload.Amount) {
-				return nil, npc.closeWithError(errors.New("nano pay balance decreased"))
+				return nil, npc.closeWithError(ErrInvalidAmount)
 			}
 		} else {
 			if err := npc.flush(); err != nil {
@@ -337,11 +336,11 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 	}
 
 	if npPayload.TxnExpiration <= uint32(height)+receiverExpirationDelta {
-		return nil, npc.closeWithError(errors.New("nano pay tx expired"))
+		return nil, npc.closeWithError(ErrExpiredNanoPayTxn)
 	}
 
 	if npPayload.NanoPayExpiration <= uint32(height)+receiverExpirationDelta {
-		return nil, npc.closeWithError(errors.New("nano pay expired"))
+		return nil, npc.closeWithError(ErrExpiredNanoPay)
 	}
 
 	npc.tx = tx
