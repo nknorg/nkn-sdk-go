@@ -12,7 +12,6 @@ import (
 	"github.com/nknorg/nkn/program"
 	"github.com/nknorg/nkn/signature"
 	"github.com/nknorg/nkn/transaction"
-	"github.com/nknorg/nkn/util/config"
 	"github.com/nknorg/nkn/vault"
 )
 
@@ -206,7 +205,13 @@ func (w *Wallet) VerifyPassword(password string) bool {
 	return bytes.Equal(passwordHash[:], w.passwordHash)
 }
 
-func (w *Wallet) signTransaction(tx *transaction.Transaction) error {
+// ProgramHash returns the program hash of this wallet's account.
+func (w *Wallet) ProgramHash() common.Uint160 {
+	return w.account.ProgramHash
+}
+
+// SignTransaction signs an unsigned transaction using this wallet's key pair.
+func (w *Wallet) SignTransaction(tx *transaction.Transaction) error {
 	ct, err := program.CreateSignatureProgramContext(w.account.PublicKey)
 	if err != nil {
 		return err
@@ -221,226 +226,113 @@ func (w *Wallet) signTransaction(tx *transaction.Transaction) error {
 	return nil
 }
 
-// SendRawTransaction sends a signed transaction to blockchain and returns
-// the hex string of transaction hash.
-func (w *Wallet) SendRawTransaction(txn *transaction.Transaction) (string, error) {
-	return SendRawTransaction(txn, w.config)
-}
-
-// GetNonce returns the next nonce of this wallet to use. If txPool is false,
-// result only counts transactions in ledger; if txPool is true, transactions in
-// txPool are also counted.
-//
-// Nonce is changed to signed int for gomobile compatibility.
-func (w *Wallet) GetNonce(txPool bool) (int64, error) {
-	return GetNonce(w.address, txPool, w.config)
-}
-
-// GetHeight returns the latest block height.
-func (w *Wallet) GetHeight() (int32, error) {
-	return GetHeight(w.config)
-}
-
-// Balance returns the balance of this wallet.
-func (w *Wallet) Balance() (*Amount, error) {
-	return w.BalanceByAddress(w.address)
-}
-
-// BalanceByAddress returns the balance of a wallet address.
-func (w *Wallet) BalanceByAddress(address string) (*Amount, error) {
-	return GetBalance(address, w.config)
-}
-
-// Transfer sends asset to a wallet address with a transaction fee. Both amount
-// and fee are the string representation of the amount in unit of NKN to avoid
-// precision loss. For example, "0.1" will be parsed as 0.1 NKN.
-func (w *Wallet) Transfer(address, amount, fee string) (string, error) {
-	amountFixed64, err := common.StringToFixed64(amount)
-	if err != nil {
-		return "", err
-	}
-
-	programHash, err := common.ToScriptHash(address)
-	if err != nil {
-		return "", err
-	}
-
-	_fee, err := common.StringToFixed64(fee)
-	if err != nil {
-		return "", err
-	}
-
-	nonce, err := w.GetNonce(true)
-	if err != nil {
-		return "", err
-	}
-
-	tx, err := transaction.NewTransferAssetTransaction(w.account.ProgramHash, programHash, uint64(nonce), amountFixed64, _fee)
-	if err != nil {
-		return "", err
-	}
-
-	if err := w.signTransaction(tx); err != nil {
-		return "", err
-	}
-
-	return w.SendRawTransaction(tx)
-}
-
 // NewNanoPay is a shortcut for NewNanoPay using this wallet as sender.
 //
 // Duration is changed to signed int for gomobile compatibility.
 func (w *Wallet) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPay, error) {
-	return NewNanoPay(w, recipientAddress, fee, duration)
+	return NewNanoPay(w, w, recipientAddress, fee, duration)
 }
 
-// NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this wallet's RPC
-// server address.
+// NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this wallet as
+// RPC client.
 func (w *Wallet) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
 	if len(recipientAddress) == 0 {
 		recipientAddress = w.Address()
 	}
-	return NewNanoPayClaimer(recipientAddress, claimIntervalMs, onError, w.config)
+	return NewNanoPayClaimer(recipientAddress, claimIntervalMs, onError, w)
 }
 
-// RegisterName registers a name for this wallet's public key at the cost of 10
-// NKN with a given transaction fee. The name will be valid for 1,576,800 blocks
-// (around 1 year). Register name currently owned by this wallet will extend the
-// duration of the name to current block height + 1,576,800. Registration will
-// fail if the name is currently owned by another account.
-func (w *Wallet) RegisterName(name, fee string) (string, error) {
-	_fee, err := common.StringToFixed64(fee)
-	if err != nil {
-		return "", err
-	}
-
-	nonce, err := w.GetNonce(true)
-	if err != nil {
-		return "", err
-	}
-
-	tx, err := transaction.NewRegisterNameTransaction(w.PubKey(), name, uint64(nonce), config.MinNameRegistrationFee, _fee)
-	if err != nil {
-		return "", err
-	}
-
-	if err := w.signTransaction(tx); err != nil {
-		return "", err
-	}
-
-	return w.SendRawTransaction(tx)
+// GetNonce is the same as package level GetNonce, but using this wallet's
+// SeedRPCServerAddr.
+func (w *Wallet) GetNonce(txPool bool) (int64, error) {
+	return w.GetNonceByAddress(w.address, txPool)
 }
 
-// TransferName transfers a name owned by this wallet to another public key with
-// a transaction fee. The expiration height of the name will not be changed.
-func (w *Wallet) TransferName(name string, recipientPubKey []byte, fee string) (string, error) {
-	_fee, err := common.StringToFixed64(fee)
-	if err != nil {
-		return "", err
-	}
-
-	nonce, err := w.GetNonce(true)
-	if err != nil {
-		return "", err
-	}
-
-	tx, err := transaction.NewTransferNameTransaction(w.PubKey(), recipientPubKey, name, uint64(nonce), _fee)
-	if err != nil {
-		return "", err
-	}
-
-	if err := w.signTransaction(tx); err != nil {
-		return "", err
-	}
-
-	return w.SendRawTransaction(tx)
+// GetNonceByAddress is the same as package level GetNonce, but using this
+// wallet's SeedRPCServerAddr.
+func (w *Wallet) GetNonceByAddress(address string, txPool bool) (int64, error) {
+	return GetNonce(address, txPool, w.config)
 }
 
-// DeleteName deletes a name owned by this wallet with a given transaction fee.
-func (w *Wallet) DeleteName(name, fee string) (string, error) {
-	_fee, err := common.StringToFixed64(fee)
-	if err != nil {
-		return "", err
-	}
-
-	nonce, err := w.GetNonce(true)
-	if err != nil {
-		return "", err
-	}
-
-	tx, err := transaction.NewDeleteNameTransaction(w.PubKey(), name, uint64(nonce), _fee)
-	if err != nil {
-		return "", err
-	}
-
-	if err := w.signTransaction(tx); err != nil {
-		return "", err
-	}
-
-	return w.SendRawTransaction(tx)
+// GetHeight is the same as package level GetHeight, but using this wallet's
+// SeedRPCServerAddr.
+func (w *Wallet) GetHeight() (int32, error) {
+	return GetHeight(w.config)
 }
 
-// Subscribe to a topic with an identifier for a number of blocks. Client using
-// the same key pair and identifier will be able to receive messages from this
-// topic. If this (identifier, public key) pair is already subscribed to this
-// topic, the subscription expiration will be extended to current block height +
-// duration.
+// Balance is the same as package level GetBalance, but using this wallet's
+// SeedRPCServerAddr.
+func (w *Wallet) Balance() (*Amount, error) {
+	return w.BalanceByAddress(w.address)
+}
+
+// BalanceByAddress is the same as package level GetBalance, but using this
+// wallet's SeedRPCServerAddr.
+func (w *Wallet) BalanceByAddress(address string) (*Amount, error) {
+	return GetBalance(address, w.config)
+}
+
+// GetSubscribers is the same as package level GetSubscribers, but using this
+// wallet's SeedRPCServerAddr.
+func (w *Wallet) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+	return GetSubscribers(topic, offset, limit, meta, txPool, w.config)
+}
+
+// GetSubscription is the same as package level GetSubscription, but using this
+// wallet's SeedRPCServerAddr.
+func (w *Wallet) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+	return GetSubscription(topic, subscriber, w.config)
+}
+
+// GetSubscribersCount is the same as package level GetSubscribersCount, but
+// this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetSubscribersCount(topic string) (int, error) {
+	return GetSubscribersCount(topic, w.config)
+}
+
+// GetRegistrant is the same as package level GetRegistrant, but this wallet's
+// SeedRPCServerAddr.
+func (w *Wallet) GetRegistrant(name string) (*Registrant, error) {
+	return GetRegistrant(name, w.config)
+}
+
+// SendRawTransaction is the same as package level SendRawTransaction, but using
+// this wallet's SeedRPCServerAddr.
+func (w *Wallet) SendRawTransaction(txn *transaction.Transaction) (string, error) {
+	return SendRawTransaction(txn, w.config)
+}
+
+// Transfer is a shortcut for Transfer using this wallet as SignerRPCClient.
+func (w *Wallet) Transfer(address, amount string, config *TransactionConfig) (string, error) {
+	return Transfer(w, address, amount, config)
+}
+
+// RegisterName is a shortcut for RegisterName using this wallet as
+// SignerRPCClient.
+func (w *Wallet) RegisterName(name string, config *TransactionConfig) (string, error) {
+	return RegisterName(w, name, config)
+}
+
+// TransferName is a shortcut for TransferName using this wallet as
+// SignerRPCClient.
+func (w *Wallet) TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+	return TransferName(w, name, recipientPubKey, config)
+}
+
+// DeleteName is a shortcut for DeleteName using this wallet as SignerRPCClient.
+func (w *Wallet) DeleteName(name string, config *TransactionConfig) (string, error) {
+	return DeleteName(w, name, config)
+}
+
+// Subscribe is a shortcut for Subscribe using this wallet as SignerRPCClient.
 //
 // Duration is changed to signed int for gomobile compatibility.
-func (w *Wallet) Subscribe(identifier, topic string, duration int, meta, fee string) (string, error) {
-	_fee, err := common.StringToFixed64(fee)
-	if err != nil {
-		return "", err
-	}
-	nonce, err := w.GetNonce(true)
-	if err != nil {
-		return "", err
-	}
-	tx, err := transaction.NewSubscribeTransaction(
-		w.PubKey(),
-		identifier,
-		topic,
-		uint32(duration),
-		meta,
-		uint64(nonce),
-		_fee,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if err := w.signTransaction(tx); err != nil {
-		return "", err
-	}
-
-	return w.SendRawTransaction(tx)
+func (w *Wallet) Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+	return Subscribe(w, identifier, topic, duration, meta, config)
 }
 
-// Unsubscribe from a topic for an identifier. Client using the same key pair
-// and identifier will no longer receive messages from this topic.
-func (w *Wallet) Unsubscribe(identifier string, topic string, fee string) (string, error) {
-	_fee, err := common.StringToFixed64(fee)
-	if err != nil {
-		return "", err
-	}
-	nonce, err := w.GetNonce(true)
-	if err != nil {
-		return "", err
-	}
-	tx, err := transaction.NewUnsubscribeTransaction(
-		w.PubKey(),
-		identifier,
-		topic,
-		uint64(nonce),
-		_fee,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	if err := w.signTransaction(tx); err != nil {
-		return "", err
-	}
-
-	return w.SendRawTransaction(tx)
+// Unsubscribe is a shortcut for Unsubscribe using this wallet as
+// SignerRPCClient.
+func (w *Wallet) Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error) {
+	return Unsubscribe(w, identifier, topic, config)
 }

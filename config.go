@@ -198,6 +198,27 @@ func GetDefaultRPCConfig() *RPCConfig {
 	return &rpcConf
 }
 
+// TransactionConfig is the config for making a transaction.
+type TransactionConfig struct {
+	Fee        string
+	Nonce      int64 // nonce is changed to signed int for gomobile compatibility
+	Attributes []byte
+}
+
+// DefaultTransactionConfig is the default TransactionConfig.
+var DefaultTransactionConfig = TransactionConfig{
+	Fee:        "0",
+	Nonce:      0,
+	Attributes: nil,
+}
+
+// GetDefaultTransactionConfig returns the default rpc config with nil pointer
+// fields set to default.
+func GetDefaultTransactionConfig() *TransactionConfig {
+	txnConf := DefaultTransactionConfig
+	return &txnConf
+}
+
 // GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
 // client config.
 func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
@@ -269,6 +290,20 @@ func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConf
 // recursively. Any non zero value fields will override the default config.
 func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
 	merged := GetDefaultWalletConfig()
+	if conf != nil {
+		err := mergo.Merge(merged, conf, mergo.WithOverride)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return merged, nil
+}
+
+// MergeTransactionConfig merges a given transaction config with the default
+// transaction config recursively. Any non zero value fields will override the
+// default config.
+func MergeTransactionConfig(conf *TransactionConfig) (*TransactionConfig, error) {
+	merged := GetDefaultTransactionConfig()
 	if conf != nil {
 		err := mergo.Merge(merged, conf, mergo.WithOverride)
 		if err != nil {

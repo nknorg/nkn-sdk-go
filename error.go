@@ -27,6 +27,11 @@ func (e errorWithCode) Code() int32 {
 	return e.code
 }
 
+const (
+	errCodeNetworkError int32 = -1
+	errCodeDecodeError  int32 = -2
+)
+
 // Error definitions.
 var (
 	ErrClosed               = ncp.NewGenericError("use of closed network connection", true, true) // The error message is meant to be identical to error returned by net package.

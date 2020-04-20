@@ -6,8 +6,45 @@ import (
 	"errors"
 
 	"github.com/nknorg/nkn/api/httpjson/client"
+	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/transaction"
+	nknConfig "github.com/nknorg/nkn/util/config"
 )
+
+// Signer is the interface that can sign transactions.
+type Signer interface {
+	PubKey() []byte
+	ProgramHash() common.Uint160
+	SignTransaction(tx *transaction.Transaction) error
+}
+
+// RPCClient is the RPC client interface that implements most RPC methods
+// (except a few ones that is supposed to call with seed node only).
+type RPCClient interface {
+	GetNonce(txPool bool) (int64, error)
+	GetNonceByAddress(address string, txPool bool) (int64, error)
+	Balance() (*Amount, error)
+	BalanceByAddress(address string) (*Amount, error)
+	GetHeight() (int32, error)
+	GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error)
+	GetSubscription(topic string, subscriber string) (*Subscription, error)
+	GetSubscribersCount(topic string) (int, error)
+	GetRegistrant(name string) (*Registrant, error)
+	SendRawTransaction(txn *transaction.Transaction) (string, error)
+}
+
+// SignerRPCClient is a RPCClient that can also sign transactions and made RPC
+// requests that requires signatures.
+type SignerRPCClient interface {
+	Signer
+	RPCClient
+	Transfer(address, amount string, config *TransactionConfig) (string, error)
+	RegisterName(name string, config *TransactionConfig) (string, error)
+	TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error)
+	DeleteName(name string, config *TransactionConfig) (string, error)
+	Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error)
+	Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error)
+}
 
 // RPCConfigInterface is the config interface for making rpc call. ClientConfig,
 // WalletConfig and RPCConfig all implement this interface and thus can be used
@@ -18,9 +55,10 @@ type RPCConfigInterface interface {
 
 // Node struct contains the information of the node that a client connects to.
 type Node struct {
-	Address   string `json:"addr"`
-	PublicKey string `json:"pubkey"`
-	ID        string `json:"id"`
+	Addr    string `json:"addr"`
+	RPCAddr string `json:"rpcAddr"`
+	PubKey  string `json:"pubkey"`
+	ID      string `json:"id"`
 }
 
 // Subscription contains the information of a subscriber to a topic.
@@ -50,6 +88,44 @@ type errResp struct {
 	Data    string
 }
 
+// RPCCall makes a RPC call and put results to result passed in.
+func RPCCall(action string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
+	if config == nil {
+		config = GetDefaultRPCConfig()
+	}
+	data, err := client.Call(config.GetRandomSeedRPCServerAddr(), action, 0, params)
+	if err != nil {
+		return &errorWithCode{err: err, code: errCodeNetworkError}
+	}
+	resp := make(map[string]*json.RawMessage)
+	err = json.Unmarshal(data, &resp)
+	if err != nil {
+		return &errorWithCode{err: err, code: errCodeDecodeError}
+	}
+	if resp["error"] != nil {
+		er := &errResp{}
+		err := json.Unmarshal(*resp["error"], er)
+		if err != nil {
+			return &errorWithCode{err: err, code: errCodeDecodeError}
+		}
+		code := er.Code
+		if code < 0 {
+			code = -1
+		}
+		msg := er.Message
+		if len(er.Data) > 0 {
+			msg += ": " + er.Data
+		}
+		return &errorWithCode{err: errors.New(msg), code: code}
+	}
+
+	err = json.Unmarshal(*resp["result"], result)
+	if err != nil {
+		return &errorWithCode{err: err, code: errCodeDecodeError}
+	}
+	return nil
+}
+
 // GetWsAddr RPC gets the node that a client address should connect to using ws.
 func GetWsAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
 	node := &Node{}
@@ -69,27 +145,6 @@ func GetWssAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
 		return nil, err
 	}
 	return node, nil
-}
-
-// GetRegistrant RPC gets the registrant of a name.
-func GetRegistrant(name string, config RPCConfigInterface) (*Registrant, error) {
-	registrant := &Registrant{}
-	err := RPCCall("getregistrant", map[string]interface{}{"name": name}, registrant, config)
-	if err != nil {
-		return nil, err
-	}
-	return registrant, nil
-}
-
-// SendRawTransaction RPC sends a signed transaction to chain and returns txn
-// hash hex string.
-func SendRawTransaction(txn *transaction.Transaction, config RPCConfigInterface) (string, error) {
-	var txnHash string
-	err := RPCCall("sendrawtransaction", map[string]interface{}{"tx": hex.EncodeToString(txn.ToArray())}, &txnHash, config)
-	if err != nil {
-		return "", err
-	}
-	return txnHash, nil
 }
 
 // GetNonce RPC gets the next nonce to use of an address. If txPool is false,
@@ -205,40 +260,279 @@ func GetSubscribersCount(topic string, config RPCConfigInterface) (int, error) {
 	return count, nil
 }
 
-// RPCCall makes a RPC call and put results to result passed in.
-func RPCCall(action string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
-	if config == nil {
-		config = GetDefaultRPCConfig()
-	}
-	data, err := client.Call(config.GetRandomSeedRPCServerAddr(), action, 0, params)
+// GetRegistrant RPC gets the registrant of a name.
+func GetRegistrant(name string, config RPCConfigInterface) (*Registrant, error) {
+	registrant := &Registrant{}
+	err := RPCCall("getregistrant", map[string]interface{}{"name": name}, registrant, config)
 	if err != nil {
-		return &errorWithCode{err: err, code: -1}
+		return nil, err
 	}
-	resp := make(map[string]*json.RawMessage)
-	err = json.Unmarshal(data, &resp)
+	return registrant, nil
+}
+
+// SendRawTransaction RPC sends a signed transaction to chain and returns txn
+// hash hex string.
+func SendRawTransaction(txn *transaction.Transaction, config RPCConfigInterface) (string, error) {
+	var txnHash string
+	err := RPCCall("sendrawtransaction", map[string]interface{}{"tx": hex.EncodeToString(txn.ToArray())}, &txnHash, config)
 	if err != nil {
-		return &errorWithCode{err: err, code: -1}
+		return "", err
 	}
-	if resp["error"] != nil {
-		er := &errResp{}
-		err := json.Unmarshal(*resp["error"], er)
-		if err != nil {
-			return &errorWithCode{err: err, code: -1}
-		}
-		code := er.Code
-		if code < 0 {
-			code = -1
-		}
-		msg := er.Message
-		if len(er.Data) > 0 {
-			msg += ": " + er.Data
-		}
-		return &errorWithCode{err: errors.New(msg), code: code}
+	return txnHash, nil
+}
+
+// Transfer sends asset to a wallet address with a transaction fee. Amount is
+// the string representation of the amount in unit of NKN to avoid precision
+// loss. For example, "0.1" will be parsed as 0.1 NKN.
+func Transfer(s SignerRPCClient, address, amount string, config *TransactionConfig) (string, error) {
+	config, err := MergeTransactionConfig(config)
+	if err != nil {
+		return "", err
 	}
 
-	err = json.Unmarshal(*resp["result"], result)
+	amountFixed64, err := common.StringToFixed64(amount)
 	if err != nil {
-		return &errorWithCode{err: err, code: 0}
+		return "", err
 	}
-	return nil
+
+	programHash, err := common.ToScriptHash(address)
+	if err != nil {
+		return "", err
+	}
+
+	fee, err := common.StringToFixed64(config.Fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := config.Nonce
+	if nonce == 0 {
+		nonce, err = s.GetNonce(true)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tx, err := transaction.NewTransferAssetTransaction(s.ProgramHash(), programHash, uint64(nonce), amountFixed64, fee)
+	if err != nil {
+		return "", err
+	}
+
+	if len(config.Attributes) > 0 {
+		tx.Transaction.UnsignedTx.Attributes = config.Attributes
+	}
+
+	if err := s.SignTransaction(tx); err != nil {
+		return "", err
+	}
+
+	return s.SendRawTransaction(tx)
+}
+
+// RegisterName registers a name for this signer's public key at the cost of 10
+// NKN with a given transaction fee. The name will be valid for 1,576,800 blocks
+// (around 1 year). Register name currently owned by this pubkey will extend the
+// duration of the name to current block height + 1,576,800. Registration will
+// fail if the name is currently owned by another account.
+func RegisterName(s SignerRPCClient, name string, config *TransactionConfig) (string, error) {
+	config, err := MergeTransactionConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	fee, err := common.StringToFixed64(config.Fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := config.Nonce
+	if nonce == 0 {
+		nonce, err = s.GetNonce(true)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tx, err := transaction.NewRegisterNameTransaction(s.PubKey(), name, uint64(nonce), nknConfig.MinNameRegistrationFee, fee)
+	if err != nil {
+		return "", err
+	}
+
+	if len(config.Attributes) > 0 {
+		tx.Transaction.UnsignedTx.Attributes = config.Attributes
+	}
+
+	if err := s.SignTransaction(tx); err != nil {
+		return "", err
+	}
+
+	return s.SendRawTransaction(tx)
+}
+
+// TransferName transfers a name owned by this signer's pubkey to another public
+// key with a transaction fee. The expiration height of the name will not be
+// changed.
+func TransferName(s SignerRPCClient, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+	config, err := MergeTransactionConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	fee, err := common.StringToFixed64(config.Fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := config.Nonce
+	if nonce == 0 {
+		nonce, err = s.GetNonce(true)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tx, err := transaction.NewTransferNameTransaction(s.PubKey(), recipientPubKey, name, uint64(nonce), fee)
+	if err != nil {
+		return "", err
+	}
+
+	if len(config.Attributes) > 0 {
+		tx.Transaction.UnsignedTx.Attributes = config.Attributes
+	}
+
+	if err := s.SignTransaction(tx); err != nil {
+		return "", err
+	}
+
+	return s.SendRawTransaction(tx)
+}
+
+// DeleteName deletes a name owned by this signer's pubkey with a given
+// transaction fee.
+func DeleteName(s SignerRPCClient, name string, config *TransactionConfig) (string, error) {
+	config, err := MergeTransactionConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	fee, err := common.StringToFixed64(config.Fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := config.Nonce
+	if nonce == 0 {
+		nonce, err = s.GetNonce(true)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tx, err := transaction.NewDeleteNameTransaction(s.PubKey(), name, uint64(nonce), fee)
+	if err != nil {
+		return "", err
+	}
+
+	if len(config.Attributes) > 0 {
+		tx.Transaction.UnsignedTx.Attributes = config.Attributes
+	}
+
+	if err := s.SignTransaction(tx); err != nil {
+		return "", err
+	}
+
+	return s.SendRawTransaction(tx)
+}
+
+// Subscribe to a topic with an identifier for a number of blocks. Client using
+// the same key pair and identifier will be able to receive messages from this
+// topic. If this (identifier, public key) pair is already subscribed to this
+// topic, the subscription expiration will be extended to current block height +
+// duration.
+//
+// Duration is changed to signed int for gomobile compatibility.
+func Subscribe(s SignerRPCClient, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+	config, err := MergeTransactionConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	fee, err := common.StringToFixed64(config.Fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := config.Nonce
+	if nonce == 0 {
+		nonce, err = s.GetNonce(true)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tx, err := transaction.NewSubscribeTransaction(
+		s.PubKey(),
+		identifier,
+		topic,
+		uint32(duration),
+		meta,
+		uint64(nonce),
+		fee,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if len(config.Attributes) > 0 {
+		tx.Transaction.UnsignedTx.Attributes = config.Attributes
+	}
+
+	if err := s.SignTransaction(tx); err != nil {
+		return "", err
+	}
+
+	return s.SendRawTransaction(tx)
+}
+
+// Unsubscribe from a topic for an identifier. Client using the same key pair
+// and identifier will no longer receive messages from this topic.
+func Unsubscribe(s SignerRPCClient, identifier, topic string, config *TransactionConfig) (string, error) {
+	config, err := MergeTransactionConfig(config)
+	if err != nil {
+		return "", err
+	}
+
+	fee, err := common.StringToFixed64(config.Fee)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := config.Nonce
+	if nonce == 0 {
+		nonce, err = s.GetNonce(true)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	tx, err := transaction.NewUnsubscribeTransaction(
+		s.PubKey(),
+		identifier,
+		topic,
+		uint64(nonce),
+		fee,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if len(config.Attributes) > 0 {
+		tx.Transaction.UnsignedTx.Attributes = config.Attributes
+	}
+
+	if err := s.SignTransaction(tx); err != nil {
+		return "", err
+	}
+
+	return s.SendRawTransaction(tx)
 }

@@ -14,6 +14,8 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 	ncp "github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn-sdk-go/payloads"
+	"github.com/nknorg/nkn/common"
+	"github.com/nknorg/nkn/transaction"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/patrickmn/go-cache"
 )
@@ -38,6 +40,31 @@ var (
 	multiClientIdentifierRe = regexp.MustCompile(MultiClientIdentifierRe)
 )
 
+func addMultiClientPrefix(dest []string, clientID int) []string {
+	result := make([]string, len(dest))
+	for i, addr := range dest {
+		result[i] = addIdentifier(addr, clientID)
+	}
+	return result
+}
+
+func addIdentifier(addr string, id int) string {
+	if id < 0 {
+		return addr
+	}
+	return addIdentifierPrefix(addr, "__"+strconv.Itoa(id)+"__")
+}
+
+func removeIdentifier(src string) (string, string) {
+	s := strings.SplitN(src, ".", 2)
+	if len(s) > 1 {
+		if multiClientIdentifierRe.MatchString(s[0]) {
+			return s[1], s[0]
+		}
+	}
+	return src, ""
+}
+
 // MultiClient sends and receives data using multiple NKN clients concurrently
 // to improve reliability and latency. In addition, it supports session mode, a
 // reliable streaming protocol similar to TCP based on ncp
@@ -58,6 +85,7 @@ type MultiClient struct {
 	defaultClient *Client
 	acceptAddrs   []*regexp.Regexp
 	isClosed      bool
+	createDone    bool
 
 	sessionLock sync.Mutex
 	sessions    map[string]*ncp.Session
@@ -180,6 +208,9 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 
 	go func() {
 		wg.Wait()
+		m.lock.Lock()
+		m.createDone = true
+		m.lock.Unlock()
 		select {
 		case fail <- struct{}{}:
 		default:
@@ -198,16 +229,33 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 // create client/wallet with the same key pair and should be kept secret and
 // safe.
 func (m *MultiClient) Seed() []byte {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	return m.defaultClient.Seed()
+	return m.GetDefaultClient().Seed()
 }
 
 // PubKey returns the public key of the multiclient.
 func (m *MultiClient) PubKey() []byte {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	return m.defaultClient.PubKey()
+	return m.GetDefaultClient().PubKey()
+}
+
+// Address returns the NKN client address of the multiclient. Client address is
+// in the form of
+//   identifier.pubKeyHex
+// if identifier is not an empty string, or
+//   pubKeyHex
+// if identifier is an empty string.
+//
+// Note that client address is different from wallet address using the same key
+// pair (account). Wallet address can be computed from client address, but NOT
+// vice versa.
+func (m *MultiClient) Address() string {
+	return m.addr.String()
+}
+
+// Addr returns the NKN client address of the multiclient as net.Addr interface,
+// with Network() returns "nkn" and String() returns the same value as
+// multiclient.Address().
+func (m *MultiClient) Addr() net.Addr {
+	return m.addr
 }
 
 // GetClients returns all clients of the multiclient with client index as key.
@@ -216,6 +264,11 @@ func (m *MultiClient) PubKey() []byte {
 func (m *MultiClient) GetClients() map[int]*Client {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
+
+	if m.createDone {
+		return m.clients
+	}
+
 	clients := make(map[int]*Client, len(m.clients))
 	for i, client := range m.clients {
 		clients[i] = client
@@ -496,27 +549,6 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 	return nil
 }
 
-// Address returns the NKN client address of the multiclient. Client address is
-// in the form of
-//   identifier.pubKeyHex
-// if identifier is not an empty string, or
-//   pubKeyHex
-// if identifier is an empty string.
-//
-// Note that client address is different from wallet address using the same key
-// pair (account). Wallet address can be computed from client address, but NOT
-// vice versa.
-func (m *MultiClient) Address() string {
-	return m.addr.String()
-}
-
-// Addr returns the NKN client address of the multiclient as net.Addr interface,
-// with Network() returns "nkn" and String() returns the same value as
-// multiclient.Address().
-func (m *MultiClient) Addr() net.Addr {
-	return m.addr
-}
-
 // Listen will make multiclient start accepting sessions from address that
 // matches any of the given regular expressions. If addrsRe is nil, any address
 // will be accepted. Each function call will overwrite previous listening
@@ -664,27 +696,221 @@ func (m *MultiClient) getConfig() *ClientConfig {
 	return m.config
 }
 
-func addMultiClientPrefix(dest []string, clientID int) []string {
-	result := make([]string, len(dest))
-	for i, addr := range dest {
-		result[i] = addIdentifier(addr, clientID)
-	}
-	return result
+// ProgramHash returns the program hash of this multiclient's account.
+func (m *MultiClient) ProgramHash() common.Uint160 {
+	return m.GetDefaultClient().ProgramHash()
 }
 
-func addIdentifier(addr string, id int) string {
-	if id < 0 {
-		return addr
-	}
-	return addIdentifierPrefix(addr, "__"+strconv.Itoa(id)+"__")
+// SignTransaction signs an unsigned transaction using this multiclient's key
+// pair.
+func (m *MultiClient) SignTransaction(tx *transaction.Transaction) error {
+	return m.GetDefaultClient().SignTransaction(tx)
 }
 
-func removeIdentifier(src string) (string, string) {
-	s := strings.SplitN(src, ".", 2)
-	if len(s) > 1 {
-		if multiClientIdentifierRe.MatchString(s[0]) {
-			return s[1], s[0]
+// NewNanoPay is a shortcut for NewNanoPay using this multiclient's wallet
+// address as sender.
+//
+// Duration is changed to signed int for gomobile compatibility.
+func (m *MultiClient) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPay, error) {
+	return NewNanoPay(m.GetDefaultClient().wallet, m, recipientAddress, fee, duration)
+}
+
+// NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this multiclient
+// as RPC client.
+func (m *MultiClient) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
+	if len(recipientAddress) == 0 {
+		recipientAddress = m.GetDefaultClient().wallet.address
+	}
+	return NewNanoPayClaimer(recipientAddress, claimIntervalMs, onError, m)
+}
+
+// GetNonce is the same as package level GetNonce, but using connected node as
+// the RPC server, followed by this multiclient's SeedRPCServerAddr if failed.
+func (m *MultiClient) GetNonce(txPool bool) (int64, error) {
+	return m.GetNonceByAddress(m.GetDefaultClient().wallet.address, txPool)
+}
+
+// GetNonceByAddress is the same as package level GetNonce, but using connected
+// node as the RPC server, followed by this multiclient's SeedRPCServerAddr if
+// failed.
+func (m *MultiClient) GetNonceByAddress(address string, txPool bool) (int64, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetNonce(address, txPool, c.wallet.config)
+			if err == nil {
+				return res, err
+			}
 		}
 	}
-	return src, ""
+	return GetNonce(address, txPool, m.config)
+}
+
+// GetHeight is the same as package level GetHeight, but using connected node as
+// the RPC server, followed by this multiclient's SeedRPCServerAddr if failed.
+func (m *MultiClient) GetHeight() (int32, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetHeight(c.wallet.config)
+			if err == nil {
+				return res, err
+			}
+		}
+	}
+	return GetHeight(m.config)
+}
+
+// Balance is the same as package level GetBalance, but using connected node as
+// the RPC server, followed by this multiclient's SeedRPCServerAddr if failed.
+func (m *MultiClient) Balance() (*Amount, error) {
+	return m.BalanceByAddress(m.GetDefaultClient().wallet.address)
+}
+
+// BalanceByAddress is the same as package level GetBalance, but using connected
+// node as the RPC server, followed by this multiclient's SeedRPCServerAddr if
+// failed.
+func (m *MultiClient) BalanceByAddress(address string) (*Amount, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetBalance(address, c.wallet.config)
+			if err == nil {
+				return res, err
+			}
+		}
+	}
+	return GetBalance(address, m.config)
+}
+
+// GetSubscribers is the same as package level GetSubscribers, but using
+// connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetSubscribers(topic, offset, limit, meta, txPool, c.wallet.config)
+			if err == nil {
+				return res, err
+			}
+		}
+	}
+	return GetSubscribers(topic, offset, limit, meta, txPool, m.config)
+}
+
+// GetSubscription is the same as package level GetSubscription, but using
+// connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetSubscription(topic, subscriber, c.wallet.config)
+			if err == nil {
+				return res, err
+			}
+		}
+	}
+	return GetSubscription(topic, subscriber, m.config)
+}
+
+// GetSubscribersCount is the same as package level GetSubscribersCount, but
+// using connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetSubscribersCount(topic string) (int, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetSubscribersCount(topic, c.wallet.config)
+			if err == nil {
+				return res, err
+			}
+		}
+	}
+	return GetSubscribersCount(topic, m.config)
+}
+
+// GetRegistrant is the same as package level GetRegistrant, but using connected
+// node as the RPC server, followed by this multiclient's SeedRPCServerAddr if
+// failed.
+func (m *MultiClient) GetRegistrant(name string) (*Registrant, error) {
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := GetRegistrant(name, c.wallet.config)
+			if err == nil {
+				return res, err
+			}
+		}
+	}
+	return GetRegistrant(name, m.config)
+}
+
+// SendRawTransaction is the same as package level SendRawTransaction, but using
+// connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) SendRawTransaction(txn *transaction.Transaction) (string, error) {
+	success := make(chan string, 1)
+	fail := make(chan struct{}, 1)
+
+	go func() {
+		sent := 0
+		for _, c := range m.GetClients() {
+			if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+				res, err := SendRawTransaction(txn, c.wallet.config)
+				if err == nil {
+					select {
+					case success <- res:
+					default:
+					}
+					sent++
+				}
+			}
+		}
+		if sent == 0 {
+			select {
+			case fail <- struct{}{}:
+			default:
+			}
+		}
+	}()
+
+	select {
+	case res := <-success:
+		return res, nil
+	case <-fail:
+		return SendRawTransaction(txn, m.config)
+	}
+}
+
+// Transfer is a shortcut for Transfer using this multiclient as
+// SignerRPCClient.
+func (m *MultiClient) Transfer(address, amount string, config *TransactionConfig) (string, error) {
+	return Transfer(m, address, amount, config)
+}
+
+// RegisterName is a shortcut for RegisterName using this multiclient as
+// SignerRPCClient.
+func (m *MultiClient) RegisterName(name string, config *TransactionConfig) (string, error) {
+	return RegisterName(m, name, config)
+}
+
+// TransferName is a shortcut for TransferName using this multiclient as
+// SignerRPCClient.
+func (m *MultiClient) TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+	return TransferName(m, name, recipientPubKey, config)
+}
+
+// DeleteName is a shortcut for DeleteName using this multiclient as
+// SignerRPCClient.
+func (m *MultiClient) DeleteName(name string, config *TransactionConfig) (string, error) {
+	return DeleteName(m, name, config)
+}
+
+// Subscribe is a shortcut for Subscribe using this multiclient as
+// SignerRPCClient.
+//
+// Duration is changed to signed int for gomobile compatibility.
+func (m *MultiClient) Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+	return Subscribe(m, identifier, topic, duration, meta, config)
+}
+
+// Unsubscribe is a shortcut for Unsubscribe using this multiclient as
+// SignerRPCClient.
+func (m *MultiClient) Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error) {
+	return Unsubscribe(m, identifier, topic, config)
 }
