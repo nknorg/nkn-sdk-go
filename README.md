@@ -295,7 +295,7 @@ balance, err := wallet.BalanceByAddress("NKNxxxxx")
 Transfer asset to some address:
 
 ```go
-txnHash, err := wallet.Transfer(account.WalletAddress(), "100", "0")
+txnHash, err := wallet.Transfer(account.WalletAddress(), "100", nil)
 ```
 
 Open nano pay channel to specified address:
@@ -323,25 +323,25 @@ txnHash, err := wallet.SendRawTransaction(txn)
 Register name for this wallet:
 
 ```go
-txnHash, err = wallet.RegisterName("somename")
+txnHash, err = wallet.RegisterName("somename", nil)
 ```
 
 Delete name for this wallet:
 
 ```go
-txnHash, err = wallet.DeleteName("somename")
+txnHash, err = wallet.DeleteName("somename", nil)
 ```
 
 Subscribe to specified topic for this wallet for next 100 blocks:
 
 ```go
-txnHash, err = wallet.Subscribe("identifier", "topic", 100, "meta", "0")
+txnHash, err = wallet.Subscribe("identifier", "topic", 100, "meta", nil)
 ```
 
 Unsubscribe from specified topic:
 
 ```go
-txnHash, err = wallet.Unsubscribe("identifier", "topic", "0")
+txnHash, err = wallet.Unsubscribe("identifier", "topic", nil)
 ```
 
 ## iOS/Android

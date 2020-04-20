@@ -30,6 +30,7 @@ const (
 // payment amount can increase monotonically.
 type NanoPay struct {
 	senderWallet         *Wallet
+	rpcClient            RPCClient
 	recipientAddress     string
 	recipientProgramHash common.Uint160
 	fee                  common.Fixed64
@@ -46,7 +47,7 @@ type NanoPay struct {
 type NanoPayClaimer struct {
 	recipientAddress     string
 	recipientProgramHash common.Uint160
-	rpcConfig            RPCConfigInterface
+	rpcClient            RPCClient
 
 	lock              sync.Mutex
 	amount            common.Fixed64
@@ -59,8 +60,8 @@ type NanoPayClaimer struct {
 }
 
 // NewNanoPay creates a NanoPay with a payer wallet, recipient wallet address,
-// txn fee, and duration in unit of blocks.
-func NewNanoPay(senderWallet *Wallet, recipientAddress, fee string, duration int) (*NanoPay, error) {
+// txn fee, duration in unit of blocks, and an optional rpc client.
+func NewNanoPay(senderWallet *Wallet, rpcClient RPCClient, recipientAddress, fee string, duration int) (*NanoPay, error) {
 	programHash, err := common.ToScriptHash(recipientAddress)
 	if err != nil {
 		return nil, err
@@ -73,6 +74,7 @@ func NewNanoPay(senderWallet *Wallet, recipientAddress, fee string, duration int
 
 	np := &NanoPay{
 		senderWallet:         senderWallet,
+		rpcClient:            rpcClient,
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: programHash,
 		fee:                  feeFixed64,
@@ -91,7 +93,7 @@ func (np *NanoPay) Recipient() string {
 // NanoPay transaction. Delta is the string representation of the amount in unit
 // of NKN to avoid precision loss. For example, "0.1" will be parsed as 0.1 NKN.
 func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, error) {
-	height, err := np.senderWallet.GetHeight()
+	height, err := np.rpcClient.GetHeight()
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +124,7 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 
 	tx.UnsignedTx.Fee = int64(np.fee)
 
-	if err := np.senderWallet.signTransaction(tx); err != nil {
+	if err := np.senderWallet.SignTransaction(tx); err != nil {
 		return nil, err
 	}
 
@@ -130,9 +132,9 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 }
 
 // NewNanoPayClaimer creates a NanoPayClaimer with a given recipient wallet
-// address, claim interval in millisecond, onError channel, and an optional
-// rpcConfig that is used for making RPC requests.
-func NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError, rpcConfig RPCConfigInterface) (*NanoPayClaimer, error) {
+// address, claim interval in millisecond, onError channel, and a rpcClient that
+// is used for making RPC requests.
+func NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError, rpcClient RPCClient) (*NanoPayClaimer, error) {
 	receiver, err := common.ToScriptHash(recipientAddress)
 	if err != nil {
 		return nil, err
@@ -141,7 +143,7 @@ func NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *
 	npc := &NanoPayClaimer{
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: receiver,
-		rpcConfig:            rpcConfig,
+		rpcClient:            rpcClient,
 	}
 
 	go func() {
@@ -164,7 +166,7 @@ func NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *
 
 			now := time.Now()
 			if now.Before(npc.lastClaimTime.Add(time.Duration(claimIntervalMs) * time.Millisecond)) {
-				height, err := GetHeight(npc.rpcConfig)
+				height, err := npc.rpcClient.GetHeight()
 				if err != nil {
 					onError.receive(err)
 					continue
@@ -231,7 +233,7 @@ func (npc *NanoPayClaimer) flush() error {
 		return nil
 	}
 
-	_, err := SendRawTransaction(npc.tx, npc.rpcConfig)
+	_, err := npc.rpcClient.SendRawTransaction(npc.tx)
 	if err != nil {
 		return err
 	}
@@ -264,7 +266,7 @@ func (npc *NanoPayClaimer) Amount() *Amount {
 // new NanoPay, and previous NanoPay state will be flushed and sent to chain
 // before accepting new one.
 func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
-	height, err := GetHeight(npc.rpcConfig)
+	height, err := npc.rpcClient.GetHeight()
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +304,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 		return nil, npc.closeWithError(err)
 	}
 
-	senderBalance, err := GetBalance(senderAddress, npc.rpcConfig)
+	senderBalance, err := npc.rpcClient.BalanceByAddress(senderAddress)
 	if err != nil {
 		return nil, err
 	}
