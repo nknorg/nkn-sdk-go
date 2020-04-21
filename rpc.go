@@ -7,6 +7,7 @@ import (
 
 	"github.com/nknorg/nkn/api/httpjson/client"
 	"github.com/nknorg/nkn/common"
+	"github.com/nknorg/nkn/program"
 	"github.com/nknorg/nkn/transaction"
 	nknConfig "github.com/nknorg/nkn/util/config"
 )
@@ -14,7 +15,6 @@ import (
 // Signer is the interface that can sign transactions.
 type Signer interface {
 	PubKey() []byte
-	ProgramHash() common.Uint160
 	SignTransaction(tx *transaction.Transaction) error
 }
 
@@ -290,12 +290,17 @@ func Transfer(s SignerRPCClient, address, amount string, config *TransactionConf
 		return "", err
 	}
 
+	sender, err := program.CreateProgramHash(s.PubKey())
+	if err != nil {
+		return "", err
+	}
+
 	amountFixed64, err := common.StringToFixed64(amount)
 	if err != nil {
 		return "", err
 	}
 
-	programHash, err := common.ToScriptHash(address)
+	recipient, err := common.ToScriptHash(address)
 	if err != nil {
 		return "", err
 	}
@@ -313,7 +318,7 @@ func Transfer(s SignerRPCClient, address, amount string, config *TransactionConf
 		}
 	}
 
-	tx, err := transaction.NewTransferAssetTransaction(s.ProgramHash(), programHash, uint64(nonce), amountFixed64, fee)
+	tx, err := transaction.NewTransferAssetTransaction(sender, recipient, uint64(nonce), amountFixed64, fee)
 	if err != nil {
 		return "", err
 	}

@@ -18,7 +18,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	apiCommon "github.com/nknorg/nkn/api/common"
-	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/crypto/ed25519"
 	"github.com/nknorg/nkn/pb"
@@ -1079,11 +1078,6 @@ func (c *Client) SetWriteDeadline(deadline time.Time) error {
 
 func (c *Client) getConfig() *ClientConfig {
 	return c.config
-}
-
-// ProgramHash returns the program hash of this client's account.
-func (c *Client) ProgramHash() common.Uint160 {
-	return c.wallet.ProgramHash()
 }
 
 // SignTransaction signs an unsigned transaction using this client's key pair.

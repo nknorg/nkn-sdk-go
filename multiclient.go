@@ -14,7 +14,6 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 	ncp "github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn-sdk-go/payloads"
-	"github.com/nknorg/nkn/common"
 	"github.com/nknorg/nkn/transaction"
 	"github.com/nknorg/nkn/util/address"
 	"github.com/patrickmn/go-cache"
@@ -110,7 +109,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 		offset = 1
 	}
 
-	addr := address.MakeAddressString(account.PublicKey.EncodePoint(), baseIdentifier)
+	addr := address.MakeAddressString(account.PublicKey, baseIdentifier)
 
 	m := &MultiClient{
 		config:        config,
@@ -694,11 +693,6 @@ func (m *MultiClient) IsClosed() bool {
 
 func (m *MultiClient) getConfig() *ClientConfig {
 	return m.config
-}
-
-// ProgramHash returns the program hash of this multiclient's account.
-func (m *MultiClient) ProgramHash() common.Uint160 {
-	return m.GetDefaultClient().ProgramHash()
 }
 
 // SignTransaction signs an unsigned transaction using this multiclient's key
