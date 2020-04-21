@@ -64,7 +64,7 @@ func (account *Account) Seed() []byte {
 
 // PubKey returns the public key of the account.
 func (account *Account) PubKey() []byte {
-	return account.Account.PublicKey.EncodePoint()
+	return account.Account.PublicKey
 }
 
 // WalletAddress returns the wallet address of the account.
@@ -355,7 +355,7 @@ func ClientAddrToPubKey(clientAddr string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = crypto.DecodePoint(pk)
+	err = crypto.CheckPublicKey(pk)
 	if err != nil {
 		return nil, err
 	}
@@ -363,11 +363,7 @@ func ClientAddrToPubKey(clientAddr string) ([]byte, error) {
 }
 
 // PubKeyToWalletAddr converts a public key to its NKN wallet address.
-func PubKeyToWalletAddr(pk []byte) (string, error) {
-	pubKey, err := crypto.DecodePoint(pk)
-	if err != nil {
-		return "", err
-	}
+func PubKeyToWalletAddr(pubKey []byte) (string, error) {
 	programHash, err := program.CreateProgramHash(pubKey)
 	if err != nil {
 		return "", err
@@ -379,7 +375,7 @@ func PubKeyToWalletAddr(pk []byte) (string, error) {
 // address. It's a shortcut for calling ClientAddrToPubKey followed by
 // PubKeyToWalletAddr.
 func ClientAddrToWalletAddr(clientAddr string) (string, error) {
-	_, pk, _, err := address.ParseClientAddress(clientAddr)
+	pk, err := ClientAddrToPubKey(clientAddr)
 	if err != nil {
 		return "", err
 	}
