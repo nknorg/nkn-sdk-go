@@ -1090,7 +1090,7 @@ func (c *Client) SignTransaction(tx *transaction.Transaction) error {
 //
 // Duration is changed to signed int for gomobile compatibility.
 func (c *Client) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPay, error) {
-	return NewNanoPay(c.wallet, c, recipientAddress, fee, duration)
+	return NewNanoPay(c, c.wallet, recipientAddress, fee, duration)
 }
 
 // NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this client as
@@ -1099,7 +1099,7 @@ func (c *Client) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int3
 	if len(recipientAddress) == 0 {
 		recipientAddress = c.wallet.address
 	}
-	return NewNanoPayClaimer(recipientAddress, claimIntervalMs, onError, c)
+	return NewNanoPayClaimer(c, recipientAddress, claimIntervalMs, onError)
 }
 
 // GetNonce is the same as package level GetNonce, but using connected node as
