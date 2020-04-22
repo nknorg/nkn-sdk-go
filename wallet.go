@@ -239,7 +239,7 @@ func (w *Wallet) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int3
 	if len(recipientAddress) == 0 {
 		recipientAddress = w.Address()
 	}
-	return NewNanoPayClaimer(recipientAddress, claimIntervalMs, onError, w)
+	return NewNanoPayClaimer(w, recipientAddress, claimIntervalMs, onError)
 }
 
 // GetNonce is the same as package level GetNonce, but using this wallet's

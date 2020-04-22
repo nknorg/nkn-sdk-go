@@ -29,8 +29,8 @@ const (
 // NanoPay is a nano payment channel between a payer and recipient where the
 // payment amount can increase monotonically.
 type NanoPay struct {
+	rpcClient            rpcClient
 	senderWallet         *Wallet
-	rpcClient            RPCClient
 	recipientAddress     string
 	recipientProgramHash common.Uint160
 	fee                  common.Fixed64
@@ -45,9 +45,9 @@ type NanoPay struct {
 // NanoPayClaimer accepts NanoPay updates and send the latest state to
 // blockchain periodically.
 type NanoPayClaimer struct {
+	rpcClient            rpcClient
 	recipientAddress     string
 	recipientProgramHash common.Uint160
-	rpcClient            RPCClient
 
 	lock              sync.Mutex
 	amount            common.Fixed64
@@ -59,9 +59,10 @@ type NanoPayClaimer struct {
 	tx                *transaction.Transaction
 }
 
-// NewNanoPay creates a NanoPay with a payer wallet, recipient wallet address,
-// txn fee, duration in unit of blocks, and an optional rpc client.
-func NewNanoPay(senderWallet *Wallet, rpcClient RPCClient, recipientAddress, fee string, duration int) (*NanoPay, error) {
+// NewNanoPay creates a NanoPay with a rpcClient (client, multiclient or
+// wallet), payer wallet, recipient wallet address, txn fee, duration in unit of
+// blocks, and an optional rpc client.
+func NewNanoPay(rpcClient rpcClient, senderWallet *Wallet, recipientAddress, fee string, duration int) (*NanoPay, error) {
 	programHash, err := common.ToScriptHash(recipientAddress)
 	if err != nil {
 		return nil, err
@@ -73,8 +74,8 @@ func NewNanoPay(senderWallet *Wallet, rpcClient RPCClient, recipientAddress, fee
 	}
 
 	np := &NanoPay{
-		senderWallet:         senderWallet,
 		rpcClient:            rpcClient,
+		senderWallet:         senderWallet,
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: programHash,
 		fee:                  feeFixed64,
@@ -131,19 +132,19 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	return tx, nil
 }
 
-// NewNanoPayClaimer creates a NanoPayClaimer with a given recipient wallet
-// address, claim interval in millisecond, onError channel, and a rpcClient that
-// is used for making RPC requests.
-func NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError, rpcClient RPCClient) (*NanoPayClaimer, error) {
+// NewNanoPayClaimer creates a NanoPayClaimer with a given rpcClient (client,
+// multiclient or wallet), recipient wallet address, claim interval in
+// millisecond, onError channel.
+func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
 	receiver, err := common.ToScriptHash(recipientAddress)
 	if err != nil {
 		return nil, err
 	}
 
 	npc := &NanoPayClaimer{
+		rpcClient:            rpcClient,
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: receiver,
-		rpcClient:            rpcClient,
 	}
 
 	go func() {

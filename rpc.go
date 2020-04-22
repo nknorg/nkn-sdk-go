@@ -13,14 +13,14 @@ import (
 )
 
 // Signer is the interface that can sign transactions.
-type Signer interface {
+type signer interface {
 	PubKey() []byte
 	SignTransaction(tx *transaction.Transaction) error
 }
 
 // RPCClient is the RPC client interface that implements most RPC methods
 // (except a few ones that is supposed to call with seed node only).
-type RPCClient interface {
+type rpcClient interface {
 	GetNonce(txPool bool) (int64, error)
 	GetNonceByAddress(address string, txPool bool) (int64, error)
 	Balance() (*Amount, error)
@@ -35,9 +35,9 @@ type RPCClient interface {
 
 // SignerRPCClient is a RPCClient that can also sign transactions and made RPC
 // requests that requires signatures.
-type SignerRPCClient interface {
-	Signer
-	RPCClient
+type signerRPCClient interface {
+	signer
+	rpcClient
 	Transfer(address, amount string, config *TransactionConfig) (string, error)
 	RegisterName(name string, config *TransactionConfig) (string, error)
 	TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error)
@@ -283,8 +283,9 @@ func SendRawTransaction(txn *transaction.Transaction, config RPCConfigInterface)
 
 // Transfer sends asset to a wallet address with a transaction fee. Amount is
 // the string representation of the amount in unit of NKN to avoid precision
-// loss. For example, "0.1" will be parsed as 0.1 NKN.
-func Transfer(s SignerRPCClient, address, amount string, config *TransactionConfig) (string, error) {
+// loss. For example, "0.1" will be parsed as 0.1 NKN. The signerRPCClient can
+// be a client, multiclient or wallet.
+func Transfer(s signerRPCClient, address, amount string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -338,8 +339,9 @@ func Transfer(s SignerRPCClient, address, amount string, config *TransactionConf
 // NKN with a given transaction fee. The name will be valid for 1,576,800 blocks
 // (around 1 year). Register name currently owned by this pubkey will extend the
 // duration of the name to current block height + 1,576,800. Registration will
-// fail if the name is currently owned by another account.
-func RegisterName(s SignerRPCClient, name string, config *TransactionConfig) (string, error) {
+// fail if the name is currently owned by another account. The signerRPCClient
+// can be a client, multiclient or wallet.
+func RegisterName(s signerRPCClient, name string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -376,8 +378,8 @@ func RegisterName(s SignerRPCClient, name string, config *TransactionConfig) (st
 
 // TransferName transfers a name owned by this signer's pubkey to another public
 // key with a transaction fee. The expiration height of the name will not be
-// changed.
-func TransferName(s SignerRPCClient, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+// changed. The signerRPCClient can be a client, multiclient or wallet.
+func TransferName(s signerRPCClient, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -413,8 +415,8 @@ func TransferName(s SignerRPCClient, name string, recipientPubKey []byte, config
 }
 
 // DeleteName deletes a name owned by this signer's pubkey with a given
-// transaction fee.
-func DeleteName(s SignerRPCClient, name string, config *TransactionConfig) (string, error) {
+// transaction fee. The signerRPCClient can be a client, multiclient or wallet.
+func DeleteName(s signerRPCClient, name string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -453,10 +455,10 @@ func DeleteName(s SignerRPCClient, name string, config *TransactionConfig) (stri
 // the same key pair and identifier will be able to receive messages from this
 // topic. If this (identifier, public key) pair is already subscribed to this
 // topic, the subscription expiration will be extended to current block height +
-// duration.
+// duration. The signerRPCClient can be a client, multiclient or wallet.
 //
 // Duration is changed to signed int for gomobile compatibility.
-func Subscribe(s SignerRPCClient, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+func Subscribe(s signerRPCClient, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -500,8 +502,9 @@ func Subscribe(s SignerRPCClient, identifier, topic string, duration int, meta s
 }
 
 // Unsubscribe from a topic for an identifier. Client using the same key pair
-// and identifier will no longer receive messages from this topic.
-func Unsubscribe(s SignerRPCClient, identifier, topic string, config *TransactionConfig) (string, error) {
+// and identifier will no longer receive messages from this topic. The
+// signerRPCClient can be a client, multiclient or wallet.
+func Unsubscribe(s signerRPCClient, identifier, topic string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
