@@ -116,7 +116,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		addressID:        addressToID(addr),
 		OnConnect:        NewOnConnect(1, nil),
 		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
-		reconnectChan:    make(chan struct{}, 1),
+		reconnectChan:    make(chan struct{}),
 		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
 		sharedKeys:       make(map[string]*[sharedKeySize]byte),
 		wallet:           w,
@@ -619,7 +619,7 @@ func (c *Client) connect(maxRetries int) error {
 	retryInterval := c.config.MinReconnectInterval
 	for retry := 1; maxRetries == 0 || retry <= maxRetries; retry++ {
 		if retry > 1 {
-			log.Printf("Retry in %v...\n", retryInterval)
+			log.Printf("Retry in %v ms...\n", retryInterval)
 			time.Sleep(time.Duration(retryInterval) * time.Millisecond)
 			retryInterval *= 2
 			if retryInterval > c.config.MaxReconnectInterval {
@@ -661,7 +661,7 @@ func (c *Client) handleReconnect() {
 			return
 		}
 
-		log.Printf("Reconnect in %v...\n", c.config.MinReconnectInterval)
+		log.Printf("Reconnect in %v ms...\n", c.config.MinReconnectInterval)
 		time.Sleep(time.Duration(c.config.MinReconnectInterval) * time.Millisecond)
 
 		err := c.connect(0)
