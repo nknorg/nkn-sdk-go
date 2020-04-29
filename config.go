@@ -222,28 +222,28 @@ func GetDefaultTransactionConfig() *TransactionConfig {
 // GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
 // client config.
 func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
-	if len(config.SeedRPCServerAddr.Elems) == 0 {
+	if config.SeedRPCServerAddr.Len() == 0 {
 		return ""
 	}
-	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
+	return config.SeedRPCServerAddr.Elems()[rand.Intn(config.SeedRPCServerAddr.Len())]
 }
 
 // GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
 // wallet config.
 func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
-	if len(config.SeedRPCServerAddr.Elems) == 0 {
+	if config.SeedRPCServerAddr.Len() == 0 {
 		return ""
 	}
-	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
+	return config.SeedRPCServerAddr.Elems()[rand.Intn(config.SeedRPCServerAddr.Len())]
 }
 
 // GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
 // rpc config.
 func (config *RPCConfig) GetRandomSeedRPCServerAddr() string {
-	if len(config.SeedRPCServerAddr.Elems) == 0 {
+	if config.SeedRPCServerAddr.Len() == 0 {
 		return ""
 	}
-	return config.SeedRPCServerAddr.Elems[rand.Intn(len(config.SeedRPCServerAddr.Elems))]
+	return config.SeedRPCServerAddr.Elems()[rand.Intn(config.SeedRPCServerAddr.Len())]
 }
 
 // MergeClientConfig merges a given client config with the default client config

@@ -97,7 +97,7 @@ func (amount *Amount) ToFixed64() common.Fixed64 {
 
 // StringArray is a wrapper type for gomobile compatibility. StringArray is not
 // protected by lock and should not be read and write at the same time.
-type StringArray struct{ Elems []string }
+type StringArray struct{ elems []string }
 
 // NewStringArray creates a StringArray from a list of string elements.
 func NewStringArray(elems ...string) *StringArray {
@@ -110,14 +110,22 @@ func NewStringArrayFromString(s string) *StringArray {
 	return &StringArray{strings.Fields(s)}
 }
 
+// Elems returns the string array elements.
+func (sa *StringArray) Elems() []string {
+	if sa == nil {
+		return nil
+	}
+	return sa.elems
+}
+
 // Len returns the string array length.
 func (sa *StringArray) Len() int {
-	return len(sa.Elems)
+	return len(sa.Elems())
 }
 
 // Append adds an element to the string array.
 func (sa *StringArray) Append(s string) {
-	sa.Elems = append(sa.Elems, s)
+	sa.elems = append(sa.elems, s)
 }
 
 // StringMapFunc is a wrapper type for gomobile compatibility.

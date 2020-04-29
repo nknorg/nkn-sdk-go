@@ -308,7 +308,7 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 		return nil, err
 	}
 
-	if err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := m.sendWithClient(clientID, dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
@@ -374,7 +374,7 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 	go func() {
 		sent := 0
 		for clientID := range clients {
-			err := m.sendWithClient(clientID, dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds)
+			err := m.sendWithClient(clientID, dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds)
 			if err == nil {
 				select {
 				case success <- struct{}{}:
@@ -557,7 +557,7 @@ func (m *MultiClient) Listen(addrsRe *StringArray) error {
 	if addrsRe == nil {
 		addrs = []string{DefaultSessionAllowAddr}
 	} else {
-		addrs = addrsRe.Elems
+		addrs = addrsRe.Elems()
 	}
 
 	var err error
