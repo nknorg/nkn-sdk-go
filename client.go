@@ -735,7 +735,7 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 		return nil, err
 	}
 
-	if err := c.send(dests.Elems, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := c.send(dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
