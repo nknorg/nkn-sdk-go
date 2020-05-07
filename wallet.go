@@ -1,13 +1,10 @@
 package nkn
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 
 	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/crypto"
 	"github.com/nknorg/nkn/pb"
 	"github.com/nknorg/nkn/program"
 	"github.com/nknorg/nkn/signature"
@@ -18,14 +15,10 @@ import (
 // Wallet manages assets, query state from blockchain, and send transactions to
 // blockchain.
 type Wallet struct {
-	config             *WalletConfig
-	account            *Account
-	address            string
-	seedEncrypted      []byte
-	iv                 []byte
-	masterKeyEncrypted []byte
-	passwordHash       []byte
-	contractData       []byte
+	config     *WalletConfig
+	account    *Account
+	address    string
+	walletData *vault.WalletData
 }
 
 // NewWallet creates a wallet from an account and an optional config. For any
@@ -45,49 +38,25 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 		config.MasterKey = nil
 	}()
 
-	iv := config.IV
-	if iv == nil {
-		iv, err = RandomBytes(vault.WalletIVLength)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	masterKey := config.MasterKey
-	if masterKey == nil {
-		masterKey, err = RandomBytes(vault.WalletMasterKeyLength)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	passwordKey := crypto.ToAesKey([]byte(config.Password))
-	passwordHash := sha256.Sum256(passwordKey)
-
-	seedEncrypted, err := crypto.AesEncrypt(account.Seed(), masterKey, iv)
-	if err != nil {
-		return nil, err
-	}
-
-	masterKeyEncrypted, err := crypto.AesEncrypt(masterKey, passwordKey, iv)
-	if err != nil {
-		return nil, err
-	}
-
-	contract, err := program.CreateSignatureProgramContext(account.Account.PubKey())
+	walletData, err := vault.NewWalletData(
+		account.Account,
+		[]byte(config.Password),
+		config.MasterKey,
+		config.IV,
+		config.ScryptConfig.Salt,
+		config.ScryptConfig.N,
+		config.ScryptConfig.R,
+		config.ScryptConfig.P,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	wallet := &Wallet{
-		config:             config,
-		account:            account,
-		address:            account.WalletAddress(),
-		seedEncrypted:      seedEncrypted,
-		iv:                 iv,
-		masterKeyEncrypted: masterKeyEncrypted,
-		passwordHash:       passwordHash[:],
-		contractData:       contract.ToArray(),
+		config:     config,
+		account:    account,
+		address:    account.WalletAddress(),
+		walletData: walletData,
 	}
 
 	return wallet, nil
@@ -96,8 +65,18 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 // WalletFromJSON recovers a wallet from wallet JSON and wallet config. The
 // password in config must match the password used to create the wallet.
 func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
+	config, err := MergeWalletConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		config.Password = ""
+		config.MasterKey = nil
+	}()
+
 	walletData := &vault.WalletData{}
-	err := json.Unmarshal([]byte(walletJSON), walletData)
+	err = json.Unmarshal([]byte(walletJSON), walletData)
 	if err != nil {
 		return nil, err
 	}
@@ -106,75 +85,38 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 		return nil, ErrInvalidWalletVersion
 	}
 
-	if config == nil {
-		config = &WalletConfig{}
-	}
-
-	passwordKey := crypto.ToAesKey([]byte(config.Password))
-	passwordKeyHash, err := hex.DecodeString(walletData.PasswordHash)
-	if err != nil {
-		return nil, err
-	}
-	pkh := sha256.Sum256(passwordKey)
-	if !bytes.Equal(pkh[:], passwordKeyHash) {
-		return nil, ErrWrongPassword
-	}
-
 	iv, err := hex.DecodeString(walletData.IV)
 	if err != nil {
 		return nil, err
 	}
 
-	masterKeyEncrypted, err := hex.DecodeString(walletData.MasterKey)
+	masterKey, err := walletData.DecryptMasterKey([]byte(config.Password))
 	if err != nil {
 		return nil, err
 	}
 
-	masterKey, err := crypto.AesDecrypt(masterKeyEncrypted, passwordKey, iv)
+	account, err := walletData.DecryptAccount([]byte(config.Password))
 	if err != nil {
 		return nil, err
 	}
 
-	seedEncrypted, err := hex.DecodeString(walletData.SeedEncrypted)
-	if err != nil {
-		return nil, err
-	}
+	config.IV = iv
+	config.MasterKey = masterKey
 
-	seed, err := crypto.AesDecrypt(seedEncrypted, masterKey, iv)
-	if err != nil {
-		return nil, err
-	}
-
-	account, err := NewAccount(seed)
-	if err != nil {
-		return nil, err
-	}
-
-	configCopy := *config
-	configCopy.IV = iv
-	configCopy.MasterKey = masterKey
-
-	return NewWallet(account, &configCopy)
+	return NewWallet(&Account{account}, config)
 }
 
-// ToJSON serialize the wallet to JSON string encrypted by password used to
+// MarshalJSON serialize the wallet to JSON string encrypted by password used to
 // create the wallet. The same password must be used to recover the wallet from
 // JSON string.
+func (w *Wallet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(w.walletData)
+}
+
+// ToJSON is a shortcut for wallet.MarshalJSON, but returns string instead of
+// bytes.
 func (w *Wallet) ToJSON() (string, error) {
-	b, err := json.Marshal(vault.WalletData{
-		HeaderData: vault.HeaderData{
-			PasswordHash: hex.EncodeToString(w.passwordHash),
-			IV:           hex.EncodeToString(w.iv),
-			MasterKey:    hex.EncodeToString(w.masterKeyEncrypted),
-			Version:      vault.WalletVersion,
-		},
-		AccountData: vault.AccountData{
-			Address:       w.address,
-			ProgramHash:   w.account.ProgramHash.ToHexString(),
-			SeedEncrypted: hex.EncodeToString(w.seedEncrypted),
-			ContractData:  hex.EncodeToString(w.contractData),
-		},
-	})
+	b, err := w.MarshalJSON()
 	if err != nil {
 		return "", err
 	}
@@ -200,9 +142,7 @@ func (w *Wallet) Address() string {
 // VerifyPassword returns whether a password is the correct password of this
 // wallet.
 func (w *Wallet) VerifyPassword(password string) bool {
-	passwordKey := crypto.ToAesKey([]byte(password))
-	passwordHash := sha256.Sum256(passwordKey)
-	return bytes.Equal(passwordHash[:], w.passwordHash)
+	return w.walletData.VerifyPassword([]byte(password)) == nil
 }
 
 // ProgramHash returns the program hash of this wallet's account.

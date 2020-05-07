@@ -159,17 +159,29 @@ func GetDefaultDialConfig(baseSessionConfig *ncp.Config) *DialConfig {
 	return &dialConf
 }
 
+// ScryptConfig is the scrypt configuration.
+type ScryptConfig struct {
+	Salt []byte
+	N    int
+	R    int
+	P    int
+}
+
 // WalletConfig is the wallet configuration.
 type WalletConfig struct {
 	SeedRPCServerAddr *StringArray
 	Password          string
 	IV                []byte
 	MasterKey         []byte
+	ScryptConfig      *ScryptConfig
 }
 
 // DefaultWalletConfig is the default wallet configuration.
 var DefaultWalletConfig = WalletConfig{
 	SeedRPCServerAddr: nil,
+	IV:                nil,
+	MasterKey:         nil,
+	ScryptConfig:      nil,
 }
 
 // GetDefaultWalletConfig returns the default wallet config with nil pointer
@@ -177,6 +189,7 @@ var DefaultWalletConfig = WalletConfig{
 func GetDefaultWalletConfig() *WalletConfig {
 	walletConf := DefaultWalletConfig
 	walletConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	walletConf.ScryptConfig = &ScryptConfig{}
 	return &walletConf
 }
 
