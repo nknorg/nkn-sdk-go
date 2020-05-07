@@ -30,19 +30,13 @@ type Account struct{ *vault.Account }
 // NewAccount creates an account from secret seed. Seed length should be 32 or
 // 0. If seed has zero length (including nil), a random seed will be generated.
 func NewAccount(seed []byte) (*Account, error) {
-	if len(seed) == 0 {
-		account, err := vault.NewAccount()
-		return &Account{account}, err
+	var account *vault.Account
+	var err error
+	if len(seed) > 0 {
+		account, err = vault.NewAccountWithSeed(seed)
+	} else {
+		account, err = vault.NewAccount()
 	}
-
-	err := crypto.CheckSeed(seed)
-	if err != nil {
-		return nil, err
-	}
-
-	privateKey := crypto.GetPrivateKeyFromSeed(seed)
-
-	account, err := vault.NewAccountWithPrivatekey(privateKey)
 	if err != nil {
 		return nil, err
 	}

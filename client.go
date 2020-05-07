@@ -420,9 +420,9 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return err
 			}
 
-			if len(inboundMsg.PrevSignature) > 0 {
+			if len(inboundMsg.PrevHash) > 0 {
 				go func() {
-					if err := c.sendReceipt(inboundMsg.PrevSignature); err != nil {
+					if err := c.sendReceipt(inboundMsg.PrevHash); err != nil {
 						log.Println(err)
 					}
 				}()
@@ -700,8 +700,8 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	}
 
 	receipt := &pb.Receipt{
-		PrevSignature: prevSignature,
-		Signature:     signature,
+		PrevHash:  prevSignature,
+		Signature: signature,
 	}
 	receiptData, err := proto.Marshal(receipt)
 	if err != nil {
