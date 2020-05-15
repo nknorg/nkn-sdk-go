@@ -100,6 +100,15 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 		return nil, err
 	}
 
+	address, err := account.ProgramHash.ToAddress()
+	if err != nil {
+		return nil, err
+	}
+
+	if address != walletData.Address {
+		return nil, ErrWrongPassword
+	}
+
 	config.IV = iv
 	config.MasterKey = masterKey
 
