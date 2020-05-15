@@ -55,7 +55,7 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 	wallet := &Wallet{
 		config:     config,
 		account:    account,
-		address:    account.WalletAddress(),
+		address:    walletData.Address,
 		walletData: walletData,
 	}
 
@@ -85,16 +85,6 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 		return nil, ErrInvalidWalletVersion
 	}
 
-	iv, err := hex.DecodeString(walletData.IV)
-	if err != nil {
-		return nil, err
-	}
-
-	masterKey, err := walletData.DecryptMasterKey([]byte(config.Password))
-	if err != nil {
-		return nil, err
-	}
-
 	account, err := walletData.DecryptAccount([]byte(config.Password))
 	if err != nil {
 		return nil, err
@@ -107,6 +97,26 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 
 	if address != walletData.Address {
 		return nil, ErrWrongPassword
+	}
+
+	if walletData.Version == vault.WalletVersion {
+		wallet := &Wallet{
+			config:     config,
+			account:    &Account{account},
+			address:    address,
+			walletData: walletData,
+		}
+		return wallet, nil
+	}
+
+	iv, err := hex.DecodeString(walletData.IV)
+	if err != nil {
+		return nil, err
+	}
+
+	masterKey, err := walletData.DecryptMasterKey([]byte(config.Password))
+	if err != nil {
+		return nil, err
 	}
 
 	config.IV = iv
