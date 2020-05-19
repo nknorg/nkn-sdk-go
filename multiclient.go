@@ -155,12 +155,18 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 
 			wg.Done()
 
-			node := <-client.OnConnect.C
+			node, ok := <-client.OnConnect.C
+			if !ok {
+				return
+			}
 			m.OnConnect.receive(node)
 
 			for {
 				select {
-				case msg := <-client.OnMessage.C:
+				case msg, ok := <-client.OnMessage.C:
+					if !ok {
+						return
+					}
 					if msg.Type == SessionType {
 						if !msg.Encrypted {
 							continue
