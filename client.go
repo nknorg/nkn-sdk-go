@@ -458,17 +458,13 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				data = nil
 			}
 
-			var msg *Message
-			switch payload.Type {
-			case payloads.BINARY, payloads.TEXT, payloads.SESSION:
-				msg = &Message{
-					Src:       inboundMsg.Src,
-					Data:      data,
-					Type:      int32(payload.Type),
-					Encrypted: payloadMsg.Encrypted,
-					MessageID: payload.MessageId,
-					NoReply:   payload.NoReply,
-				}
+			msg := &Message{
+				Src:       inboundMsg.Src,
+				Data:      data,
+				Type:      int32(payload.Type),
+				Encrypted: payloadMsg.Encrypted,
+				MessageID: payload.MessageId,
+				NoReply:   payload.NoReply,
 			}
 
 			if len(payload.ReplyToId) > 0 {
