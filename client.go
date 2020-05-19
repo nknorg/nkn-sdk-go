@@ -66,7 +66,7 @@ type Client struct {
 	responseChannels  *cache.Cache
 
 	lock       sync.RWMutex
-	closed     bool
+	isClosed   bool
 	conn       *websocket.Conn
 	node       *Node
 	sharedKeys map[string]*[sharedKeySize]byte
@@ -161,20 +161,28 @@ func (c *Client) Address() string {
 func (c *Client) IsClosed() bool {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.closed
+	return c.isClosed
 }
 
 // Close closes the client.
-func (c *Client) Close() {
+func (c *Client) Close() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if !c.closed {
-		c.closed = true
-		close(c.OnConnect.C)
-		close(c.OnMessage.C)
-		close(c.reconnectChan)
-		c.conn.Close()
+
+	if c.isClosed {
+		return nil
 	}
+
+	c.isClosed = true
+
+	c.OnConnect.close()
+	c.OnMessage.close()
+
+	close(c.reconnectChan)
+
+	c.conn.Close()
+
+	return nil
 }
 
 // GetNode returns the node that client is currently connected to.
@@ -395,7 +403,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			c.lock.RLock()
 			defer c.lock.RUnlock()
-			if c.closed {
+			if c.isClosed {
 				return nil
 			}
 
@@ -500,7 +508,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			c.lock.RLock()
 			defer c.lock.RUnlock()
-			if c.closed {
+			if c.isClosed {
 				return nil
 			}
 
