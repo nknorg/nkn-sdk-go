@@ -212,6 +212,10 @@ func (c *OnConnect) receive(node *Node) {
 	}
 }
 
+func (c *OnConnect) close() {
+	close(c.C)
+}
+
 // OnMessageFunc is a wrapper type for gomobile compatibility.
 type OnMessageFunc interface{ OnMessage(*Message) }
 
@@ -249,6 +253,10 @@ func (c *OnMessage) receive(msg *Message, verbose bool) {
 	}
 }
 
+func (c *OnMessage) close() {
+	close(c.C)
+}
+
 // OnErrorFunc is a wrapper type for gomobile compatibility.
 type OnErrorFunc interface{ OnError(error) }
 
@@ -282,6 +290,10 @@ func (c *OnError) receive(err error) {
 			log.Printf("OnError channel full, print error instead: %v", err)
 		}
 	}
+}
+
+func (c *OnError) close() {
+	close(c.C)
 }
 
 // ClientAddr represents NKN client address. It implements net.Addr interface.

@@ -159,7 +159,14 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 			if !ok {
 				return
 			}
+
+			m.lock.RLock()
+			if m.isClosed {
+				m.lock.RUnlock()
+				return
+			}
 			m.OnConnect.receive(node)
+			m.lock.RUnlock()
 
 			for {
 				select {
@@ -202,7 +209,14 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 								return nil
 							}
 						}
+
+						m.lock.RLock()
+						if m.isClosed {
+							m.lock.RUnlock()
+							return
+						}
 						m.OnMessage.receive(msg, true)
+						m.lock.RUnlock()
 					}
 				case <-m.onClose:
 					return
@@ -679,11 +693,18 @@ func (m *MultiClient) Close() error {
 
 	time.AfterFunc(time.Duration(m.config.SessionConfig.Linger)*time.Millisecond, func() {
 		for _, client := range m.GetClients() {
-			client.Close()
+			err := client.Close()
+			if err != nil {
+				log.Println(err)
+				continue
+			}
 		}
 	})
 
 	m.isClosed = true
+
+	m.OnConnect.close()
+	m.OnMessage.close()
 
 	close(m.onClose)
 
