@@ -382,7 +382,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				go func() {
 					err := c.connectToNode(&node)
 					if err != nil {
-						c.reconnect()
+						c.Reconnect()
 					}
 				}()
 			} else if action == setClientAction {
@@ -569,6 +569,8 @@ func (c *Client) connectToNode(node *Node) error {
 				err = conn.WriteMessage(websocket.PingMessage, nil)
 				c.lock.Unlock()
 				if err != nil {
+					log.Println(err)
+					c.Reconnect()
 					return
 				}
 			case <-done:
@@ -587,7 +589,7 @@ func (c *Client) connectToNode(node *Node) error {
 		c.lock.Unlock()
 		if err != nil {
 			log.Println(err)
-			c.reconnect()
+			c.Reconnect()
 			return
 		}
 	}()
@@ -600,9 +602,9 @@ func (c *Client) connectToNode(node *Node) error {
 			}
 
 			msgType, data, err := conn.ReadMessage()
-			if err != nil && !c.IsClosed() {
+			if err != nil {
 				log.Println(err)
-				c.reconnect()
+				c.Reconnect()
 				return
 			}
 
@@ -649,7 +651,8 @@ func (c *Client) connect(maxRetries int) error {
 	return ErrConnectFailed
 }
 
-func (c *Client) reconnect() {
+// Reconnect forces the client to find node and connect again.
+func (c *Client) Reconnect() {
 	if c.IsClosed() {
 		return
 	}
@@ -683,7 +686,7 @@ func (c *Client) writeMessage(buf []byte) error {
 	err := c.conn.WriteMessage(websocket.BinaryMessage, buf)
 	c.lock.Unlock()
 	if err != nil {
-		c.reconnect()
+		c.Reconnect()
 	}
 	return err
 }

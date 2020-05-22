@@ -718,6 +718,20 @@ func (m *MultiClient) IsClosed() bool {
 	return m.isClosed
 }
 
+// Reconnect forces all clients to find node and connect again.
+func (m *MultiClient) Reconnect() {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	if m.isClosed {
+		return
+	}
+
+	for _, client := range m.clients {
+		client.Reconnect()
+	}
+}
+
 func (m *MultiClient) getConfig() *ClientConfig {
 	return m.config
 }
