@@ -132,6 +132,11 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 	return &c, nil
 }
 
+// Account returns the account of the client.
+func (c *Client) Account() *Account {
+	return c.account
+}
+
 // Seed returns the secret seed of the client. Secret seed can be used to create
 // client/wallet with the same key pair and should be kept secret and safe.
 func (c *Client) Seed() []byte {

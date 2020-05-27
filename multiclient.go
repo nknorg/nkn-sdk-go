@@ -244,6 +244,11 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 	}
 }
 
+// Account returns the account of the multiclient.
+func (m *MultiClient) Account() *Account {
+	return m.GetDefaultClient().account
+}
+
 // Seed returns the secret seed of the multiclient. Secret seed can be used to
 // create client/wallet with the same key pair and should be kept secret and
 // safe.

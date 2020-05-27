@@ -1,6 +1,14 @@
 # nkn-sdk-go
 
-[![GoDoc](https://godoc.org/github.com/nknorg/nkn-sdk-go?status.svg)](https://godoc.org/github.com/nknorg/nkn-sdk-go) [![GitHub license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE) [![Go Report Card](https://goreportcard.com/badge/github.com/nknorg/nkn-sdk-go)](https://goreportcard.com/report/github.com/nknorg/nkn-sdk-go) [![Build Status](https://travis-ci.org/nknorg/nkn-sdk-go.svg?branch=master)](https://travis-ci.org/nknorg/nkn-sdk-go) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
+[![GoDoc](https://godoc.org/github.com/nknorg/nkn-sdk-go?status.svg)](https://godoc.org/github.com/nknorg/nkn-sdk-go)
+[![GitHub
+license](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Go Report
+Card](https://goreportcard.com/badge/github.com/nknorg/nkn-sdk-go)](https://goreportcard.com/report/github.com/nknorg/nkn-sdk-go)
+[![Build
+Status](https://travis-ci.org/nknorg/nkn-sdk-go.svg?branch=master)](https://travis-ci.org/nknorg/nkn-sdk-go)
+[![PRs
+Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
 Go implementation of NKN client and wallet SDK. The SDK consists of a
 few components:
@@ -39,11 +47,14 @@ Advantages of using NKN client/multiclient for data transmission:
 - Everything is free, open source and decentralized. (If you are curious, node
   relay traffic for clients for free to earn mining rewards in NKN blockchain.)
 
-Documentation:
-[https://godoc.org/github.com/nknorg/nkn-sdk-go](https://godoc.org/github.com/nknorg/nkn-sdk-go).
+## Documentation
 
+Full documentation can be found at
+[GoDoc](https://godoc.org/github.com/nknorg/nkn-sdk-go).
 
-## Client
+## Usage
+
+### Client
 
 NKN Client provides low level p2p messaging through NKN network. For most
 applications, it's more suitable to use multiclient (see
@@ -151,7 +162,7 @@ subscription, err := client.GetSubscription("topic", "identifier.publickey")
 fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
 ```
 
-## Multiclient
+### Multiclient
 
 Multiclient creates multiple client instances by adding identifier prefix
 (`__0__.`, `__1__.`, `__2__.`, ...) to a nkn address and send/receive packets
@@ -184,7 +195,7 @@ usage and examples. If you need low-level property or API, you can use
 `multiclient.DefaultClient` to get the default client and `multiclient.Clients`
 to get all clients.
 
-## Session
+### Session
 
 Multiclient supports a reliable transmit protocol called session. It will be
 responsible for retransmission and ordering just like TCP. It uses multiple
@@ -229,7 +240,7 @@ n, err := session.Read(buf)
 n, err := session.Write(buf)
 ```
 
-## Wallet
+### Wallet
 
 Create wallet SDK:
 
@@ -344,7 +355,7 @@ Unsubscribe from specified topic:
 txnHash, err = wallet.Unsubscribe("identifier", "topic", nil)
 ```
 
-## iOS/Android
+## Compiling to iOS/Android native library
 
 This library is designed to work with
 [gomobile](https://godoc.org/golang.org/x/mobile/cmd/gomobile) and run natively
