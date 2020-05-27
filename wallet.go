@@ -142,6 +142,11 @@ func (w *Wallet) ToJSON() (string, error) {
 	return string(b), nil
 }
 
+// Account returns the account of the wallet.
+func (w *Wallet) Account() *Account {
+	return w.account
+}
+
 // Seed returns the secret seed of the wallet. Secret seed can be used to create
 // client/wallet with the same key pair and should be kept secret and safe.
 func (w *Wallet) Seed() []byte {
