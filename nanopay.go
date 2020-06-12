@@ -52,6 +52,7 @@ type NanoPayClaimer struct {
 	lock              sync.Mutex
 	amount            common.Fixed64
 	closed            bool
+	closeChan         chan struct{}
 	expiration        uint32
 	id                *uint64
 	lastClaimTime     time.Time
@@ -145,14 +146,16 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 		rpcClient:            rpcClient,
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: receiver,
+		closeChan:            make(chan struct{}),
 	}
 
 	go func() {
+		defer npc.Flush()
 		for {
 			time.Sleep(time.Second)
 
 			if npc.closed {
-				break
+				return
 			}
 
 			npc.lock.Lock()
@@ -178,8 +181,12 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 					if sleepDuration > time.Duration(expiration-uint32(height)-forceFlushDelta)*config.ConsensusDuration {
 						sleepDuration = time.Duration(expiration-uint32(height)-forceFlushDelta) * config.ConsensusDuration
 					}
-					time.Sleep(sleepDuration)
-					continue
+					select {
+					case <-time.After(sleepDuration):
+						continue
+					case <-npc.closeChan:
+						return
+					}
 				}
 			}
 
@@ -205,6 +212,7 @@ func (npc *NanoPayClaimer) close() error {
 		return nil
 	}
 	npc.closed = true
+	close(npc.closeChan)
 	return npc.flush()
 }
 
