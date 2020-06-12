@@ -81,6 +81,7 @@ func NewNanoPay(rpcClient rpcClient, senderWallet *Wallet, recipientAddress, fee
 		recipientProgramHash: programHash,
 		fee:                  feeFixed64,
 		duration:             uint32(duration),
+		id:                   randUint64(),
 	}
 
 	return np, nil
