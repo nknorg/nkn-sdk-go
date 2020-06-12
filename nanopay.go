@@ -148,6 +148,7 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: receiver,
 		closeChan:            make(chan struct{}),
+		lastClaimTime:        time.Now(),
 	}
 
 	go func() {
@@ -214,7 +215,7 @@ func (npc *NanoPayClaimer) close() error {
 	}
 	npc.closed = true
 	close(npc.closeChan)
-	return npc.flush()
+	return nil
 }
 
 // Close closes the NanoPayClaimer.
