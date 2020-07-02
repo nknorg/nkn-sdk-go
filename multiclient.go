@@ -141,11 +141,23 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 			}
 
 			m.lock.Lock()
+
+			if m.isClosed {
+				err := client.Close()
+				if err != nil {
+					log.Println(err)
+				}
+				wg.Done()
+				m.lock.Unlock()
+				return
+			}
+
 			m.clients[i] = client
 			if i < defaultClientIdx {
 				m.defaultClient = client
 				defaultClientIdx = i
 			}
+
 			m.lock.Unlock()
 
 			select {
