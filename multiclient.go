@@ -14,8 +14,8 @@ import (
 	multierror "github.com/hashicorp/go-multierror"
 	ncp "github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn-sdk-go/payloads"
-	"github.com/nknorg/nkn/transaction"
-	"github.com/nknorg/nkn/util/address"
+	"github.com/nknorg/nkn/v2/transaction"
+	"github.com/nknorg/nkn/v2/util/address"
 	"github.com/patrickmn/go-cache"
 )
 

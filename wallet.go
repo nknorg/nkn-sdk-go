@@ -4,12 +4,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 
-	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/pb"
-	"github.com/nknorg/nkn/program"
-	"github.com/nknorg/nkn/signature"
-	"github.com/nknorg/nkn/transaction"
-	"github.com/nknorg/nkn/vault"
+	"github.com/nknorg/nkn/v2/common"
+	"github.com/nknorg/nkn/v2/pb"
+	"github.com/nknorg/nkn/v2/program"
+	"github.com/nknorg/nkn/v2/signature"
+	"github.com/nknorg/nkn/v2/transaction"
+	"github.com/nknorg/nkn/v2/vault"
 )
 
 // Wallet manages assets, query state from blockchain, and send transactions to

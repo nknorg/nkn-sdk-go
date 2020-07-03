@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/crypto"
-	"github.com/nknorg/nkn/program"
-	"github.com/nknorg/nkn/util/address"
-	"github.com/nknorg/nkn/vault"
+	"github.com/nknorg/nkn/v2/common"
+	"github.com/nknorg/nkn/v2/crypto"
+	"github.com/nknorg/nkn/v2/program"
+	"github.com/nknorg/nkn/v2/util/address"
+	"github.com/nknorg/nkn/v2/vault"
 )
 
 const (

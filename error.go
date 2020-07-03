@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	ncp "github.com/nknorg/ncp-go"
-	"github.com/nknorg/nkn/vault"
+	"github.com/nknorg/nkn/v2/vault"
 )
 
 // ErrorWithCode is an error interface that implements error and Code()
