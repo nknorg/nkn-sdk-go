@@ -44,11 +44,11 @@ This library is designed to work with gomobile
 iOS/Android without any modification. You can use gomobile to compile it to
 Objective-C framework for iOS:
 
-  gomobile bind -target=ios -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/transaction
+  gomobile bind -target=ios -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/v2/transaction
 
 and Java AAR for Android:
 
-  gomobile bind -target=android -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/transaction
+  gomobile bind -target=android -ldflags "-s -w" github.com/nknorg/nkn-sdk-go github.com/nknorg/ncp-go github.com/nknorg/nkn/v2/transaction
 
 It's recommended to use the latest version of gomobile that supports go modules.
 */

@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/nknorg/nkn/api/httpjson/client"
-	"github.com/nknorg/nkn/common"
-	"github.com/nknorg/nkn/program"
-	"github.com/nknorg/nkn/transaction"
-	nknConfig "github.com/nknorg/nkn/util/config"
+	"github.com/nknorg/nkn/v2/api/httpjson/client"
+	"github.com/nknorg/nkn/v2/common"
+	"github.com/nknorg/nkn/v2/program"
+	"github.com/nknorg/nkn/v2/transaction"
+	nknConfig "github.com/nknorg/nkn/v2/util/config"
 )
 
 // Signer is the interface that can sign transactions.
@@ -273,8 +273,12 @@ func GetRegistrant(name string, config RPCConfigInterface) (*Registrant, error) 
 // SendRawTransaction RPC sends a signed transaction to chain and returns txn
 // hash hex string.
 func SendRawTransaction(txn *transaction.Transaction, config RPCConfigInterface) (string, error) {
+	b, err := txn.Marshal()
+	if err != nil {
+		return "", err
+	}
 	var txnHash string
-	err := RPCCall("sendrawtransaction", map[string]interface{}{"tx": hex.EncodeToString(txn.ToArray())}, &txnHash, config)
+	err = RPCCall("sendrawtransaction", map[string]interface{}{"tx": hex.EncodeToString(b)}, &txnHash, config)
 	if err != nil {
 		return "", err
 	}
