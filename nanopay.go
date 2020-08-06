@@ -1,6 +1,7 @@
 package nkn
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -97,11 +98,17 @@ func (np *NanoPay) Recipient() string {
 // of NKN to avoid precision loss. For example, "0.1" will be parsed as 0.1 NKN.
 func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, error) {
 	height, err := np.rpcClient.GetHeight()
-	if err != nil {
-		return nil, err
-	}
 
 	np.lock.Lock()
+	defer np.lock.Unlock()
+
+	if err != nil {
+		log.Printf("Get height error: %v", err)
+		if np.expiration == 0 {
+			return nil, err
+		}
+	}
+
 	if np.expiration == 0 || np.expiration <= uint32(height)+senderExpirationDelta {
 		np.id = randUint64()
 		np.expiration = uint32(height) + np.duration
@@ -110,7 +117,6 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 
 	deltaValue, err := common.StringToFixed64(delta)
 	if err != nil {
-		np.lock.Unlock()
 		return nil, err
 	}
 
@@ -118,7 +124,6 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 	id := np.id
 	amount := np.amount
 	expiration := np.expiration
-	np.lock.Unlock()
 
 	tx, err := transaction.NewNanoPayTransaction(np.senderWallet.account.ProgramHash, np.recipientProgramHash, id, amount, expiration, expiration)
 	if err != nil {
