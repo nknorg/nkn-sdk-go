@@ -630,7 +630,7 @@ func (c *Client) connect(maxRetries int) error {
 	retryInterval := c.config.MinReconnectInterval
 	for retry := 1; maxRetries == 0 || retry <= maxRetries; retry++ {
 		if retry > 1 {
-			log.Printf("Retry in %v ms...\n", retryInterval)
+			log.Printf("Retry in %v ms...", retryInterval)
 			time.Sleep(time.Duration(retryInterval) * time.Millisecond)
 			retryInterval *= 2
 			if retryInterval > c.config.MaxReconnectInterval {
@@ -673,7 +673,7 @@ func (c *Client) handleReconnect() {
 			return
 		}
 
-		log.Printf("Reconnect in %v ms...\n", c.config.MinReconnectInterval)
+		log.Printf("Reconnect in %v ms...", c.config.MinReconnectInterval)
 		time.Sleep(time.Duration(c.config.MinReconnectInterval) * time.Millisecond)
 
 		err := c.connect(0)
