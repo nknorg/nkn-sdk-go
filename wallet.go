@@ -3,6 +3,7 @@ package nkn
 import (
 	"encoding/hex"
 	"encoding/json"
+	"sync"
 
 	"github.com/nknorg/nkn/v2/common"
 	"github.com/nknorg/nkn/v2/pb"
@@ -15,9 +16,11 @@ import (
 // Wallet manages assets, query state from blockchain, and send transactions to
 // blockchain.
 type Wallet struct {
-	config     *WalletConfig
-	account    *Account
-	address    string
+	config  *WalletConfig
+	account *Account
+	address string
+
+	lock       sync.Mutex
 	walletData *vault.WalletData
 }
 
@@ -33,29 +36,32 @@ func NewWallet(account *Account, config *WalletConfig) (*Wallet, error) {
 		return nil, err
 	}
 
-	defer func() {
-		config.Password = ""
-		config.MasterKey = nil
-	}()
+	var walletData *vault.WalletData
+	if len(config.Password) > 0 || len(config.MasterKey) > 0 {
+		defer func() {
+			config.Password = ""
+			config.MasterKey = nil
+		}()
 
-	walletData, err := vault.NewWalletData(
-		account.Account,
-		[]byte(config.Password),
-		config.MasterKey,
-		config.IV,
-		config.ScryptConfig.Salt,
-		config.ScryptConfig.N,
-		config.ScryptConfig.R,
-		config.ScryptConfig.P,
-	)
-	if err != nil {
-		return nil, err
+		walletData, err = vault.NewWalletData(
+			account.Account,
+			[]byte(config.Password),
+			config.MasterKey,
+			config.IV,
+			config.ScryptConfig.Salt,
+			config.ScryptConfig.N,
+			config.ScryptConfig.R,
+			config.ScryptConfig.P,
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	wallet := &Wallet{
 		config:     config,
 		account:    account,
-		address:    walletData.Address,
+		address:    account.WalletAddress(),
 		walletData: walletData,
 	}
 
@@ -125,11 +131,37 @@ func WalletFromJSON(walletJSON string, config *WalletConfig) (*Wallet, error) {
 	return NewWallet(&Account{account}, config)
 }
 
+func (w *Wallet) getWalletData() (*vault.WalletData, error) {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	if w.walletData == nil {
+		walletData, err := vault.NewWalletData(
+			w.account.Account,
+			[]byte(w.config.Password),
+			w.config.MasterKey,
+			w.config.IV,
+			w.config.ScryptConfig.Salt,
+			w.config.ScryptConfig.N,
+			w.config.ScryptConfig.R,
+			w.config.ScryptConfig.P,
+		)
+		if err != nil {
+			return nil, err
+		}
+		w.walletData = walletData
+	}
+	return w.walletData, nil
+}
+
 // MarshalJSON serialize the wallet to JSON string encrypted by password used to
 // create the wallet. The same password must be used to recover the wallet from
 // JSON string.
 func (w *Wallet) MarshalJSON() ([]byte, error) {
-	return json.Marshal(w.walletData)
+	walletData, err := w.getWalletData()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(walletData)
 }
 
 // ToJSON is a shortcut for wallet.MarshalJSON, but returns string instead of
@@ -163,10 +195,14 @@ func (w *Wallet) Address() string {
 	return w.address
 }
 
-// VerifyPassword returns whether a password is the correct password of this
-// wallet.
-func (w *Wallet) VerifyPassword(password string) bool {
-	return w.walletData.VerifyPassword([]byte(password)) == nil
+// VerifyPassword returns nil if provided password is the correct password of
+// this wallet.
+func (w *Wallet) VerifyPassword(password string) error {
+	walletData, err := w.getWalletData()
+	if err != nil {
+		return err
+	}
+	return walletData.VerifyPassword([]byte(password))
 }
 
 // ProgramHash returns the program hash of this wallet's account.

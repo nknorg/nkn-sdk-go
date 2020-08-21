@@ -283,7 +283,7 @@ err := nkn.VerifyWalletAddress(wallet.Address())
 Verify password of the wallet:
 
 ```go
-ok := wallet.VerifyPassword("password")
+err := wallet.VerifyPassword("password")
 ```
 
 Query asset balance for this wallet:
