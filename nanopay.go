@@ -6,11 +6,11 @@ import (
 	"time"
 
 	multierror "github.com/hashicorp/go-multierror"
-	"github.com/nknorg/nkn/v2/chain"
+	"github.com/nknorg/nkn/v2/chain/txvalidator"
 	"github.com/nknorg/nkn/v2/common"
+	"github.com/nknorg/nkn/v2/config"
 	"github.com/nknorg/nkn/v2/pb"
 	"github.com/nknorg/nkn/v2/transaction"
-	"github.com/nknorg/nkn/v2/util/config"
 )
 
 const (
@@ -306,7 +306,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 		return nil, npc.closeWithError(ErrWrongRecipient)
 	}
 
-	if err := chain.VerifyTransaction(tx, 0); err != nil {
+	if err := txvalidator.VerifyTransaction(tx, uint32(height)); err != nil {
 		return nil, npc.closeWithError(err)
 	}
 

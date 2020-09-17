@@ -14,16 +14,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"github.com/nknorg/nkn-sdk-go/payloads"
-	apiCommon "github.com/nknorg/nkn/v2/api/common"
+	"github.com/nknorg/nkn/v2/api/common/errcode"
+	"github.com/nknorg/nkn/v2/config"
 	"github.com/nknorg/nkn/v2/crypto"
 	"github.com/nknorg/nkn/v2/crypto/ed25519"
 	"github.com/nknorg/nkn/v2/pb"
 	"github.com/nknorg/nkn/v2/transaction"
 	"github.com/nknorg/nkn/v2/util/address"
-	"github.com/nknorg/nkn/v2/util/config"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/nacl/box"
 )
@@ -374,12 +374,12 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 		if err := json.Unmarshal(*msg["Action"], &action); err != nil {
 			return err
 		}
-		var errCode apiCommon.ErrCode
+		var errCode errcode.ErrCode
 		if err := json.Unmarshal(*msg["Error"], &errCode); err != nil {
 			return err
 		}
-		if errCode != apiCommon.SUCCESS {
-			if errCode == apiCommon.WRONG_NODE {
+		if errCode != errcode.SUCCESS {
+			if errCode == errcode.WRONG_NODE {
 				var node Node
 				if err := json.Unmarshal(*msg["Result"], &node); err != nil {
 					return err
@@ -394,7 +394,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				c.Close()
 			}
 			return errorWithCode{
-				err:  errors.New(apiCommon.ErrMessage[errCode]),
+				err:  errors.New(errcode.ErrMessage[errCode]),
 				code: int32(errCode),
 			}
 		}
@@ -427,7 +427,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			return err
 		}
 		switch clientMsg.MessageType {
-		case pb.INBOUND_MESSAGE:
+		case pb.ClientMessageType_INBOUND_MESSAGE:
 			inboundMsg := &pb.InboundMessage{}
 			if err := proto.Unmarshal(clientMsg.Message, inboundMsg); err != nil {
 				return err
@@ -461,13 +461,13 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			}
 			data := payload.Data
 			switch payload.Type {
-			case payloads.TEXT:
+			case payloads.PayloadType_TEXT:
 				textData := &payloads.TextData{}
 				if err := proto.Unmarshal(data, textData); err != nil {
 					return err
 				}
 				data = []byte(textData.Text)
-			case payloads.ACK:
+			case payloads.PayloadType_ACK:
 				data = nil
 			}
 
@@ -721,9 +721,9 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 	}
 
 	clientMsg := &pb.ClientMessage{
-		MessageType:     pb.RECEIPT,
+		MessageType:     pb.ClientMessageType_RECEIPT,
 		Message:         receiptData,
-		CompressionType: pb.COMPRESSION_NONE,
+		CompressionType: pb.CompressionType_COMPRESSION_NONE,
 	}
 	buf, err := proto.Marshal(clientMsg)
 	if err != nil {
@@ -900,7 +900,7 @@ func (c *Client) newOutboundMessage(dests []string, plds [][]byte, encrypted boo
 
 func (c *Client) newClientMessage(outboundMsg *pb.OutboundMessage) (*pb.ClientMessage, error) {
 	clientMsg := &pb.ClientMessage{
-		MessageType: pb.OUTBOUND_MESSAGE,
+		MessageType: pb.ClientMessageType_OUTBOUND_MESSAGE,
 	}
 
 	outboundMsgData, err := proto.Marshal(outboundMsg)
@@ -909,7 +909,7 @@ func (c *Client) newClientMessage(outboundMsg *pb.OutboundMessage) (*pb.ClientMe
 	}
 
 	if len(outboundMsg.Payloads) > 1 {
-		clientMsg.CompressionType = pb.COMPRESSION_ZLIB
+		clientMsg.CompressionType = pb.CompressionType_COMPRESSION_ZLIB
 		var b bytes.Buffer
 		w := zlib.NewWriter(&b)
 		_, err = w.Write(outboundMsgData)
@@ -922,7 +922,7 @@ func (c *Client) newClientMessage(outboundMsg *pb.OutboundMessage) (*pb.ClientMe
 		}
 		clientMsg.Message = b.Bytes()
 	} else {
-		clientMsg.CompressionType = pb.COMPRESSION_NONE
+		clientMsg.CompressionType = pb.CompressionType_COMPRESSION_NONE
 		clientMsg.Message = outboundMsgData
 	}
 
