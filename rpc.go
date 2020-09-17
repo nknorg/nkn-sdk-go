@@ -7,9 +7,9 @@ import (
 
 	"github.com/nknorg/nkn/v2/api/httpjson/client"
 	"github.com/nknorg/nkn/v2/common"
+	nknConfig "github.com/nknorg/nkn/v2/config"
 	"github.com/nknorg/nkn/v2/program"
 	"github.com/nknorg/nkn/v2/transaction"
-	nknConfig "github.com/nknorg/nkn/v2/util/config"
 )
 
 // Signer is the interface that can sign transactions.

@@ -525,7 +525,7 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *nc
 	sort.Strings(clientIDs)
 	return ncp.NewSession(m.addr, NewClientAddr(remoteAddr), clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
-			Type:      payloads.SESSION,
+			Type:      payloads.PayloadType_SESSION,
 			MessageId: sessionID,
 			Data:      buf,
 		}

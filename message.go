@@ -3,7 +3,7 @@ package nkn
 import (
 	"crypto/rand"
 
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"golang.org/x/crypto/nacl/box"
 )
@@ -15,10 +15,10 @@ const (
 
 // Payload type alias for gomobile compatibility.
 const (
-	BinaryType  = int32(payloads.BINARY)
-	TextType    = int32(payloads.TEXT)
-	AckType     = int32(payloads.ACK)
-	SessionType = int32(payloads.SESSION)
+	BinaryType  = int32(payloads.PayloadType_BINARY)
+	TextType    = int32(payloads.PayloadType_TEXT)
+	AckType     = int32(payloads.PayloadType_ACK)
+	SessionType = int32(payloads.PayloadType_SESSION)
 )
 
 // Message contains the info of received message.
@@ -79,7 +79,7 @@ func newBinaryPayload(data, messageID, replyToID []byte, noReply bool) (*payload
 	}
 
 	return &payloads.Payload{
-		Type:      payloads.BINARY,
+		Type:      payloads.PayloadType_BINARY,
 		MessageId: messageID,
 		Data:      data,
 		ReplyToId: replyToID,
@@ -102,7 +102,7 @@ func newTextPayload(text string, messageID, replyToID []byte, noReply bool) (*pa
 	}
 
 	return &payloads.Payload{
-		Type:      payloads.TEXT,
+		Type:      payloads.PayloadType_TEXT,
 		MessageId: messageID,
 		Data:      data,
 		ReplyToId: replyToID,
@@ -112,7 +112,7 @@ func newTextPayload(text string, messageID, replyToID []byte, noReply bool) (*pa
 
 func newAckPayload(replyToID []byte) (*payloads.Payload, error) {
 	return &payloads.Payload{
-		Type:      payloads.ACK,
+		Type:      payloads.PayloadType_ACK,
 		ReplyToId: replyToID,
 	}, nil
 }
