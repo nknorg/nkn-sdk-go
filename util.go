@@ -239,6 +239,19 @@ func (c *OnMessage) Next() *Message {
 	return <-c.C
 }
 
+// Next waits and returns the next element from the channel, timeout in millisecond.
+func (c *OnMessage) NextWithTimeout(timeout int32) *Message {
+	if timeout == 0 {
+		return <-c.C
+	}
+	select {
+	case msg := <-c.C:
+		return msg
+	case <-time.After(time.Duration(timeout) * time.Millisecond):
+		return nil
+	}
+}
+
 func (c *OnMessage) receive(msg *Message, verbose bool) {
 	if c.Callback != nil {
 		c.Callback.OnMessage(msg)
