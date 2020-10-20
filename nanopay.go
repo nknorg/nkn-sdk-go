@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/go-multierror"
 	"github.com/nknorg/nkn/v2/chain/txvalidator"
 	"github.com/nknorg/nkn/v2/common"
 	"github.com/nknorg/nkn/v2/config"
@@ -58,6 +58,7 @@ type NanoPayClaimer struct {
 	id                *uint64
 	lastClaimTime     time.Time
 	prevClaimedAmount common.Fixed64
+	prevFlushAmount   common.Fixed64
 	tx                *transaction.Transaction
 }
 
@@ -249,14 +250,24 @@ func (npc *NanoPayClaimer) flush() error {
 		return nil
 	}
 
-	_, err := npc.rpcClient.SendRawTransaction(npc.tx)
+	payload, err := transaction.Unpack(npc.tx.UnsignedTx.Payload)
+	if err != nil {
+		return npc.closeWithError(err)
+	}
+
+	npPayload, ok := payload.(*pb.NanoPay)
+	if !ok {
+		return npc.closeWithError(ErrNotNanoPay)
+	}
+
+	_, err = npc.rpcClient.SendRawTransaction(npc.tx)
 	if err != nil {
 		return err
 	}
-
 	npc.tx = nil
 	npc.expiration = 0
 	npc.lastClaimTime = time.Now()
+	npc.prevFlushAmount = common.Fixed64(npPayload.Amount)
 
 	return nil
 }
@@ -320,22 +331,11 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 		return nil, npc.closeWithError(err)
 	}
 
-	senderBalance, err := npc.rpcClient.BalanceByAddress(senderAddress)
-	if err != nil {
-		return nil, err
-	}
-
 	npc.lock.Lock()
 	defer npc.lock.Unlock()
 
 	if npc.closed {
 		return nil, ErrNanoPayClosed
-	}
-
-	if npc.id == nil || *npc.id == npPayload.Id {
-		if senderBalance.ToFixed64() < npc.amount {
-			return nil, npc.closeWithError(ErrInsufficientBalance)
-		}
 	}
 
 	if npc.id != nil {
@@ -349,8 +349,16 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 			}
 			npc.id = nil
 			npc.prevClaimedAmount += npc.amount
+			npc.prevFlushAmount = common.Fixed64(0)
 			npc.amount = -1
 		}
+	}
+	senderBalance, err := npc.rpcClient.BalanceByAddress(senderAddress)
+	if err != nil {
+		return nil, err
+	}
+	if senderBalance.ToFixed64()+npc.prevFlushAmount < common.Fixed64(npPayload.Amount) {
+		return nil, npc.closeWithError(ErrInsufficientBalance)
 	}
 
 	if npPayload.TxnExpiration <= uint32(height)+receiverExpirationDelta {
