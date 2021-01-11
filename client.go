@@ -790,6 +790,9 @@ func (c *Client) processDest(dest string) (string, error) {
 }
 
 func (c *Client) processDests(dests []string) ([]string, error) {
+	if len(dests) == 0 {
+		return nil, nil
+	}
 	processedDests := make([]string, 0, len(dests))
 	for _, dest := range dests {
 		processedDest, err := c.processDest(dest)
@@ -937,6 +940,10 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 	dests, err := c.processDests(dests)
 	if err != nil {
 		return err
+	}
+
+	if len(dests) == 0 {
+		return nil
 	}
 
 	plds, err := c.newPayloads(dests, payload, encrypted)
