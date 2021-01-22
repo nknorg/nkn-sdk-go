@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
@@ -119,9 +120,19 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 		return &errorWithCode{err: err, code: errCodeEncodeError}
 	}
 
-	body, err := httpPost(config.GetSeedRPCServerAddr().RandomElem(), req, time.Duration(config.GetRPCTimeout())*time.Millisecond)
-	if err != nil {
-		return &errorWithCode{err: err, code: errCodeNetworkError}
+	var body []byte
+	success := false
+	for _, rpcAddr := range config.GetSeedRPCServerAddr().Elems() {
+		body, err = httpPost(rpcAddr, req, time.Duration(config.GetRPCTimeout())*time.Millisecond)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		success = true
+		break
+	}
+	if !success {
+		return &errorWithCode{err: errors.New("all rpc request failed"), code: errCodeNetworkError}
 	}
 
 	respJSON := make(map[string]*json.RawMessage)
