@@ -50,12 +50,12 @@ type signerRPCClient interface {
 	Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error)
 }
 
-// RPCConfigInterface is the config interface for making rpc call. ClientConfig,
+// rpcConfigInterface is the config interface for making rpc call. ClientConfig,
 // WalletConfig and RPCConfig all implement this interface and thus can be used
 // directly.
-type RPCConfigInterface interface {
-	GetSeedRPCServerAddr() *StringArray
-	GetRPCTimeout() int32
+type rpcConfigInterface interface {
+	getSeedRPCServerAddr() *StringArray
+	getRPCTimeout() time.Duration
 }
 
 // Node struct contains the information of the node that a client connects to.
@@ -106,7 +106,7 @@ func httpPost(addr string, req []byte, timeout time.Duration) ([]byte, error) {
 }
 
 // RPCCall makes a RPC call and put results to result passed in.
-func RPCCall(method string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
+func RPCCall(method string, params map[string]interface{}, result interface{}, config rpcConfigInterface) error {
 	if config == nil {
 		config = GetDefaultRPCConfig()
 	}
@@ -122,8 +122,8 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 
 	var body []byte
 	success := false
-	for _, rpcAddr := range config.GetSeedRPCServerAddr().Elems() {
-		body, err = httpPost(rpcAddr, req, time.Duration(config.GetRPCTimeout())*time.Millisecond)
+	for _, rpcAddr := range config.getSeedRPCServerAddr().Elems() {
+		body, err = httpPost(rpcAddr, req, config.getRPCTimeout())
 		if err != nil {
 			log.Println(err)
 			continue
@@ -162,7 +162,7 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 }
 
 // GetWsAddr RPC gets the node that a client address should connect to using ws.
-func GetWsAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
+func GetWsAddr(clientAddr string, config rpcConfigInterface) (*Node, error) {
 	node := &Node{}
 	err := RPCCall("getwsaddr", map[string]interface{}{"address": clientAddr}, node, config)
 	if err != nil {
@@ -173,7 +173,7 @@ func GetWsAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
 
 // GetWssAddr RPC gets the node that a client address should connect to using
 // wss.
-func GetWssAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
+func GetWssAddr(clientAddr string, config rpcConfigInterface) (*Node, error) {
 	node := &Node{}
 	err := RPCCall("getwssaddr", map[string]interface{}{"address": clientAddr}, node, config)
 	if err != nil {
@@ -187,7 +187,7 @@ func GetWssAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
 // txPool are also counted.
 //
 // Nonce is changed to signed int for gomobile compatibility.
-func GetNonce(address string, txPool bool, config RPCConfigInterface) (int64, error) {
+func GetNonce(address string, txPool bool, config rpcConfigInterface) (int64, error) {
 	n := &nonce{}
 	err := RPCCall("getnoncebyaddr", map[string]interface{}{"address": address}, n, config)
 	if err != nil {
@@ -200,7 +200,7 @@ func GetNonce(address string, txPool bool, config RPCConfigInterface) (int64, er
 }
 
 // GetBalance RPC returns the balance of a wallet address.
-func GetBalance(address string, config RPCConfigInterface) (*Amount, error) {
+func GetBalance(address string, config rpcConfigInterface) (*Amount, error) {
 	balance := &balance{}
 	err := RPCCall("getbalancebyaddr", map[string]interface{}{"address": address}, balance, config)
 	if err != nil {
@@ -210,7 +210,7 @@ func GetBalance(address string, config RPCConfigInterface) (*Amount, error) {
 }
 
 // GetHeight RPC returns the latest block height.
-func GetHeight(config RPCConfigInterface) (int32, error) {
+func GetHeight(config rpcConfigInterface) (int32, error) {
 	var height uint32
 	err := RPCCall("getlatestblockheight", map[string]interface{}{}, &height, config)
 	if err != nil {
@@ -227,7 +227,7 @@ func GetHeight(config RPCConfigInterface) (int32, error) {
 // not guaranteed to be packed into a block.
 //
 // Offset and limit are changed to signed int for gomobile compatibility
-func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config RPCConfigInterface) (*Subscribers, error) {
+func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config rpcConfigInterface) (*Subscribers, error) {
 	var result map[string]interface{}
 	err := RPCCall("getsubscribers", map[string]interface{}{
 		"topic":  topic,
@@ -270,7 +270,7 @@ func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config R
 }
 
 // GetSubscription RPC gets the subscription details of a subscriber in a topic.
-func GetSubscription(topic string, subscriber string, config RPCConfigInterface) (*Subscription, error) {
+func GetSubscription(topic string, subscriber string, config rpcConfigInterface) (*Subscription, error) {
 	subscription := &Subscription{}
 	err := RPCCall("getsubscription", map[string]interface{}{
 		"topic":      topic,
@@ -286,7 +286,7 @@ func GetSubscription(topic string, subscriber string, config RPCConfigInterface)
 // including txPool).
 //
 // Count is changed to signed int for gomobile compatibility
-func GetSubscribersCount(topic string, config RPCConfigInterface) (int, error) {
+func GetSubscribersCount(topic string, config rpcConfigInterface) (int, error) {
 	var count int
 	err := RPCCall("getsubscriberscount", map[string]interface{}{"topic": topic}, &count, config)
 	if err != nil {
@@ -296,7 +296,7 @@ func GetSubscribersCount(topic string, config RPCConfigInterface) (int, error) {
 }
 
 // GetRegistrant RPC gets the registrant of a name.
-func GetRegistrant(name string, config RPCConfigInterface) (*Registrant, error) {
+func GetRegistrant(name string, config rpcConfigInterface) (*Registrant, error) {
 	registrant := &Registrant{}
 	err := RPCCall("getregistrant", map[string]interface{}{"name": name}, registrant, config)
 	if err != nil {
@@ -307,7 +307,7 @@ func GetRegistrant(name string, config RPCConfigInterface) (*Registrant, error) 
 
 // SendRawTransaction RPC sends a signed transaction to chain and returns txn
 // hash hex string.
-func SendRawTransaction(txn *transaction.Transaction, config RPCConfigInterface) (string, error) {
+func SendRawTransaction(txn *transaction.Transaction, config rpcConfigInterface) (string, error) {
 	b, err := txn.Marshal()
 	if err != nil {
 		return "", err
