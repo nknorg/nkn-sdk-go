@@ -1114,11 +1114,11 @@ func (c *Client) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPa
 
 // NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this client as
 // RPC client.
-func (c *Client) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
+func (c *Client) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	if len(recipientAddress) == 0 {
 		recipientAddress = c.wallet.address
 	}
-	return NewNanoPayClaimer(c, recipientAddress, claimIntervalMs, onError)
+	return NewNanoPayClaimer(c, recipientAddress, claimIntervalMs, minFlushAmount, onError)
 }
 
 // GetNonce is the same as package level GetNonce, but using connected node as

@@ -49,6 +49,7 @@ type NanoPayClaimer struct {
 	rpcClient            rpcClient
 	recipientAddress     string
 	recipientProgramHash common.Uint160
+	minFlushAmount       common.Fixed64
 
 	lock              sync.Mutex
 	amount            common.Fixed64
@@ -142,9 +143,15 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 
 // NewNanoPayClaimer creates a NanoPayClaimer with a given rpcClient (client,
 // multiclient or wallet), recipient wallet address, claim interval in
-// millisecond, onError channel.
-func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimIntervalMs int32, onError *OnError) (*NanoPayClaimer, error) {
+// millisecond, minimal flush amount, onError channel. It is recommended to use
+// a positive minFlushAmount.
+func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimIntervalMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	receiver, err := common.ToScriptHash(recipientAddress)
+	if err != nil {
+		return nil, err
+	}
+
+	minFlushAmountFixed64, err := common.StringToFixed64(minFlushAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +160,7 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 		rpcClient:            rpcClient,
 		recipientAddress:     recipientAddress,
 		recipientProgramHash: receiver,
+		minFlushAmount:       minFlushAmountFixed64,
 		closeChan:            make(chan struct{}),
 		lastClaimTime:        time.Now(),
 	}
@@ -160,9 +168,9 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 	go func() {
 		defer npc.Flush()
 		for {
-			time.Sleep(time.Second)
+			time.Sleep(time.Minute)
 
-			if npc.closed {
+			if npc.IsClosed() {
 				return
 			}
 
@@ -170,14 +178,19 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 			tx := npc.tx
 			lastClaimTime := npc.lastClaimTime
 			expiration := npc.expiration
+			incrementAmount := npc.amount - npc.prevFlushAmount
 			npc.lock.Unlock()
 
 			if tx == nil {
 				continue
 			}
 
+			if incrementAmount < npc.minFlushAmount {
+				continue
+			}
+
 			now := time.Now()
-			if now.Before(npc.lastClaimTime.Add(time.Duration(claimIntervalMs) * time.Millisecond)) {
+			if now.Before(lastClaimTime.Add(time.Duration(claimIntervalMs) * time.Millisecond)) {
 				height, err := npc.rpcClient.GetHeight()
 				if err != nil {
 					onError.receive(err)
@@ -264,6 +277,7 @@ func (npc *NanoPayClaimer) flush() error {
 	if err != nil {
 		return err
 	}
+
 	npc.tx = nil
 	npc.expiration = 0
 	npc.lastClaimTime = time.Now()
@@ -350,13 +364,15 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 			npc.id = nil
 			npc.prevClaimedAmount += npc.amount
 			npc.prevFlushAmount = common.Fixed64(0)
-			npc.amount = -1
+			npc.amount = 0
 		}
 	}
+
 	senderBalance, err := npc.rpcClient.BalanceByAddress(senderAddress)
 	if err != nil {
 		return nil, err
 	}
+
 	if senderBalance.ToFixed64()+npc.prevFlushAmount < common.Fixed64(npPayload.Amount) {
 		return nil, npc.closeWithError(ErrInsufficientBalance)
 	}
