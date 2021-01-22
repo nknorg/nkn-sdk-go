@@ -59,13 +59,15 @@ func GetDefaultClientConfig() *ClientConfig {
 	return &clientConf
 }
 
-// GetSeedRPCServerAddr returns all seed rpc server addresses.
-func (c *ClientConfig) GetSeedRPCServerAddr() *StringArray {
+// RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
+// added to avoid gomobile compile error.
+func (c *ClientConfig) RPCGetSeedRPCServerAddr() *StringArray {
 	return c.SeedRPCServerAddr
 }
 
-// GetRPCTimeout returns RPC timeout in millisecond.
-func (c *ClientConfig) GetRPCTimeout() int32 {
+// RPCGetRPCTimeout returns RPC timeout in millisecond. RPC prefix is added to
+// avoid gomobile compile error.
+func (c *ClientConfig) RPCGetRPCTimeout() int32 {
 	return c.RPCTimeout
 }
 
@@ -168,13 +170,15 @@ func GetDefaultWalletConfig() *WalletConfig {
 	return &walletConf
 }
 
-// GetSeedRPCServerAddr returns all seed rpc server addresses.
-func (c *WalletConfig) GetSeedRPCServerAddr() *StringArray {
+// RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
+// added to avoid gomobile compile error.
+func (c *WalletConfig) RPCGetSeedRPCServerAddr() *StringArray {
 	return c.SeedRPCServerAddr
 }
 
-// GetRPCTimeout returns RPC timeout in millisecond.
-func (c *WalletConfig) GetRPCTimeout() int32 {
+// RPCGetRPCTimeout returns RPC timeout in millisecond. RPC prefix is added to
+// avoid gomobile compile error.
+func (c *WalletConfig) RPCGetRPCTimeout() int32 {
 	return c.RPCTimeout
 }
 
@@ -198,13 +202,15 @@ func GetDefaultRPCConfig() *RPCConfig {
 	return &rpcConf
 }
 
-// GetSeedRPCServerAddr returns all seed rpc server addresses.
-func (c *RPCConfig) GetSeedRPCServerAddr() *StringArray {
+// RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
+// added to avoid gomobile compile error.
+func (c *RPCConfig) RPCGetSeedRPCServerAddr() *StringArray {
 	return c.SeedRPCServerAddr
 }
 
-// GetRPCTimeout returns RPC timeout in millisecond.
-func (c *RPCConfig) GetRPCTimeout() int32 {
+// RPCGetRPCTimeout returns RPC timeout in millisecond. RPC prefix is added to
+// avoid gomobile compile error.
+func (c *RPCConfig) RPCGetRPCTimeout() int32 {
 	return c.RPCTimeout
 }
 
