@@ -52,10 +52,11 @@ type signerRPCClient interface {
 
 // RPCConfigInterface is the config interface for making rpc call. ClientConfig,
 // WalletConfig and RPCConfig all implement this interface and thus can be used
-// directly.
+// directly. RPC prefix is added to all public methods to avoid gomobile compile
+// error.
 type RPCConfigInterface interface {
-	GetSeedRPCServerAddr() *StringArray
-	GetRPCTimeout() int32
+	RPCGetSeedRPCServerAddr() *StringArray
+	RPCGetRPCTimeout() int32
 }
 
 // Node struct contains the information of the node that a client connects to.
@@ -122,8 +123,8 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 
 	var body []byte
 	success := false
-	for _, rpcAddr := range config.GetSeedRPCServerAddr().Elems() {
-		body, err = httpPost(rpcAddr, req, time.Duration(config.GetRPCTimeout())*time.Millisecond)
+	for _, rpcAddr := range config.RPCGetSeedRPCServerAddr().Elems() {
+		body, err = httpPost(rpcAddr, req, time.Duration(config.RPCGetRPCTimeout())*time.Millisecond)
 		if err != nil {
 			log.Println(err)
 			continue
