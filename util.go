@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"log"
 	"math/big"
+	mathRand "math/rand"
 	"strings"
 	"time"
 
@@ -120,6 +121,13 @@ func (sa *StringArray) Len() int {
 // Append adds an element to the string array.
 func (sa *StringArray) Append(s string) {
 	sa.elems = append(sa.elems, s)
+}
+
+func (sa *StringArray) RandomElem() string {
+	if sa.Len() == 0 {
+		return ""
+	}
+	return sa.Elems()[mathRand.Intn(sa.Len())]
 }
 
 // StringMapFunc is a wrapper type for gomobile compatibility.
