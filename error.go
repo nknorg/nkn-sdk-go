@@ -28,8 +28,9 @@ func (e errorWithCode) Code() int32 {
 }
 
 const (
-	errCodeNetworkError int32 = -1
-	errCodeDecodeError  int32 = -2
+	errCodeNetworkError int32 = -50001
+	errCodeDecodeError  int32 = -50002
+	errCodeEncodeError  int32 = -50003
 )
 
 // Error definitions.

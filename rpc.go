@@ -1,11 +1,14 @@
 package nkn
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
+	"net/http"
+	"time"
 
-	"github.com/nknorg/nkn/v2/api/httpjson/client"
 	"github.com/nknorg/nkn/v2/common"
 	nknConfig "github.com/nknorg/nkn/v2/config"
 	"github.com/nknorg/nkn/v2/program"
@@ -50,7 +53,8 @@ type signerRPCClient interface {
 // WalletConfig and RPCConfig all implement this interface and thus can be used
 // directly.
 type RPCConfigInterface interface {
-	GetRandomSeedRPCServerAddr() string
+	GetSeedRPCServerAddr() *StringArray
+	GetRPCTimeout() int32
 }
 
 // Node struct contains the information of the node that a client connects to.
@@ -88,41 +92,61 @@ type errResp struct {
 	Data    string
 }
 
+func httpPost(addr string, req []byte, timeout time.Duration) ([]byte, error) {
+	client := &http.Client{
+		Timeout: timeout,
+	}
+	resp, err := client.Post(addr, "application/json", bytes.NewBuffer(req))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
+}
+
 // RPCCall makes a RPC call and put results to result passed in.
-func RPCCall(action string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
+func RPCCall(method string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
 	if config == nil {
 		config = GetDefaultRPCConfig()
 	}
-	data, err := client.Call(config.GetRandomSeedRPCServerAddr(), action, 0, params)
+
+	req, err := json.Marshal(map[string]interface{}{
+		"id":     "nkn-sdk-go",
+		"method": method,
+		"params": params,
+	})
+	if err != nil {
+		return &errorWithCode{err: err, code: errCodeEncodeError}
+	}
+
+	body, err := httpPost(config.GetSeedRPCServerAddr().RandomElem(), req, time.Duration(config.GetRPCTimeout())*time.Millisecond)
 	if err != nil {
 		return &errorWithCode{err: err, code: errCodeNetworkError}
 	}
-	resp := make(map[string]*json.RawMessage)
-	err = json.Unmarshal(data, &resp)
+
+	respJSON := make(map[string]*json.RawMessage)
+	err = json.Unmarshal(body, &respJSON)
 	if err != nil {
 		return &errorWithCode{err: err, code: errCodeDecodeError}
 	}
-	if resp["error"] != nil {
+	if respJSON["error"] != nil {
 		er := &errResp{}
-		err := json.Unmarshal(*resp["error"], er)
+		err := json.Unmarshal(*respJSON["error"], er)
 		if err != nil {
 			return &errorWithCode{err: err, code: errCodeDecodeError}
-		}
-		code := er.Code
-		if code < 0 {
-			code = -1
 		}
 		msg := er.Message
 		if len(er.Data) > 0 {
 			msg += ": " + er.Data
 		}
-		return &errorWithCode{err: errors.New(msg), code: code}
+		return &errorWithCode{err: errors.New(msg), code: er.Code}
 	}
 
-	err = json.Unmarshal(*resp["result"], result)
+	err = json.Unmarshal(*respJSON["result"], result)
 	if err != nil {
 		return &errorWithCode{err: err, code: errCodeDecodeError}
 	}
+
 	return nil
 }
 

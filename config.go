@@ -20,6 +20,7 @@ var DefaultSeedRPCServerAddr = []string{
 // ClientConfig is the client configuration.
 type ClientConfig struct {
 	SeedRPCServerAddr       *StringArray   // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
+	RPCTimeout              int32          // Timeout for each RPC call in millisecond
 	MsgChanLen              int32          // Channel length for received but unproccessed messages.
 	ConnectRetries          int32          // Connnect to node retries (including the initial connect). 0 means unlimited retries.
 	MsgCacheExpiration      int32          // Message cache expiration in millisecond for response channel, multiclient message id deduplicate, etc.
@@ -35,6 +36,7 @@ type ClientConfig struct {
 // DefaultClientConfig is the default client config.
 var DefaultClientConfig = ClientConfig{
 	SeedRPCServerAddr:       nil,
+	RPCTimeout:              10000,
 	MsgChanLen:              1024,
 	ConnectRetries:          3,
 	MsgCacheExpiration:      300000,
@@ -55,6 +57,16 @@ func GetDefaultClientConfig() *ClientConfig {
 	clientConf.MessageConfig = GetDefaultMessageConfig()
 	clientConf.SessionConfig = GetDefaultSessionConfig()
 	return &clientConf
+}
+
+// GetSeedRPCServerAddr returns all seed rpc server addresses.
+func (c *ClientConfig) GetSeedRPCServerAddr() *StringArray {
+	return c.SeedRPCServerAddr
+}
+
+// GetRPCTimeout returns RPC timeout in millisecond.
+func (c *ClientConfig) GetRPCTimeout() int32 {
+	return c.RPCTimeout
 }
 
 // MessageConfig is the config for sending messages.
@@ -131,6 +143,7 @@ type ScryptConfig struct {
 // WalletConfig is the wallet configuration.
 type WalletConfig struct {
 	SeedRPCServerAddr *StringArray
+	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 	Password          string
 	IV                []byte
 	MasterKey         []byte
@@ -140,6 +153,7 @@ type WalletConfig struct {
 // DefaultWalletConfig is the default wallet configuration.
 var DefaultWalletConfig = WalletConfig{
 	SeedRPCServerAddr: nil,
+	RPCTimeout:        10000,
 	IV:                nil,
 	MasterKey:         nil,
 	ScryptConfig:      nil,
@@ -154,14 +168,26 @@ func GetDefaultWalletConfig() *WalletConfig {
 	return &walletConf
 }
 
+// GetSeedRPCServerAddr returns all seed rpc server addresses.
+func (c *WalletConfig) GetSeedRPCServerAddr() *StringArray {
+	return c.SeedRPCServerAddr
+}
+
+// GetRPCTimeout returns RPC timeout in millisecond.
+func (c *WalletConfig) GetRPCTimeout() int32 {
+	return c.RPCTimeout
+}
+
 // RPCConfig is the rpc call configuration.
 type RPCConfig struct {
 	SeedRPCServerAddr *StringArray
+	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 }
 
 // DefaultRPCConfig is the default rpc configuration.
 var DefaultRPCConfig = RPCConfig{
 	SeedRPCServerAddr: nil,
+	RPCTimeout:        10000,
 }
 
 // GetDefaultRPCConfig returns the default rpc config with nil pointer fields
@@ -170,6 +196,16 @@ func GetDefaultRPCConfig() *RPCConfig {
 	rpcConf := DefaultRPCConfig
 	rpcConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
 	return &rpcConf
+}
+
+// GetSeedRPCServerAddr returns all seed rpc server addresses.
+func (c *RPCConfig) GetSeedRPCServerAddr() *StringArray {
+	return c.SeedRPCServerAddr
+}
+
+// GetRPCTimeout returns RPC timeout in millisecond.
+func (c *RPCConfig) GetRPCTimeout() int32 {
+	return c.RPCTimeout
 }
 
 // TransactionConfig is the config for making a transaction.
@@ -191,33 +227,6 @@ var DefaultTransactionConfig = TransactionConfig{
 func GetDefaultTransactionConfig() *TransactionConfig {
 	txnConf := DefaultTransactionConfig
 	return &txnConf
-}
-
-// GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
-// client config.
-func (config *ClientConfig) GetRandomSeedRPCServerAddr() string {
-	if config.SeedRPCServerAddr.Len() == 0 {
-		return ""
-	}
-	return config.SeedRPCServerAddr.Elems()[rand.Intn(config.SeedRPCServerAddr.Len())]
-}
-
-// GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
-// wallet config.
-func (config *WalletConfig) GetRandomSeedRPCServerAddr() string {
-	if config.SeedRPCServerAddr.Len() == 0 {
-		return ""
-	}
-	return config.SeedRPCServerAddr.Elems()[rand.Intn(config.SeedRPCServerAddr.Len())]
-}
-
-// GetRandomSeedRPCServerAddr returns a random seed rpc server address from the
-// rpc config.
-func (config *RPCConfig) GetRandomSeedRPCServerAddr() string {
-	if config.SeedRPCServerAddr.Len() == 0 {
-		return ""
-	}
-	return config.SeedRPCServerAddr.Elems()[rand.Intn(config.SeedRPCServerAddr.Len())]
 }
 
 // MergeClientConfig merges a given client config with the default client config
