@@ -59,14 +59,12 @@ func GetDefaultClientConfig() *ClientConfig {
 	return &clientConf
 }
 
-// GetSeedRPCServerAddr returns all seed rpc server addresses.
-func (c *ClientConfig) GetSeedRPCServerAddr() *StringArray {
+func (c *ClientConfig) getSeedRPCServerAddr() *StringArray {
 	return c.SeedRPCServerAddr
 }
 
-// GetRPCTimeout returns RPC timeout in millisecond.
-func (c *ClientConfig) GetRPCTimeout() int32 {
-	return c.RPCTimeout
+func (c *ClientConfig) getRPCTimeout() time.Duration {
+	return time.Duration(c.RPCTimeout) * time.Millisecond
 }
 
 // MessageConfig is the config for sending messages.
@@ -168,14 +166,12 @@ func GetDefaultWalletConfig() *WalletConfig {
 	return &walletConf
 }
 
-// GetSeedRPCServerAddr returns all seed rpc server addresses.
-func (c *WalletConfig) GetSeedRPCServerAddr() *StringArray {
+func (c *WalletConfig) getSeedRPCServerAddr() *StringArray {
 	return c.SeedRPCServerAddr
 }
 
-// GetRPCTimeout returns RPC timeout in millisecond.
-func (c *WalletConfig) GetRPCTimeout() int32 {
-	return c.RPCTimeout
+func (c *WalletConfig) getRPCTimeout() time.Duration {
+	return time.Duration(c.RPCTimeout) * time.Millisecond
 }
 
 // RPCConfig is the rpc call configuration.
@@ -198,14 +194,12 @@ func GetDefaultRPCConfig() *RPCConfig {
 	return &rpcConf
 }
 
-// GetSeedRPCServerAddr returns all seed rpc server addresses.
-func (c *RPCConfig) GetSeedRPCServerAddr() *StringArray {
+func (c *RPCConfig) getSeedRPCServerAddr() *StringArray {
 	return c.SeedRPCServerAddr
 }
 
-// GetRPCTimeout returns RPC timeout in millisecond.
-func (c *RPCConfig) GetRPCTimeout() int32 {
-	return c.RPCTimeout
+func (c *RPCConfig) getRPCTimeout() time.Duration {
+	return time.Duration(c.RPCTimeout) * time.Millisecond
 }
 
 // TransactionConfig is the config for making a transaction.
