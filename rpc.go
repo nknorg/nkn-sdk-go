@@ -2,12 +2,14 @@ package nkn
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/nknorg/nkn/v2/common"
@@ -57,6 +59,7 @@ type signerRPCClient interface {
 type RPCConfigInterface interface {
 	RPCGetSeedRPCServerAddr() *StringArray
 	RPCGetRPCTimeout() int32
+	RPCGetConcurrency() int32
 }
 
 // Node struct contains the information of the node that a client connects to.
@@ -94,11 +97,15 @@ type errResp struct {
 	Data    string
 }
 
-func httpPost(addr string, req []byte, timeout time.Duration) ([]byte, error) {
+func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Duration) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, "POST", addr, bytes.NewBuffer(reqBody))
+	if err != nil {
+		return nil, err
+	}
 	client := &http.Client{
 		Timeout: timeout,
 	}
-	resp, err := client.Post(addr, "application/json", bytes.NewBuffer(req))
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -121,18 +128,53 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 		return &errorWithCode{err: err, code: errCodeEncodeError}
 	}
 
-	var body []byte
-	success := false
-	for _, rpcAddr := range config.RPCGetSeedRPCServerAddr().Elems() {
-		body, err = httpPost(rpcAddr, req, time.Duration(config.RPCGetRPCTimeout())*time.Millisecond)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-		success = true
-		break
+	var wg sync.WaitGroup
+	rpcAddrChan := make(chan string)
+	respBodyChan := make(chan []byte, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for i := 0; i < int(config.RPCGetConcurrency()); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for rpcAddr := range rpcAddrChan {
+				body, err := httpPost(ctx, rpcAddr, req, time.Duration(config.RPCGetRPCTimeout())*time.Millisecond)
+				if err != nil {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						log.Println(err)
+					}
+					continue
+				}
+				select {
+				case respBodyChan <- body:
+					cancel()
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
-	if !success {
+
+	for _, rpcAddr := range config.RPCGetSeedRPCServerAddr().Elems() {
+		select {
+		case rpcAddrChan <- rpcAddr:
+		case <-ctx.Done():
+			break
+		}
+	}
+
+	close(rpcAddrChan)
+
+	wg.Wait()
+
+	var body []byte
+	select {
+	case body = <-respBodyChan:
+	default:
 		return &errorWithCode{err: errors.New("all rpc request failed"), code: errCodeNetworkError}
 	}
 
