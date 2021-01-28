@@ -70,6 +70,27 @@ type Node struct {
 	ID      string `json:"id"`
 }
 
+// NodeState struct contains the state of a NKN full node.
+type NodeState struct {
+	Addr               string `json:"addr"`
+	CurrTimeStamp      int64  `json:"currTimeStamp"`
+	Height             int32  `json:"height"` // Changed to signed int for gomobile compatibility
+	ID                 string `json:"id"`
+	JSONRPCPort        int32  `json:"jsonRpcPort"`
+	ProposalSubmitted  int32  `json:"proposalSubmitted"`
+	ProtocolVersion    int32  `json:"protocolVersion"`
+	PublicKey          string `json:"publicKey"`
+	RelayMessageCount  int64  `json:"relayMessageCount"`
+	SyncState          string `json:"syncState"`
+	TLSJSONRpcDomain   string `json:"tlsJsonRpcDomain"`
+	TLSJSONRpcPort     int32  `json:"tlsJsonRpcPort"`
+	TLSWebsocketDomain string `json:"tlsWebsocketDomain"`
+	TLSWebsocketPort   int32  `json:"tlsWebsocketPort"`
+	Uptime             int64  `json:"uptime"`
+	Version            string `json:"version"`
+	WebsocketPort      int32  `json:"websocketPort"`
+}
+
 // Subscription contains the information of a subscriber to a topic.
 type Subscription struct {
 	Meta      string `json:"meta"`
@@ -134,7 +155,11 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	for i := 0; i < int(config.RPCGetConcurrency()); i++ {
+	n := int(config.RPCGetConcurrency())
+	if n == 0 {
+		n = config.RPCGetSeedRPCServerAddr().Len()
+	}
+	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -625,4 +650,14 @@ func Unsubscribe(s signerRPCClient, identifier, topic string, config *Transactio
 	}
 
 	return s.SendRawTransaction(tx)
+}
+
+// GetNodeState returns the state of the RPC node.
+func GetNodeState(config RPCConfigInterface) (*NodeState, error) {
+	nodeState := &NodeState{}
+	err := RPCCall("getnodestate", map[string]interface{}{}, nodeState, config)
+	if err != nil {
+		return nil, err
+	}
+	return nodeState, nil
 }
