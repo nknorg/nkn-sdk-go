@@ -21,6 +21,7 @@ var DefaultSeedRPCServerAddr = []string{
 type ClientConfig struct {
 	SeedRPCServerAddr       *StringArray   // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
 	RPCTimeout              int32          // Timeout for each RPC call in millisecond
+	RPCConcurrency          int32          // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 	MsgChanLen              int32          // Channel length for received but unproccessed messages.
 	ConnectRetries          int32          // Connnect to node retries (including the initial connect). 0 means unlimited retries.
 	MsgCacheExpiration      int32          // Message cache expiration in millisecond for response channel, multiclient message id deduplicate, etc.
@@ -37,6 +38,7 @@ type ClientConfig struct {
 var DefaultClientConfig = ClientConfig{
 	SeedRPCServerAddr:       nil,
 	RPCTimeout:              10000,
+	RPCConcurrency:          1,
 	MsgChanLen:              1024,
 	ConnectRetries:          3,
 	MsgCacheExpiration:      300000,
@@ -69,6 +71,12 @@ func (c *ClientConfig) RPCGetSeedRPCServerAddr() *StringArray {
 // avoid gomobile compile error.
 func (c *ClientConfig) RPCGetRPCTimeout() int32 {
 	return c.RPCTimeout
+}
+
+// RPCGetConcurrency returns RPC concurrency. RPC prefix is added to avoid
+// gomobile compile error.
+func (c *ClientConfig) RPCGetConcurrency() int32 {
+	return c.RPCConcurrency
 }
 
 // MessageConfig is the config for sending messages.
@@ -146,6 +154,7 @@ type ScryptConfig struct {
 type WalletConfig struct {
 	SeedRPCServerAddr *StringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
+	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 	Password          string
 	IV                []byte
 	MasterKey         []byte
@@ -156,6 +165,7 @@ type WalletConfig struct {
 var DefaultWalletConfig = WalletConfig{
 	SeedRPCServerAddr: nil,
 	RPCTimeout:        10000,
+	RPCConcurrency:    1,
 	IV:                nil,
 	MasterKey:         nil,
 	ScryptConfig:      nil,
@@ -182,16 +192,24 @@ func (c *WalletConfig) RPCGetRPCTimeout() int32 {
 	return c.RPCTimeout
 }
 
+// RPCGetConcurrency returns RPC concurrency. RPC prefix is added to avoid
+// gomobile compile error.
+func (c *WalletConfig) RPCGetConcurrency() int32 {
+	return c.RPCConcurrency
+}
+
 // RPCConfig is the rpc call configuration.
 type RPCConfig struct {
 	SeedRPCServerAddr *StringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
+	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 }
 
 // DefaultRPCConfig is the default rpc configuration.
 var DefaultRPCConfig = RPCConfig{
 	SeedRPCServerAddr: nil,
 	RPCTimeout:        10000,
+	RPCConcurrency:    1,
 }
 
 // GetDefaultRPCConfig returns the default rpc config with nil pointer fields
@@ -212,6 +230,12 @@ func (c *RPCConfig) RPCGetSeedRPCServerAddr() *StringArray {
 // avoid gomobile compile error.
 func (c *RPCConfig) RPCGetRPCTimeout() int32 {
 	return c.RPCTimeout
+}
+
+// RPCGetConcurrency returns RPC concurrency. RPC prefix is added to avoid
+// gomobile compile error.
+func (c *RPCConfig) RPCGetConcurrency() int32 {
+	return c.RPCConcurrency
 }
 
 // TransactionConfig is the config for making a transaction.
