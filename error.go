@@ -31,6 +31,7 @@ const (
 	errCodeNetworkError int32 = -50001
 	errCodeDecodeError  int32 = -50002
 	errCodeEncodeError  int32 = -50003
+	errCodeCanceled     int32 = -50003
 )
 
 // Error definitions.
