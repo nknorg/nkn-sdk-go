@@ -776,16 +776,27 @@ func (m *MultiClient) NewNanoPayClaimer(recipientAddress string, claimIntervalMs
 	return NewNanoPayClaimer(m, recipientAddress, claimIntervalMs, minFlushAmount, onError)
 }
 
-// GetNonce is the same as package level GetNonce, but using connected node as
-// the RPC server, followed by this multiclient's SeedRPCServerAddr if failed.
+// GetNonce wraps GetNonceContext with background context.
 func (m *MultiClient) GetNonce(txPool bool) (int64, error) {
+	return m.GetNonceContext(context.Background(), txPool)
+}
+
+// GetNonceContext is the same as package level GetNonceContext, but using
+// connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetNonceContext(ctx context.Context, txPool bool) (int64, error) {
 	return m.GetNonceByAddress(m.GetDefaultClient().wallet.address, txPool)
 }
 
-// GetNonceByAddress is the same as package level GetNonce, but using connected
-// node as the RPC server, followed by this multiclient's SeedRPCServerAddr if
-// failed.
+// GetNonceByAddress wraps GetNonceByAddressContext with background context.
 func (m *MultiClient) GetNonceByAddress(address string, txPool bool) (int64, error) {
+	return m.GetNonceByAddressContext(context.Background(), address, txPool)
+}
+
+// GetNonceByAddressContext is the same as package level GetNonceContext, but
+// using connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetNonceByAddressContext(ctx context.Context, address string, txPool bool) (int64, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetNonce(address, txPool, c.wallet.config)
@@ -797,9 +808,15 @@ func (m *MultiClient) GetNonceByAddress(address string, txPool bool) (int64, err
 	return GetNonce(address, txPool, m.config)
 }
 
-// GetHeight is the same as package level GetHeight, but using connected node as
-// the RPC server, followed by this multiclient's SeedRPCServerAddr if failed.
+// GetHeight wraps GetHeightContext with background context.
 func (m *MultiClient) GetHeight() (int32, error) {
+	return m.GetHeightContext(context.Background())
+}
+
+// GetHeightContext is the same as package level GetHeightContext, but using
+// connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetHeightContext(ctx context.Context) (int32, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetHeight(c.wallet.config)
@@ -811,16 +828,27 @@ func (m *MultiClient) GetHeight() (int32, error) {
 	return GetHeight(m.config)
 }
 
-// Balance is the same as package level GetBalance, but using connected node as
-// the RPC server, followed by this multiclient's SeedRPCServerAddr if failed.
+// Balance wraps BalanceContext with background context.
 func (m *MultiClient) Balance() (*Amount, error) {
+	return m.BalanceContext(context.Background())
+}
+
+// BalanceContext is the same as package level GetBalanceContext, but using
+// connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) BalanceContext(ctx context.Context) (*Amount, error) {
 	return m.BalanceByAddress(m.GetDefaultClient().wallet.address)
 }
 
-// BalanceByAddress is the same as package level GetBalance, but using connected
-// node as the RPC server, followed by this multiclient's SeedRPCServerAddr if
-// failed.
+// BalanceByAddress wraps BalanceByAddressContext with background context.
 func (m *MultiClient) BalanceByAddress(address string) (*Amount, error) {
+	return m.BalanceByAddressContext(context.Background(), address)
+}
+
+// BalanceByAddressContext is the same as package level GetBalanceContext, but
+// using connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) BalanceByAddressContext(ctx context.Context, address string) (*Amount, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetBalance(address, c.wallet.config)
@@ -832,10 +860,15 @@ func (m *MultiClient) BalanceByAddress(address string) (*Amount, error) {
 	return GetBalance(address, m.config)
 }
 
-// GetSubscribers is the same as package level GetSubscribers, but using
-// connected node as the RPC server, followed by this multiclient's
-// SeedRPCServerAddr if failed.
+// GetSubscribers wraps GetSubscribersContext with background context.
 func (m *MultiClient) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+	return m.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool)
+}
+
+// GetSubscribersContext is the same as package level GetSubscribersContext, but
+// using connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetSubscribers(topic, offset, limit, meta, txPool, c.wallet.config)
@@ -847,10 +880,15 @@ func (m *MultiClient) GetSubscribers(topic string, offset, limit int, meta, txPo
 	return GetSubscribers(topic, offset, limit, meta, txPool, m.config)
 }
 
-// GetSubscription is the same as package level GetSubscription, but using
-// connected node as the RPC server, followed by this multiclient's
-// SeedRPCServerAddr if failed.
+// GetSubscription wraps GetSubscriptionContext with background context.
 func (m *MultiClient) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+	return m.GetSubscriptionContext(context.Background(), topic, subscriber)
+}
+
+// GetSubscriptionContext is the same as package level GetSubscriptionContext,
+// but using connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetSubscriptionContext(ctx context.Context, topic string, subscriber string) (*Subscription, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetSubscription(topic, subscriber, c.wallet.config)
@@ -862,10 +900,15 @@ func (m *MultiClient) GetSubscription(topic string, subscriber string) (*Subscri
 	return GetSubscription(topic, subscriber, m.config)
 }
 
-// GetSubscribersCount is the same as package level GetSubscribersCount, but
-// using connected node as the RPC server, followed by this multiclient's
-// SeedRPCServerAddr if failed.
+// GetSubscribersCount wraps GetSubscribersCountContext with background context.
 func (m *MultiClient) GetSubscribersCount(topic string) (int, error) {
+	return m.GetSubscribersCountContext(context.Background(), topic)
+}
+
+// GetSubscribersCountContext is the same as package level
+// GetSubscribersCountContext, but using connected node as the RPC server,
+// followed by this multiclient's SeedRPCServerAddr if failed.
+func (m *MultiClient) GetSubscribersCountContext(ctx context.Context, topic string) (int, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetSubscribersCount(topic, c.wallet.config)
@@ -877,10 +920,15 @@ func (m *MultiClient) GetSubscribersCount(topic string) (int, error) {
 	return GetSubscribersCount(topic, m.config)
 }
 
-// GetRegistrant is the same as package level GetRegistrant, but using connected
-// node as the RPC server, followed by this multiclient's SeedRPCServerAddr if
-// failed.
+// GetRegistrant wraps GetRegistrantContext with background context.
 func (m *MultiClient) GetRegistrant(name string) (*Registrant, error) {
+	return m.GetRegistrantContext(context.Background(), name)
+}
+
+// GetRegistrantContext is the same as package level GetRegistrantContext, but
+// using connected node as the RPC server, followed by this multiclient's
+// SeedRPCServerAddr if failed.
+func (m *MultiClient) GetRegistrantContext(ctx context.Context, name string) (*Registrant, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
 			res, err := GetRegistrant(name, c.wallet.config)
@@ -892,10 +940,15 @@ func (m *MultiClient) GetRegistrant(name string) (*Registrant, error) {
 	return GetRegistrant(name, m.config)
 }
 
-// SendRawTransaction is the same as package level SendRawTransaction, but using
-// connected node as the RPC server, followed by this multiclient's
-// SeedRPCServerAddr if failed.
+// SendRawTransaction wraps SendRawTransactionContext with background context.
 func (m *MultiClient) SendRawTransaction(txn *transaction.Transaction) (string, error) {
+	return m.SendRawTransactionContext(context.Background(), txn)
+}
+
+// SendRawTransactionContext is the same as package level
+// SendRawTransactionContext, but using connected node as the RPC server,
+// followed by this multiclient's SeedRPCServerAddr if failed.
+func (m *MultiClient) SendRawTransactionContext(ctx context.Context, txn *transaction.Transaction) (string, error) {
 	success := make(chan string, 1)
 	fail := make(chan struct{}, 1)
 
@@ -929,40 +982,70 @@ func (m *MultiClient) SendRawTransaction(txn *transaction.Transaction) (string, 
 	}
 }
 
-// Transfer is a shortcut for Transfer using this multiclient as
-// SignerRPCClient.
+// Transfer wraps TransferContext with background context.
 func (m *MultiClient) Transfer(address, amount string, config *TransactionConfig) (string, error) {
+	return m.TransferContext(context.Background(), address, amount, config)
+}
+
+// TransferContext is a shortcut for TransferContext using this multiclient as
+// SignerRPCClient.
+func (m *MultiClient) TransferContext(ctx context.Context, address, amount string, config *TransactionConfig) (string, error) {
 	return Transfer(m, address, amount, config)
 }
 
-// RegisterName is a shortcut for RegisterName using this multiclient as
-// SignerRPCClient.
+// RegisterName wraps RegisterNameContext with background context.
 func (m *MultiClient) RegisterName(name string, config *TransactionConfig) (string, error) {
+	return m.RegisterNameContext(context.Background(), name, config)
+}
+
+// RegisterNameContext is a shortcut for RegisterNameContext using this
+// multiclient as SignerRPCClient.
+func (m *MultiClient) RegisterNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error) {
 	return RegisterName(m, name, config)
 }
 
-// TransferName is a shortcut for TransferName using this multiclient as
-// SignerRPCClient.
+// TransferName wraps TransferNameContext with background context.
 func (m *MultiClient) TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+	return m.TransferNameContext(context.Background(), name, recipientPubKey, config)
+}
+
+// TransferNameContext is a shortcut for TransferNameContext using this
+// multiclient as SignerRPCClient.
+func (m *MultiClient) TransferNameContext(ctx context.Context, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
 	return TransferName(m, name, recipientPubKey, config)
 }
 
-// DeleteName is a shortcut for DeleteName using this multiclient as
-// SignerRPCClient.
+// DeleteName wraps DeleteNameContext with background context.
 func (m *MultiClient) DeleteName(name string, config *TransactionConfig) (string, error) {
+	return m.DeleteNameContext(context.Background(), name, config)
+}
+
+// DeleteNameContext is a shortcut for DeleteNameContext using this multiclient
+// as SignerRPCClient.
+func (m *MultiClient) DeleteNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error) {
 	return DeleteName(m, name, config)
 }
 
-// Subscribe is a shortcut for Subscribe using this multiclient as
+// Subscribe wraps SubscribeContext with background context.
+func (m *MultiClient) Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+	return m.SubscribeContext(context.Background(), identifier, topic, duration, meta, config)
+}
+
+// SubscribeContext is a shortcut for SubscribeContext using this multiclient as
 // SignerRPCClient.
 //
 // Duration is changed to signed int for gomobile compatibility.
-func (m *MultiClient) Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+func (m *MultiClient) SubscribeContext(ctx context.Context, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
 	return Subscribe(m, identifier, topic, duration, meta, config)
 }
 
-// Unsubscribe is a shortcut for Unsubscribe using this multiclient as
-// SignerRPCClient.
+// Unsubscribe wraps UnsubscribeContext with background context.
 func (m *MultiClient) Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error) {
+	return m.UnsubscribeContext(context.Background(), identifier, topic, config)
+}
+
+// UnsubscribeContext is a shortcut for UnsubscribeContext using this
+// multiclient as SignerRPCClient.
+func (m *MultiClient) UnsubscribeContext(ctx context.Context, identifier, topic string, config *TransactionConfig) (string, error) {
 	return Unsubscribe(m, identifier, topic, config)
 }

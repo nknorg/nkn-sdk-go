@@ -1,6 +1,7 @@
 package nkn
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"sync"
@@ -242,97 +243,180 @@ func (w *Wallet) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int3
 	return NewNanoPayClaimer(w, recipientAddress, claimIntervalMs, minFlushAmount, onError)
 }
 
-// GetNonce is the same as package level GetNonce, but using this wallet's
-// SeedRPCServerAddr.
+// GetNonce wraps GetNonceContext with background context.
 func (w *Wallet) GetNonce(txPool bool) (int64, error) {
+	return w.GetNonceContext(context.Background(), txPool)
+}
+
+// GetNonceContext is the same as package level GetNonceContext, but using this
+// wallet's SeedRPCServerAddr.
+func (w *Wallet) GetNonceContext(ctx context.Context, txPool bool) (int64, error) {
 	return w.GetNonceByAddress(w.address, txPool)
 }
 
-// GetNonceByAddress is the same as package level GetNonce, but using this
-// wallet's SeedRPCServerAddr.
+// GetNonceByAddress wraps GetNonceByAddressContext with background context.
 func (w *Wallet) GetNonceByAddress(address string, txPool bool) (int64, error) {
+	return w.GetNonceByAddressContext(context.Background(), address, txPool)
+}
+
+// GetNonceByAddressContext is the same as package level GetNonceContext, but
+// using this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetNonceByAddressContext(ctx context.Context, address string, txPool bool) (int64, error) {
 	return GetNonce(address, txPool, w.config)
 }
 
-// GetHeight is the same as package level GetHeight, but using this wallet's
-// SeedRPCServerAddr.
+// GetHeight wraps GetHeightContext with background context.
 func (w *Wallet) GetHeight() (int32, error) {
+	return w.GetHeightContext(context.Background())
+}
+
+// GetHeightContext is the same as package level GetHeightContext, but using
+// this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetHeightContext(ctx context.Context) (int32, error) {
 	return GetHeight(w.config)
 }
 
-// Balance is the same as package level GetBalance, but using this wallet's
-// SeedRPCServerAddr.
+// Balance wraps BalanceContext with background context.
 func (w *Wallet) Balance() (*Amount, error) {
+	return w.BalanceContext(context.Background())
+}
+
+// BalanceContext is the same as package level GetBalanceContext, but using this
+// wallet's SeedRPCServerAddr.
+func (w *Wallet) BalanceContext(ctx context.Context) (*Amount, error) {
 	return w.BalanceByAddress(w.address)
 }
 
-// BalanceByAddress is the same as package level GetBalance, but using this
-// wallet's SeedRPCServerAddr.
+// BalanceByAddress wraps BalanceByAddressContext with background context.
 func (w *Wallet) BalanceByAddress(address string) (*Amount, error) {
+	return w.BalanceByAddressContext(context.Background(), address)
+}
+
+// BalanceByAddressContext is the same as package level GetBalanceContext, but
+// using this wallet's SeedRPCServerAddr.
+func (w *Wallet) BalanceByAddressContext(ctx context.Context, address string) (*Amount, error) {
 	return GetBalance(address, w.config)
 }
 
-// GetSubscribers is the same as package level GetSubscribers, but using this
-// wallet's SeedRPCServerAddr.
+// GetSubscribers wraps GetSubscribersContext with background context.
 func (w *Wallet) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+	return w.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool)
+}
+
+// GetSubscribersContext is the same as package level GetSubscribersContext, but
+// using this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
 	return GetSubscribers(topic, offset, limit, meta, txPool, w.config)
 }
 
-// GetSubscription is the same as package level GetSubscription, but using this
-// wallet's SeedRPCServerAddr.
+// GetSubscription wraps GetSubscriptionContext with background context.
 func (w *Wallet) GetSubscription(topic string, subscriber string) (*Subscription, error) {
+	return w.GetSubscriptionContext(context.Background(), topic, subscriber)
+}
+
+// GetSubscriptionContext is the same as package level GetSubscriptionContext,
+// but using this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetSubscriptionContext(ctx context.Context, topic string, subscriber string) (*Subscription, error) {
 	return GetSubscription(topic, subscriber, w.config)
 }
 
-// GetSubscribersCount is the same as package level GetSubscribersCount, but
-// this wallet's SeedRPCServerAddr.
+// GetSubscribersCount wraps GetSubscribersCountContext with background context.
 func (w *Wallet) GetSubscribersCount(topic string) (int, error) {
+	return w.GetSubscribersCountContext(context.Background(), topic)
+}
+
+// GetSubscribersCountContext is the same as package level
+// GetSubscribersCountContext, but this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetSubscribersCountContext(ctx context.Context, topic string) (int, error) {
 	return GetSubscribersCount(topic, w.config)
 }
 
-// GetRegistrant is the same as package level GetRegistrant, but this wallet's
-// SeedRPCServerAddr.
+// GetRegistrant wraps GetRegistrantContext with background context.
 func (w *Wallet) GetRegistrant(name string) (*Registrant, error) {
+	return w.GetRegistrantContext(context.Background(), name)
+}
+
+// GetRegistrantContext is the same as package level GetRegistrantContext, but
+// this wallet's SeedRPCServerAddr.
+func (w *Wallet) GetRegistrantContext(ctx context.Context, name string) (*Registrant, error) {
 	return GetRegistrant(name, w.config)
 }
 
-// SendRawTransaction is the same as package level SendRawTransaction, but using
-// this wallet's SeedRPCServerAddr.
+// SendRawTransaction wraps SendRawTransactionContext with background context.
 func (w *Wallet) SendRawTransaction(txn *transaction.Transaction) (string, error) {
+	return w.SendRawTransactionContext(context.Background(), txn)
+}
+
+// SendRawTransactionContext is the same as package level
+// SendRawTransactionContext, but using this wallet's SeedRPCServerAddr.
+func (w *Wallet) SendRawTransactionContext(ctx context.Context, txn *transaction.Transaction) (string, error) {
 	return SendRawTransaction(txn, w.config)
 }
 
-// Transfer is a shortcut for Transfer using this wallet as SignerRPCClient.
+// Transfer wraps TransferContext with background context.
 func (w *Wallet) Transfer(address, amount string, config *TransactionConfig) (string, error) {
+	return w.TransferContext(context.Background(), address, amount, config)
+}
+
+// TransferContext is a shortcut for TransferContext using this wallet as
+// SignerRPCClient.
+func (w *Wallet) TransferContext(ctx context.Context, address, amount string, config *TransactionConfig) (string, error) {
 	return Transfer(w, address, amount, config)
 }
 
-// RegisterName is a shortcut for RegisterName using this wallet as
-// SignerRPCClient.
+// RegisterName wraps RegisterNameContext with background context.
 func (w *Wallet) RegisterName(name string, config *TransactionConfig) (string, error) {
+	return w.RegisterNameContext(context.Background(), name, config)
+}
+
+// RegisterNameContext is a shortcut for RegisterNameContext using this wallet
+// as SignerRPCClient.
+func (w *Wallet) RegisterNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error) {
 	return RegisterName(w, name, config)
 }
 
-// TransferName is a shortcut for TransferName using this wallet as
-// SignerRPCClient.
+// TransferName wraps TransferNameContext with background context.
 func (w *Wallet) TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+	return w.TransferNameContext(context.Background(), name, recipientPubKey, config)
+}
+
+// TransferNameContext is a shortcut for TransferNameContext using this wallet
+// as SignerRPCClient.
+func (w *Wallet) TransferNameContext(ctx context.Context, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
 	return TransferName(w, name, recipientPubKey, config)
 }
 
-// DeleteName is a shortcut for DeleteName using this wallet as SignerRPCClient.
+// DeleteName wraps DeleteNameContext with background context.
 func (w *Wallet) DeleteName(name string, config *TransactionConfig) (string, error) {
+	return w.DeleteNameContext(context.Background(), name, config)
+}
+
+// DeleteNameContext is a shortcut for DeleteNameContext using this wallet as
+// SignerRPCClient.
+func (w *Wallet) DeleteNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error) {
 	return DeleteName(w, name, config)
 }
 
-// Subscribe is a shortcut for Subscribe using this wallet as SignerRPCClient.
+// Subscribe wraps SubscribeContext with background context.
+func (w *Wallet) Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+	return w.SubscribeContext(context.Background(), identifier, topic, duration, meta, config)
+}
+
+// SubscribeContext is a shortcut for SubscribeContext using this wallet as
+// SignerRPCClient.
 //
 // Duration is changed to signed int for gomobile compatibility.
-func (w *Wallet) Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+func (w *Wallet) SubscribeContext(ctx context.Context, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
 	return Subscribe(w, identifier, topic, duration, meta, config)
 }
 
-// Unsubscribe is a shortcut for Unsubscribe using this wallet as
-// SignerRPCClient.
+// Unsubscribe wraps UnsubscribeContext with background context.
 func (w *Wallet) Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error) {
+	return w.UnsubscribeContext(context.Background(), identifier, topic, config)
+}
+
+// UnsubscribeContext is a shortcut for UnsubscribeContext using this wallet as
+// SignerRPCClient.
+func (w *Wallet) UnsubscribeContext(ctx context.Context, identifier, topic string, config *TransactionConfig) (string, error) {
 	return Unsubscribe(w, identifier, topic, config)
 }

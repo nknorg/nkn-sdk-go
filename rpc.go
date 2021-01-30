@@ -28,15 +28,25 @@ type signer interface {
 // (except a few ones that is supposed to call with seed node only).
 type rpcClient interface {
 	GetNonce(txPool bool) (int64, error)
+	GetNonceContext(ctx context.Context, txPool bool) (int64, error)
 	GetNonceByAddress(address string, txPool bool) (int64, error)
+	GetNonceByAddressContext(ctx context.Context, address string, txPool bool) (int64, error)
 	Balance() (*Amount, error)
+	BalanceContext(ctx context.Context) (*Amount, error)
 	BalanceByAddress(address string) (*Amount, error)
+	BalanceByAddressContext(ctx context.Context, address string) (*Amount, error)
 	GetHeight() (int32, error)
+	GetHeightContext(ctx context.Context) (int32, error)
 	GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error)
+	GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error)
 	GetSubscription(topic string, subscriber string) (*Subscription, error)
+	GetSubscriptionContext(ctx context.Context, topic string, subscriber string) (*Subscription, error)
 	GetSubscribersCount(topic string) (int, error)
+	GetSubscribersCountContext(ctx context.Context, topic string) (int, error)
 	GetRegistrant(name string) (*Registrant, error)
+	GetRegistrantContext(ctx context.Context, name string) (*Registrant, error)
 	SendRawTransaction(txn *transaction.Transaction) (string, error)
+	SendRawTransactionContext(ctx context.Context, txn *transaction.Transaction) (string, error)
 }
 
 // SignerRPCClient is a RPCClient that can also sign transactions and made RPC
@@ -45,11 +55,17 @@ type signerRPCClient interface {
 	signer
 	rpcClient
 	Transfer(address, amount string, config *TransactionConfig) (string, error)
+	TransferContext(ctx context.Context, address, amount string, config *TransactionConfig) (string, error)
 	RegisterName(name string, config *TransactionConfig) (string, error)
+	RegisterNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error)
 	TransferName(name string, recipientPubKey []byte, config *TransactionConfig) (string, error)
+	TransferNameContext(ctx context.Context, name string, recipientPubKey []byte, config *TransactionConfig) (string, error)
 	DeleteName(name string, config *TransactionConfig) (string, error)
+	DeleteNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error)
 	Subscribe(identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error)
+	SubscribeContext(ctx context.Context, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error)
 	Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error)
+	UnsubscribeContext(ctx context.Context, identifier, topic string, config *TransactionConfig) (string, error)
 }
 
 // RPCConfigInterface is the config interface for making rpc call. ClientConfig,
@@ -135,7 +151,7 @@ func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Dur
 }
 
 // RPCCall makes a RPC call and put results to result passed in.
-func RPCCall(method string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
+func RPCCall(parentCtx context.Context, method string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
 	if config == nil {
 		config = GetDefaultRPCConfig()
 	}
@@ -152,7 +168,7 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 	var wg sync.WaitGroup
 	rpcAddrChan := make(chan string)
 	respBodyChan := make(chan []byte, 1)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
 	n := int(config.RPCGetConcurrency())
@@ -196,10 +212,15 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 
 	wg.Wait()
 
-	var body []byte
-	select {
-	case body = <-respBodyChan:
-	default:
+	close(respBodyChan)
+
+	err = parentCtx.Err()
+	if err != nil {
+		return &errorWithCode{err: err, code: errCodeCanceled}
+	}
+
+	body, ok := <-respBodyChan
+	if !ok {
 		return &errorWithCode{err: errors.New("all rpc request failed"), code: errCodeNetworkError}
 	}
 
@@ -229,35 +250,51 @@ func RPCCall(method string, params map[string]interface{}, result interface{}, c
 	return nil
 }
 
-// GetWsAddr RPC gets the node that a client address should connect to using ws.
+// GetWsAddr wraps GetWsAddrContext with background context.
 func GetWsAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
+	return GetWsAddrContext(context.Background(), clientAddr, config)
+}
+
+// GetWsAddrContext RPC gets the node that a client address should connect to
+// using ws.
+func GetWsAddrContext(ctx context.Context, clientAddr string, config RPCConfigInterface) (*Node, error) {
 	node := &Node{}
-	err := RPCCall("getwsaddr", map[string]interface{}{"address": clientAddr}, node, config)
+	err := RPCCall(ctx, "getwsaddr", map[string]interface{}{"address": clientAddr}, node, config)
 	if err != nil {
 		return nil, err
 	}
 	return node, nil
 }
 
-// GetWssAddr RPC gets the node that a client address should connect to using
-// wss.
+// GetWssAddr wraps GetWssAddrContext with background context.
 func GetWssAddr(clientAddr string, config RPCConfigInterface) (*Node, error) {
+	return GetWssAddrContext(context.Background(), clientAddr, config)
+}
+
+// GetWssAddrContext RPC gets the node that a client address should connect to
+// using wss.
+func GetWssAddrContext(ctx context.Context, clientAddr string, config RPCConfigInterface) (*Node, error) {
 	node := &Node{}
-	err := RPCCall("getwssaddr", map[string]interface{}{"address": clientAddr}, node, config)
+	err := RPCCall(ctx, "getwssaddr", map[string]interface{}{"address": clientAddr}, node, config)
 	if err != nil {
 		return nil, err
 	}
 	return node, nil
 }
 
-// GetNonce RPC gets the next nonce to use of an address. If txPool is false,
-// result only counts transactions in ledger; if txPool is true, transactions in
-// txPool are also counted.
+// GetNonce wraps GetNonceContext with background context.
+func GetNonce(address string, txPool bool, config RPCConfigInterface) (int64, error) {
+	return GetNonceContext(context.Background(), address, txPool, config)
+}
+
+// GetNonceContext RPC gets the next nonce to use of an address. If txPool is
+// false, result only counts transactions in ledger; if txPool is true,
+// transactions in txPool are also counted.
 //
 // Nonce is changed to signed int for gomobile compatibility.
-func GetNonce(address string, txPool bool, config RPCConfigInterface) (int64, error) {
+func GetNonceContext(ctx context.Context, address string, txPool bool, config RPCConfigInterface) (int64, error) {
 	n := &nonce{}
-	err := RPCCall("getnoncebyaddr", map[string]interface{}{"address": address}, n, config)
+	err := RPCCall(ctx, "getnoncebyaddr", map[string]interface{}{"address": address}, n, config)
 	if err != nil {
 		return 0, err
 	}
@@ -267,37 +304,52 @@ func GetNonce(address string, txPool bool, config RPCConfigInterface) (int64, er
 	return int64(n.Nonce), nil
 }
 
-// GetBalance RPC returns the balance of a wallet address.
+// GetBalance wraps GetBalanceContext with background context.
 func GetBalance(address string, config RPCConfigInterface) (*Amount, error) {
+	return GetBalanceContext(context.Background(), address, config)
+}
+
+// GetBalanceContext RPC returns the balance of a wallet address.
+func GetBalanceContext(ctx context.Context, address string, config RPCConfigInterface) (*Amount, error) {
 	balance := &balance{}
-	err := RPCCall("getbalancebyaddr", map[string]interface{}{"address": address}, balance, config)
+	err := RPCCall(ctx, "getbalancebyaddr", map[string]interface{}{"address": address}, balance, config)
 	if err != nil {
 		return nil, err
 	}
 	return NewAmount(balance.Amount)
 }
 
-// GetHeight RPC returns the latest block height.
+// GetHeight wraps GetHeightContext with background context.
 func GetHeight(config RPCConfigInterface) (int32, error) {
+	return GetHeightContext(context.Background(), config)
+}
+
+// GetHeightContext RPC returns the latest block height.
+func GetHeightContext(ctx context.Context, config RPCConfigInterface) (int32, error) {
 	var height uint32
-	err := RPCCall("getlatestblockheight", map[string]interface{}{}, &height, config)
+	err := RPCCall(ctx, "getlatestblockheight", map[string]interface{}{}, &height, config)
 	if err != nil {
 		return 0, err
 	}
 	return int32(height), nil
 }
 
-// GetSubscribers gets the subscribers of a topic with a offset and max number
-// of results (limit). If meta is true, results contain each subscriber's
+// GetSubscribers wraps GetSubscribersContext with background context.
+func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config RPCConfigInterface) (*Subscribers, error) {
+	return GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool, config)
+}
+
+// GetSubscribersContext gets the subscribers of a topic with a offset and max
+// number of results (limit). If meta is true, results contain each subscriber's
 // metadata. If txPool is true, results contain subscribers in txPool. Enabling
 // this will get subscribers sooner after they send subscribe transactions, but
 // might affect the correctness of subscribers because transactions in txpool is
 // not guaranteed to be packed into a block.
 //
 // Offset and limit are changed to signed int for gomobile compatibility
-func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config RPCConfigInterface) (*Subscribers, error) {
+func GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, config RPCConfigInterface) (*Subscribers, error) {
 	var result map[string]interface{}
-	err := RPCCall("getsubscribers", map[string]interface{}{
+	err := RPCCall(ctx, "getsubscribers", map[string]interface{}{
 		"topic":  topic,
 		"offset": offset,
 		"limit":  limit,
@@ -337,10 +389,15 @@ func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config R
 	}, nil
 }
 
-// GetSubscription RPC gets the subscription details of a subscriber in a topic.
+// GetSubscription wraps GetSubscriptionContext with background context.
 func GetSubscription(topic string, subscriber string, config RPCConfigInterface) (*Subscription, error) {
+	return GetSubscriptionContext(context.Background(), topic, subscriber, config)
+}
+
+// GetSubscriptionContext RPC gets the subscription details of a subscriber in a topic.
+func GetSubscriptionContext(ctx context.Context, topic string, subscriber string, config RPCConfigInterface) (*Subscription, error) {
 	subscription := &Subscription{}
-	err := RPCCall("getsubscription", map[string]interface{}{
+	err := RPCCall(ctx, "getsubscription", map[string]interface{}{
 		"topic":      topic,
 		"subscriber": subscriber,
 	}, subscription, config)
@@ -350,49 +407,69 @@ func GetSubscription(topic string, subscriber string, config RPCConfigInterface)
 	return subscription, nil
 }
 
-// GetSubscribersCount RPC returns the number of subscribers of a topic (not
-// including txPool).
+// GetSubscribersCount wraps GetSubscribersCountContext with background context.
+func GetSubscribersCount(topic string, config RPCConfigInterface) (int, error) {
+	return GetSubscribersCountContext(context.Background(), topic, config)
+}
+
+// GetSubscribersCountContext RPC returns the number of subscribers of a topic
+// (not including txPool).
 //
 // Count is changed to signed int for gomobile compatibility
-func GetSubscribersCount(topic string, config RPCConfigInterface) (int, error) {
+func GetSubscribersCountContext(ctx context.Context, topic string, config RPCConfigInterface) (int, error) {
 	var count int
-	err := RPCCall("getsubscriberscount", map[string]interface{}{"topic": topic}, &count, config)
+	err := RPCCall(ctx, "getsubscriberscount", map[string]interface{}{"topic": topic}, &count, config)
 	if err != nil {
 		return 0, err
 	}
 	return count, nil
 }
 
-// GetRegistrant RPC gets the registrant of a name.
+// GetRegistrant wraps GetRegistrantContext with background context.
 func GetRegistrant(name string, config RPCConfigInterface) (*Registrant, error) {
+	return GetRegistrantContext(context.Background(), name, config)
+}
+
+// GetRegistrantContext RPC gets the registrant of a name.
+func GetRegistrantContext(ctx context.Context, name string, config RPCConfigInterface) (*Registrant, error) {
 	registrant := &Registrant{}
-	err := RPCCall("getregistrant", map[string]interface{}{"name": name}, registrant, config)
+	err := RPCCall(ctx, "getregistrant", map[string]interface{}{"name": name}, registrant, config)
 	if err != nil {
 		return nil, err
 	}
 	return registrant, nil
 }
 
-// SendRawTransaction RPC sends a signed transaction to chain and returns txn
-// hash hex string.
+// SendRawTransaction wraps SendRawTransactionContext with background context.
 func SendRawTransaction(txn *transaction.Transaction, config RPCConfigInterface) (string, error) {
+	return SendRawTransactionContext(context.Background(), txn, config)
+}
+
+// SendRawTransactionContext RPC sends a signed transaction to chain and returns
+// txn hash hex string.
+func SendRawTransactionContext(ctx context.Context, txn *transaction.Transaction, config RPCConfigInterface) (string, error) {
 	b, err := txn.Marshal()
 	if err != nil {
 		return "", err
 	}
 	var txnHash string
-	err = RPCCall("sendrawtransaction", map[string]interface{}{"tx": hex.EncodeToString(b)}, &txnHash, config)
+	err = RPCCall(ctx, "sendrawtransaction", map[string]interface{}{"tx": hex.EncodeToString(b)}, &txnHash, config)
 	if err != nil {
 		return "", err
 	}
 	return txnHash, nil
 }
 
-// Transfer sends asset to a wallet address with a transaction fee. Amount is
-// the string representation of the amount in unit of NKN to avoid precision
-// loss. For example, "0.1" will be parsed as 0.1 NKN. The signerRPCClient can
-// be a client, multiclient or wallet.
+// Transfer wraps TransferContext with background context.
 func Transfer(s signerRPCClient, address, amount string, config *TransactionConfig) (string, error) {
+	return TransferContext(context.Background(), s, address, amount, config)
+}
+
+// TransferContext sends asset to a wallet address with a transaction fee.
+// Amount is the string representation of the amount in unit of NKN to avoid
+// precision loss. For example, "0.1" will be parsed as 0.1 NKN. The
+// signerRPCClient can be a client, multiclient or wallet.
+func TransferContext(ctx context.Context, s signerRPCClient, address, amount string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -439,16 +516,21 @@ func Transfer(s signerRPCClient, address, amount string, config *TransactionConf
 		return "", err
 	}
 
-	return s.SendRawTransaction(tx)
+	return s.SendRawTransactionContext(ctx, tx)
 }
 
-// RegisterName registers a name for this signer's public key at the cost of 10
-// NKN with a given transaction fee. The name will be valid for 1,576,800 blocks
-// (around 1 year). Register name currently owned by this pubkey will extend the
-// duration of the name to current block height + 1,576,800. Registration will
-// fail if the name is currently owned by another account. The signerRPCClient
-// can be a client, multiclient or wallet.
+// RegisterName wraps RegisterNameContext with background context.
 func RegisterName(s signerRPCClient, name string, config *TransactionConfig) (string, error) {
+	return RegisterNameContext(context.Background(), s, name, config)
+}
+
+// RegisterNameContext registers a name for this signer's public key at the cost
+// of 10 NKN with a given transaction fee. The name will be valid for 1,576,800
+// blocks (around 1 year). Register name currently owned by this pubkey will
+// extend the duration of the name to current block height + 1,576,800.
+// Registration will fail if the name is currently owned by another account. The
+// signerRPCClient can be a client, multiclient or wallet.
+func RegisterNameContext(ctx context.Context, s signerRPCClient, name string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -480,13 +562,18 @@ func RegisterName(s signerRPCClient, name string, config *TransactionConfig) (st
 		return "", err
 	}
 
-	return s.SendRawTransaction(tx)
+	return s.SendRawTransactionContext(ctx, tx)
 }
 
-// TransferName transfers a name owned by this signer's pubkey to another public
-// key with a transaction fee. The expiration height of the name will not be
-// changed. The signerRPCClient can be a client, multiclient or wallet.
+// TransferName wraps TransferNameContext with background context.
 func TransferName(s signerRPCClient, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
+	return TransferNameContext(context.Background(), s, name, recipientPubKey, config)
+}
+
+// TransferNameContext transfers a name owned by this signer's pubkey to another
+// public key with a transaction fee. The expiration height of the name will not
+// be changed. The signerRPCClient can be a client, multiclient or wallet.
+func TransferNameContext(ctx context.Context, s signerRPCClient, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -518,12 +605,17 @@ func TransferName(s signerRPCClient, name string, recipientPubKey []byte, config
 		return "", err
 	}
 
-	return s.SendRawTransaction(tx)
+	return s.SendRawTransactionContext(ctx, tx)
 }
 
-// DeleteName deletes a name owned by this signer's pubkey with a given
-// transaction fee. The signerRPCClient can be a client, multiclient or wallet.
+// DeleteName wraps DeleteNameContext with background context.
 func DeleteName(s signerRPCClient, name string, config *TransactionConfig) (string, error) {
+	return DeleteNameContext(context.Background(), s, name, config)
+}
+
+// DeleteNameContext deletes a name owned by this signer's pubkey with a given
+// transaction fee. The signerRPCClient can be a client, multiclient or wallet.
+func DeleteNameContext(ctx context.Context, s signerRPCClient, name string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -555,17 +647,23 @@ func DeleteName(s signerRPCClient, name string, config *TransactionConfig) (stri
 		return "", err
 	}
 
-	return s.SendRawTransaction(tx)
+	return s.SendRawTransactionContext(ctx, tx)
 }
 
-// Subscribe to a topic with an identifier for a number of blocks. Client using
-// the same key pair and identifier will be able to receive messages from this
-// topic. If this (identifier, public key) pair is already subscribed to this
-// topic, the subscription expiration will be extended to current block height +
-// duration. The signerRPCClient can be a client, multiclient or wallet.
+// Subscribe wraps SubscribeContext with background context.
+func Subscribe(s signerRPCClient, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+	return SubscribeContext(context.Background(), s, identifier, topic, duration, meta, config)
+}
+
+// SubscribeContext to a topic with an identifier for a number of blocks. Client
+// using the same key pair and identifier will be able to receive messages from
+// this topic. If this (identifier, public key) pair is already subscribed to
+// this topic, the subscription expiration will be extended to current block
+// height + duration. The signerRPCClient can be a client, multiclient or
+// wallet.
 //
 // Duration is changed to signed int for gomobile compatibility.
-func Subscribe(s signerRPCClient, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
+func SubscribeContext(ctx context.Context, s signerRPCClient, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -605,13 +703,18 @@ func Subscribe(s signerRPCClient, identifier, topic string, duration int, meta s
 		return "", err
 	}
 
-	return s.SendRawTransaction(tx)
+	return s.SendRawTransactionContext(ctx, tx)
 }
 
-// Unsubscribe from a topic for an identifier. Client using the same key pair
-// and identifier will no longer receive messages from this topic. The
-// signerRPCClient can be a client, multiclient or wallet.
+// Unsubscribe wraps UnsubscribeContext with background context.
 func Unsubscribe(s signerRPCClient, identifier, topic string, config *TransactionConfig) (string, error) {
+	return UnsubscribeContext(context.Background(), s, identifier, topic, config)
+}
+
+// UnsubscribeContext from a topic for an identifier. Client using the same key
+// pair and identifier will no longer receive messages from this topic. The
+// signerRPCClient can be a client, multiclient or wallet.
+func UnsubscribeContext(ctx context.Context, s signerRPCClient, identifier, topic string, config *TransactionConfig) (string, error) {
 	config, err := MergeTransactionConfig(config)
 	if err != nil {
 		return "", err
@@ -649,13 +752,18 @@ func Unsubscribe(s signerRPCClient, identifier, topic string, config *Transactio
 		return "", err
 	}
 
-	return s.SendRawTransaction(tx)
+	return s.SendRawTransactionContext(ctx, tx)
 }
 
-// GetNodeState returns the state of the RPC node.
+// GetNodeState wraps GetNodeStateContext with background context.
 func GetNodeState(config RPCConfigInterface) (*NodeState, error) {
+	return GetNodeStateContext(context.Background(), config)
+}
+
+// GetNodeStateContext returns the state of the RPC node.
+func GetNodeStateContext(ctx context.Context, config RPCConfigInterface) (*NodeState, error) {
 	nodeState := &NodeState{}
-	err := RPCCall("getnodestate", map[string]interface{}{}, nodeState, config)
+	err := RPCCall(ctx, "getnodestate", map[string]interface{}{}, nodeState, config)
 	if err != nil {
 		return nil, err
 	}

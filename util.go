@@ -123,6 +123,8 @@ func (sa *StringArray) Append(s string) {
 	sa.elems = append(sa.elems, s)
 }
 
+// RandomElem returns a randome element from the string array. The random number
+// is generated using math/rand and thus not cryptographically secure.
 func (sa *StringArray) RandomElem() string {
 	if sa.Len() == 0 {
 		return ""
@@ -247,7 +249,7 @@ func (c *OnMessage) Next() *Message {
 	return <-c.C
 }
 
-// Next waits and returns the next element from the channel, timeout in millisecond.
+// NextWithTimeout waits and returns the next element from the channel, timeout in millisecond.
 func (c *OnMessage) NextWithTimeout(timeout int32) *Message {
 	if timeout == 0 {
 		return <-c.C
