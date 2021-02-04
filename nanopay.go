@@ -258,7 +258,11 @@ func (npc *NanoPayClaimer) closeWithError(err error) error {
 	return err
 }
 
-func (npc *NanoPayClaimer) flush() error {
+func (npc *NanoPayClaimer) flush(force bool) error {
+	if !force && npc.amount-npc.prevFlushAmount < npc.minFlushAmount {
+		return nil
+	}
+
 	if npc.tx == nil {
 		return nil
 	}
@@ -290,7 +294,7 @@ func (npc *NanoPayClaimer) flush() error {
 func (npc *NanoPayClaimer) Flush() error {
 	npc.lock.Lock()
 	defer npc.lock.Unlock()
-	return npc.flush()
+	return npc.flush(false)
 }
 
 // Amount returns the total amount (including previously claimed and pending
@@ -358,7 +362,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 				return nil, npc.closeWithError(ErrInvalidAmount)
 			}
 		} else {
-			if err := npc.flush(); err != nil {
+			if err := npc.flush(false); err != nil {
 				return nil, npc.closeWithError(err)
 			}
 			npc.id = nil
