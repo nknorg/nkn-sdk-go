@@ -166,6 +166,7 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 	}
 
 	go func() {
+		defer onError.close()
 		defer npc.Flush()
 		for {
 			time.Sleep(time.Minute)
