@@ -949,37 +949,15 @@ func (m *MultiClient) SendRawTransaction(txn *transaction.Transaction) (string, 
 // SendRawTransactionContext, but using connected node as the RPC server,
 // followed by this multiclient's SeedRPCServerAddr if failed.
 func (m *MultiClient) SendRawTransactionContext(ctx context.Context, txn *transaction.Transaction) (string, error) {
-	success := make(chan string, 1)
-	fail := make(chan struct{}, 1)
-
-	go func() {
-		sent := 0
-		for _, c := range m.GetClients() {
-			if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-				res, err := SendRawTransaction(txn, c.wallet.config)
-				if err == nil {
-					select {
-					case success <- res:
-					default:
-					}
-					sent++
-				}
+	for _, c := range m.GetClients() {
+		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
+			res, err := SendRawTransaction(txn, c.wallet.config)
+			if err == nil {
+				return res, err
 			}
 		}
-		if sent == 0 {
-			select {
-			case fail <- struct{}{}:
-			default:
-			}
-		}
-	}()
-
-	select {
-	case res := <-success:
-		return res, nil
-	case <-fail:
-		return SendRawTransaction(txn, m.config)
 	}
+	return SendRawTransaction(txn, m.config)
 }
 
 // Transfer wraps TransferContext with background context.
