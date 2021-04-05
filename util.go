@@ -4,19 +4,19 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"fmt"
-	"github.com/nknorg/nkn/v2/common"
-	"github.com/nknorg/nkn/v2/crypto"
-	nknPb "github.com/nknorg/nkn/v2/pb"
-	"github.com/nknorg/nkn/v2/program"
-	"github.com/nknorg/nkn/v2/util/address"
-	"github.com/nknorg/nkn/v2/vault"
 	"log"
 	"math/big"
 	mathRand "math/rand"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nknorg/nkn/v2/common"
+	"github.com/nknorg/nkn/v2/crypto"
+	nknPb "github.com/nknorg/nkn/v2/pb"
+	"github.com/nknorg/nkn/v2/program"
+	"github.com/nknorg/nkn/v2/util/address"
+	"github.com/nknorg/nkn/v2/vault"
 )
 
 const (
@@ -428,13 +428,23 @@ func VerifyWalletAddress(address string) error {
 	return err
 }
 
-func MeasureSeedRPCServer(seedRpcList *StringArray, timeout int32) (*StringArray, error) {
-	ctx := context.Background()
+// MeasureSeedRPCServer wraps MeasureSeedRPCServerContext with background
+// context.
+func MeasureSeedRPCServer(seedRPCList *StringArray, timeout int32) (*StringArray, error) {
+	return MeasureSeedRPCServerContext(context.Background(), seedRPCList, timeout)
+}
+
+// MeasureSeedRPCServerContext measures the latency to seed rpc node list, only
+// select the ones in persist finished state, and sort them by latency (from low
+// to high). If none of the given seed rpc node is accessable or in persist
+// finished state, returned string array will contain zero elements. Timeout is
+// in millisecond.
+func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *StringArray, timeout int32) (*StringArray, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
-	rpcAddrs := make([]string, 0, seedRpcList.Len())
+	rpcAddrs := make([]string, 0, seedRPCList.Len())
 
-	for _, node := range seedRpcList.Elems() {
+	for _, node := range seedRPCList.Elems() {
 		wg.Add(1)
 		go func(addr string) {
 			defer wg.Done()
@@ -452,7 +462,7 @@ func MeasureSeedRPCServer(seedRpcList *StringArray, timeout int32) (*StringArray
 			lock.Lock()
 			rpcAddrs = append(rpcAddrs, addr)
 			lock.Unlock()
-		}(fmt.Sprintf("%s", node))
+		}(node)
 	}
 
 	done := make(chan struct{})
