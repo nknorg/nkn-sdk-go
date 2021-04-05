@@ -1,19 +1,22 @@
 package nkn
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
+	"github.com/nknorg/nkn/v2/common"
+	"github.com/nknorg/nkn/v2/crypto"
+	nknPb "github.com/nknorg/nkn/v2/pb"
+	"github.com/nknorg/nkn/v2/program"
+	"github.com/nknorg/nkn/v2/util/address"
+	"github.com/nknorg/nkn/v2/vault"
 	"log"
 	"math/big"
 	mathRand "math/rand"
 	"strings"
+	"sync"
 	"time"
-
-	"github.com/nknorg/nkn/v2/common"
-	"github.com/nknorg/nkn/v2/crypto"
-	"github.com/nknorg/nkn/v2/program"
-	"github.com/nknorg/nkn/v2/util/address"
-	"github.com/nknorg/nkn/v2/vault"
 )
 
 const (
@@ -423,4 +426,46 @@ func ClientAddrToWalletAddr(clientAddr string) (string, error) {
 func VerifyWalletAddress(address string) error {
 	_, err := common.ToScriptHash(address)
 	return err
+}
+
+func MeasureSeedRPCServer(seedRpcList *StringArray, timeout int32) (*StringArray, error) {
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	var lock sync.Mutex
+	rpcAddrs := make([]string, 0, seedRpcList.Len())
+
+	for _, node := range seedRpcList.Elems() {
+		wg.Add(1)
+		go func(addr string) {
+			defer wg.Done()
+			nodeState, err := GetNodeState(&RPCConfig{
+				SeedRPCServerAddr: NewStringArray(addr),
+				RPCTimeout:        timeout,
+			})
+			if err != nil {
+				return
+			}
+			if nodeState.SyncState != nknPb.SyncState_name[int32(nknPb.SyncState_PERSIST_FINISHED)] {
+				log.Printf("Skip rpc node %s in state %s\n", addr, nodeState.SyncState)
+				return
+			}
+			lock.Lock()
+			rpcAddrs = append(rpcAddrs, addr)
+			lock.Unlock()
+		}(fmt.Sprintf("%s", node))
+	}
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-done:
+	}
+
+	return NewStringArray(rpcAddrs...), nil
 }
