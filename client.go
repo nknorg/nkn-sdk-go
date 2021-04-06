@@ -526,6 +526,29 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 }
 
 func (c *Client) connectToNode(node *Node) error {
+	var rpcAddr string
+	var wg sync.WaitGroup
+	if len(node.RPCAddr) > 0 {
+		wg.Add(1)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go func() {
+			defer wg.Done()
+			addr := (&url.URL{Scheme: "http", Host: node.RPCAddr}).String()
+			nodeState, err := GetNodeStateContext(ctx, &RPCConfig{
+				SeedRPCServerAddr: NewStringArray(addr),
+				RPCTimeout:        c.config.WsHandshakeTimeout,
+			})
+			if err != nil {
+				return
+			}
+			if nodeState.SyncState != pb.SyncState_name[int32(pb.SyncState_PERSIST_FINISHED)] {
+				return
+			}
+			rpcAddr = addr
+		}()
+	}
+
 	wsAddr := (&url.URL{Scheme: "ws", Host: node.Addr}).String()
 	dialer := websocket.DefaultDialer
 	dialer.HandshakeTimeout = time.Duration(c.config.WsHandshakeTimeout) * time.Millisecond
@@ -535,10 +558,7 @@ func (c *Client) connectToNode(node *Node) error {
 		return err
 	}
 
-	var rpcAddr string
-	if len(node.RPCAddr) > 0 {
-		rpcAddr = (&url.URL{Scheme: "http", Host: node.RPCAddr}).String()
-	}
+	wg.Wait()
 
 	c.lock.Lock()
 	prevConn := c.conn
