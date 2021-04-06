@@ -13,7 +13,7 @@ import (
 
 	"github.com/nknorg/nkn/v2/common"
 	"github.com/nknorg/nkn/v2/crypto"
-	nknPb "github.com/nknorg/nkn/v2/pb"
+	"github.com/nknorg/nkn/v2/pb"
 	"github.com/nknorg/nkn/v2/program"
 	"github.com/nknorg/nkn/v2/util/address"
 	"github.com/nknorg/nkn/v2/vault"
@@ -448,15 +448,14 @@ func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *StringArray, 
 		wg.Add(1)
 		go func(addr string) {
 			defer wg.Done()
-			nodeState, err := GetNodeState(&RPCConfig{
+			nodeState, err := GetNodeStateContext(ctx, &RPCConfig{
 				SeedRPCServerAddr: NewStringArray(addr),
 				RPCTimeout:        timeout,
 			})
 			if err != nil {
 				return
 			}
-			if nodeState.SyncState != nknPb.SyncState_name[int32(nknPb.SyncState_PERSIST_FINISHED)] {
-				log.Printf("Skip rpc node %s in state %s\n", addr, nodeState.SyncState)
+			if nodeState.SyncState != pb.SyncState_name[int32(pb.SyncState_PERSIST_FINISHED)] {
 				return
 			}
 			lock.Lock()
