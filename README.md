@@ -149,12 +149,6 @@ subscribers, err := client.GetSubscribers("topic", 0, 100, true, true)
 fmt.Println(subscribers.Subscribers, subscribers.SubscribersInTxPool)
 ```
 
-Get subscribers count for specified topic:
-
-```go
-count, err := client.GetSubscribersCount("topic")
-```
-
 Get subscription:
 
 ```go
