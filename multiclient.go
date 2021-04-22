@@ -861,23 +861,23 @@ func (m *MultiClient) BalanceByAddressContext(ctx context.Context, address strin
 }
 
 // GetSubscribers wraps GetSubscribersContext with background context.
-func (m *MultiClient) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
-	return m.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool)
+func (m *MultiClient) GetSubscribers(topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
+	return m.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool, subscriberHashPrefix)
 }
 
 // GetSubscribersContext is the same as package level GetSubscribersContext, but
 // using connected node as the RPC server, followed by this multiclient's
 // SeedRPCServerAddr if failed.
-func (m *MultiClient) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+func (m *MultiClient) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetSubscribers(topic, offset, limit, meta, txPool, c.wallet.config)
+			res, err := GetSubscribers(topic, offset, limit, meta, txPool, subscriberHashPrefix, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetSubscribers(topic, offset, limit, meta, txPool, m.config)
+	return GetSubscribers(topic, offset, limit, meta, txPool, subscriberHashPrefix, m.config)
 }
 
 // GetSubscription wraps GetSubscriptionContext with background context.
@@ -901,23 +901,23 @@ func (m *MultiClient) GetSubscriptionContext(ctx context.Context, topic string, 
 }
 
 // GetSubscribersCount wraps GetSubscribersCountContext with background context.
-func (m *MultiClient) GetSubscribersCount(topic string) (int, error) {
-	return m.GetSubscribersCountContext(context.Background(), topic)
+func (m *MultiClient) GetSubscribersCount(topic string, subscriberHashPrefix []byte) (int, error) {
+	return m.GetSubscribersCountContext(context.Background(), topic, subscriberHashPrefix)
 }
 
 // GetSubscribersCountContext is the same as package level
 // GetSubscribersCountContext, but using connected node as the RPC server,
 // followed by this multiclient's SeedRPCServerAddr if failed.
-func (m *MultiClient) GetSubscribersCountContext(ctx context.Context, topic string) (int, error) {
+func (m *MultiClient) GetSubscribersCountContext(ctx context.Context, topic string, subscriberHashPrefix []byte) (int, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetSubscribersCount(topic, c.wallet.config)
+			res, err := GetSubscribersCount(topic, subscriberHashPrefix, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetSubscribersCount(topic, m.config)
+	return GetSubscribersCount(topic, subscriberHashPrefix, m.config)
 }
 
 // GetRegistrant wraps GetRegistrantContext with background context.

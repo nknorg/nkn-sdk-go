@@ -299,14 +299,14 @@ func (w *Wallet) BalanceByAddressContext(ctx context.Context, address string) (*
 }
 
 // GetSubscribers wraps GetSubscribersContext with background context.
-func (w *Wallet) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
-	return w.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool)
+func (w *Wallet) GetSubscribers(topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
+	return w.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool, subscriberHashPrefix)
 }
 
 // GetSubscribersContext is the same as package level GetSubscribersContext, but
 // using this wallet's SeedRPCServerAddr.
-func (w *Wallet) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
-	return GetSubscribers(topic, offset, limit, meta, txPool, w.config)
+func (w *Wallet) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
+	return GetSubscribers(topic, offset, limit, meta, txPool, subscriberHashPrefix, w.config)
 }
 
 // GetSubscription wraps GetSubscriptionContext with background context.
@@ -321,14 +321,14 @@ func (w *Wallet) GetSubscriptionContext(ctx context.Context, topic string, subsc
 }
 
 // GetSubscribersCount wraps GetSubscribersCountContext with background context.
-func (w *Wallet) GetSubscribersCount(topic string) (int, error) {
-	return w.GetSubscribersCountContext(context.Background(), topic)
+func (w *Wallet) GetSubscribersCount(topic string, subscriberHashPrefix []byte) (int, error) {
+	return w.GetSubscribersCountContext(context.Background(), topic, subscriberHashPrefix)
 }
 
 // GetSubscribersCountContext is the same as package level
 // GetSubscribersCountContext, but this wallet's SeedRPCServerAddr.
-func (w *Wallet) GetSubscribersCountContext(ctx context.Context, topic string) (int, error) {
-	return GetSubscribersCount(topic, w.config)
+func (w *Wallet) GetSubscribersCountContext(ctx context.Context, topic string, subscriberHashPrefix []byte) (int, error) {
+	return GetSubscribersCount(topic, subscriberHashPrefix, w.config)
 }
 
 // GetRegistrant wraps GetRegistrantContext with background context.
