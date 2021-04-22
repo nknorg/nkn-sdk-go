@@ -78,7 +78,7 @@ type Client struct {
 type clientInterface interface {
 	getConfig() *ClientConfig
 	send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error
-	GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error)
+	GetSubscribers(topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error)
 }
 
 type setClientResult struct {
@@ -1055,7 +1055,7 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 
 	offset := int(config.Offset)
 	limit := int(config.Limit)
-	res, err := c.GetSubscribers(topic, offset, limit, false, config.TxPool)
+	res, err := c.GetSubscribers(topic, offset, limit, false, config.TxPool, nil)
 	if err != nil {
 		return err
 	}
@@ -1070,7 +1070,7 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 
 	for len(subscribers) >= limit {
 		offset += limit
-		res, err = c.GetSubscribers(topic, offset, limit, false, false)
+		res, err = c.GetSubscribers(topic, offset, limit, false, false, nil)
 		if err != nil {
 			return err
 		}
@@ -1221,21 +1221,21 @@ func (c *Client) BalanceByAddressContext(ctx context.Context, address string) (*
 }
 
 // GetSubscribers wraps GetSubscribersContext with background context.
-func (c *Client) GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
-	return c.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool)
+func (c *Client) GetSubscribers(topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
+	return c.GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool, subscriberHashPrefix)
 }
 
 // GetSubscribersContext is the same as package level GetSubscribersContext, but
 // using connected node as the RPC server, followed by this client's
 // SeedRPCServerAddr if failed.
-func (c *Client) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error) {
+func (c *Client) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
 	if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-		res, err := GetSubscribersContext(ctx, topic, offset, limit, meta, txPool, c.wallet.config)
+		res, err := GetSubscribersContext(ctx, topic, offset, limit, meta, txPool, subscriberHashPrefix, c.wallet.config)
 		if err == nil {
 			return res, err
 		}
 	}
-	return GetSubscribersContext(ctx, topic, offset, limit, meta, txPool, c.config)
+	return GetSubscribersContext(ctx, topic, offset, limit, meta, txPool, subscriberHashPrefix, c.config)
 }
 
 // GetSubscription wraps GetSubscriptionContext with background context.
@@ -1257,21 +1257,21 @@ func (c *Client) GetSubscriptionContext(ctx context.Context, topic string, subsc
 }
 
 // GetSubscribersCount wraps GetSubscribersCountContext with background context.
-func (c *Client) GetSubscribersCount(topic string) (int, error) {
-	return c.GetSubscribersCountContext(context.Background(), topic)
+func (c *Client) GetSubscribersCount(topic string, subscriberHashPrefix []byte) (int, error) {
+	return c.GetSubscribersCountContext(context.Background(), topic, subscriberHashPrefix)
 }
 
 // GetSubscribersCountContext is the same as package level
 // GetSubscribersCountContext, but using connected node as the RPC server,
 // followed by this client's SeedRPCServerAddr if failed.
-func (c *Client) GetSubscribersCountContext(ctx context.Context, topic string) (int, error) {
+func (c *Client) GetSubscribersCountContext(ctx context.Context, topic string, subscriberHashPrefix []byte) (int, error) {
 	if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-		res, err := GetSubscribersCountContext(ctx, topic, c.wallet.config)
+		res, err := GetSubscribersCountContext(ctx, topic, subscriberHashPrefix, c.wallet.config)
 		if err == nil {
 			return res, err
 		}
 	}
-	return GetSubscribersCountContext(ctx, topic, c.config)
+	return GetSubscribersCountContext(ctx, topic, subscriberHashPrefix, c.config)
 }
 
 // GetRegistrant wraps GetRegistrantContext with background context.

@@ -37,12 +37,12 @@ type rpcClient interface {
 	BalanceByAddressContext(ctx context.Context, address string) (*Amount, error)
 	GetHeight() (int32, error)
 	GetHeightContext(ctx context.Context) (int32, error)
-	GetSubscribers(topic string, offset, limit int, meta, txPool bool) (*Subscribers, error)
-	GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool) (*Subscribers, error)
+	GetSubscribers(topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error)
+	GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error)
 	GetSubscription(topic string, subscriber string) (*Subscription, error)
 	GetSubscriptionContext(ctx context.Context, topic string, subscriber string) (*Subscription, error)
-	GetSubscribersCount(topic string) (int, error)
-	GetSubscribersCountContext(ctx context.Context, topic string) (int, error)
+	GetSubscribersCount(topic string, subscriberHashPrefix []byte) (int, error)
+	GetSubscribersCountContext(ctx context.Context, topic string, subscriberHashPrefix []byte) (int, error)
 	GetRegistrant(name string) (*Registrant, error)
 	GetRegistrantContext(ctx context.Context, name string) (*Registrant, error)
 	SendRawTransaction(txn *transaction.Transaction) (string, error)
@@ -335,8 +335,8 @@ func GetHeightContext(ctx context.Context, config RPCConfigInterface) (int32, er
 }
 
 // GetSubscribers wraps GetSubscribersContext with background context.
-func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config RPCConfigInterface) (*Subscribers, error) {
-	return GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool, config)
+func GetSubscribers(topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte, config RPCConfigInterface) (*Subscribers, error) {
+	return GetSubscribersContext(context.Background(), topic, offset, limit, meta, txPool, subscriberHashPrefix, config)
 }
 
 // GetSubscribersContext gets the subscribers of a topic with a offset and max
@@ -344,17 +344,22 @@ func GetSubscribers(topic string, offset, limit int, meta, txPool bool, config R
 // metadata. If txPool is true, results contain subscribers in txPool. Enabling
 // this will get subscribers sooner after they send subscribe transactions, but
 // might affect the correctness of subscribers because transactions in txpool is
-// not guaranteed to be packed into a block.
+// not guaranteed to be packed into a block. If subscriberHashPrefix is not
+// empty, only subscriber whose sha256(pubkey+identifier) contains this prefix
+// will be returned. Each prefix byte will reduce result count to about 1/256,
+// and also reduce response time to about 1/256 if there are a lot of
+// subscribers. This is a good way to sample subscribers randomly with low cost.
 //
 // Offset and limit are changed to signed int for gomobile compatibility
-func GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, config RPCConfigInterface) (*Subscribers, error) {
+func GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte, config RPCConfigInterface) (*Subscribers, error) {
 	var result map[string]interface{}
 	err := RPCCall(ctx, "getsubscribers", map[string]interface{}{
-		"topic":  topic,
-		"offset": offset,
-		"limit":  limit,
-		"meta":   meta,
-		"txPool": txPool,
+		"topic":                topic,
+		"offset":               offset,
+		"limit":                limit,
+		"meta":                 meta,
+		"txPool":               txPool,
+		"subscriberHashPrefix": hex.EncodeToString(subscriberHashPrefix),
 	}, &result, config)
 	if err != nil {
 		return nil, err
@@ -408,17 +413,24 @@ func GetSubscriptionContext(ctx context.Context, topic string, subscriber string
 }
 
 // GetSubscribersCount wraps GetSubscribersCountContext with background context.
-func GetSubscribersCount(topic string, config RPCConfigInterface) (int, error) {
-	return GetSubscribersCountContext(context.Background(), topic, config)
+func GetSubscribersCount(topic string, subscriberHashPrefix []byte, config RPCConfigInterface) (int, error) {
+	return GetSubscribersCountContext(context.Background(), topic, subscriberHashPrefix, config)
 }
 
 // GetSubscribersCountContext RPC returns the number of subscribers of a topic
-// (not including txPool).
+// (not including txPool). If subscriberHashPrefix is not empty, only subscriber
+// whose sha256(pubkey+identifier) contains this prefix will be counted. Each
+// prefix byte will reduce result count to about 1/256, and also reduce response
+// time to about 1/256 if there are a lot of subscribers. This is a good way to
+// sample subscribers randomly with low cost.
 //
 // Count is changed to signed int for gomobile compatibility
-func GetSubscribersCountContext(ctx context.Context, topic string, config RPCConfigInterface) (int, error) {
+func GetSubscribersCountContext(ctx context.Context, topic string, subscriberHashPrefix []byte, config RPCConfigInterface) (int, error) {
 	var count int
-	err := RPCCall(ctx, "getsubscriberscount", map[string]interface{}{"topic": topic}, &count, config)
+	err := RPCCall(ctx, "getsubscriberscount", map[string]interface{}{
+		"topic":                topic,
+		"subscriberHashPrefix": hex.EncodeToString(subscriberHashPrefix),
+	}, &count, config)
 	if err != nil {
 		return 0, err
 	}
