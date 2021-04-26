@@ -118,7 +118,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		OnConnect:        NewOnConnect(1, nil),
 		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
 		reconnectChan:    make(chan struct{}),
-		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheExpiration)*time.Millisecond),
+		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
 		sharedKeys:       make(map[string]*[sharedKeySize]byte),
 		wallet:           w,
 	}
