@@ -269,6 +269,9 @@ func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
 			return nil, err
 		}
 	}
+	if merged.SeedRPCServerAddr.Len() == 0 {
+		merged.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	}
 	return merged, nil
 }
 
@@ -308,6 +311,9 @@ func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+	if merged.SeedRPCServerAddr.Len() == 0 {
+		merged.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
 	}
 	return merged, nil
 }
