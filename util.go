@@ -116,6 +116,14 @@ func (sa *StringArray) Elems() []string {
 	return sa.elems
 }
 
+// StringArray returns a single string by concatenates the elements
+func (sa *StringArray) ElemsString() string {
+	if sa == nil {
+		return ""
+	}
+	return strings.Join(sa.elems, ",")
+}
+
 // Len returns the string array length.
 func (sa *StringArray) Len() int {
 	return len(sa.Elems())
