@@ -136,11 +136,11 @@ func (sa *StringArray) RandomElem() string {
 }
 
 // StringArray returns a single string by concatenates the elements
-func (sa *StringArray) ElemsString() string {
+func (sa *StringArray) Join(separator string) string {
 	if sa == nil {
 		return ""
 	}
-	return strings.Join(sa.elems, ",")
+	return strings.Join(sa.elems, separator)
 }
 
 // StringMapFunc is a wrapper type for gomobile compatibility.
