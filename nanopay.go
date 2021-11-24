@@ -143,9 +143,9 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 
 // NewNanoPayClaimer creates a NanoPayClaimer with a given rpcClient (client,
 // multiclient or wallet), recipient wallet address, claim interval in
-// millisecond, minimal flush amount, onError channel. It is recommended to use
-// a positive minFlushAmount.
-func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimIntervalMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
+// millisecond, flush linger after close in millisecond, minimal flush amount,
+// onError channel. It is recommended to use a positive minFlushAmount.
+func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimIntervalMs, lingerMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	receiver, err := common.ToScriptHash(recipientAddress)
 	if err != nil {
 		return nil, err
@@ -167,7 +167,25 @@ func NewNanoPayClaimer(rpcClient rpcClient, recipientAddress string, claimInterv
 
 	go func() {
 		defer onError.close()
-		defer npc.Flush()
+		defer func() {
+			t := time.Now()
+			for {
+				err := npc.Flush()
+				if err == nil {
+					return
+				}
+				log.Printf("Flush nanopay txn error: %v", err)
+				if time.Since(t) > time.Duration(lingerMs)*time.Millisecond {
+					return
+				}
+				sleepTime := time.Minute
+				maxSleepTime := time.Until(t.Add(time.Duration(lingerMs) * time.Millisecond))
+				if sleepTime > maxSleepTime {
+					sleepTime = maxSleepTime
+				}
+				time.Sleep(sleepTime)
+			}
+		}()
 		for {
 			time.Sleep(time.Minute)
 
