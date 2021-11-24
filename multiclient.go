@@ -769,11 +769,11 @@ func (m *MultiClient) NewNanoPay(recipientAddress, fee string, duration int) (*N
 
 // NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this multiclient
 // as RPC client.
-func (m *MultiClient) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
+func (m *MultiClient) NewNanoPayClaimer(recipientAddress string, claimIntervalMs, lingerMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	if len(recipientAddress) == 0 {
 		recipientAddress = m.GetDefaultClient().wallet.address
 	}
-	return NewNanoPayClaimer(m, recipientAddress, claimIntervalMs, minFlushAmount, onError)
+	return NewNanoPayClaimer(m, recipientAddress, claimIntervalMs, lingerMs, minFlushAmount, onError)
 }
 
 // GetNonce wraps GetNonceContext with background context.

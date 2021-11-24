@@ -236,11 +236,11 @@ func (w *Wallet) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPa
 
 // NewNanoPayClaimer is a shortcut for NewNanoPayClaimer using this wallet as
 // RPC client.
-func (w *Wallet) NewNanoPayClaimer(recipientAddress string, claimIntervalMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
+func (w *Wallet) NewNanoPayClaimer(recipientAddress string, claimIntervalMs, lingerMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	if len(recipientAddress) == 0 {
 		recipientAddress = w.Address()
 	}
-	return NewNanoPayClaimer(w, recipientAddress, claimIntervalMs, minFlushAmount, onError)
+	return NewNanoPayClaimer(w, recipientAddress, claimIntervalMs, lingerMs, minFlushAmount, onError)
 }
 
 // GetNonce wraps GetNonceContext with background context.
