@@ -73,7 +73,7 @@ type signerRPCClient interface {
 // directly. RPC prefix is added to all public methods to avoid gomobile compile
 // error.
 type RPCConfigInterface interface {
-	RPCGetSeedRPCServerAddr() *StringArray
+	RPCGetSeedRPCServerAddr() StringArray
 	RPCGetRPCTimeout() int32
 	RPCGetConcurrency() int32
 }
