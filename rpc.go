@@ -166,8 +166,9 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 	}
 
 	var wg sync.WaitGroup
+	var respLock sync.Mutex
 	rpcAddrChan := make(chan string)
-	respBodyChan := make(chan []byte, 1)
+	respErrChan := make(chan *errResp, 1)
 	ctx, cancel := context.WithCancel(parentCtx)
 	defer cancel()
 
@@ -190,10 +191,49 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 					}
 					continue
 				}
+
+				respJSON := make(map[string]*json.RawMessage)
+				err = json.Unmarshal(body, &respJSON)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				if respJSON["error"] != nil {
+					er := &errResp{}
+					err := json.Unmarshal(*respJSON["error"], er)
+					if err != nil {
+						log.Println(err)
+						continue
+					}
+					select {
+					case respErrChan <- er:
+						cancel()
+					case <-ctx.Done():
+						return
+					}
+					return
+				}
+
+				respLock.Lock()
 				select {
-				case respBodyChan <- body:
-					cancel()
 				case <-ctx.Done():
+					respLock.Unlock()
+					return
+				default:
+				}
+				err = json.Unmarshal(*respJSON["result"], result)
+				if err != nil {
+					log.Println(err)
+					respLock.Unlock()
+					continue
+				}
+
+				select {
+				case respErrChan <- nil:
+					cancel()
+					respLock.Unlock()
+				case <-ctx.Done():
+					respLock.Unlock()
 					return
 				}
 			}
@@ -212,39 +252,24 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 
 	wg.Wait()
 
-	close(respBodyChan)
+	close(respErrChan)
 
 	err = parentCtx.Err()
 	if err != nil {
 		return &errorWithCode{err: err, code: errCodeCanceled}
 	}
 
-	body, ok := <-respBodyChan
+	er, ok := <-respErrChan
 	if !ok {
 		return &errorWithCode{err: errors.New("all rpc request failed"), code: errCodeNetworkError}
 	}
 
-	respJSON := make(map[string]*json.RawMessage)
-	err = json.Unmarshal(body, &respJSON)
-	if err != nil {
-		return &errorWithCode{err: err, code: errCodeDecodeError}
-	}
-	if respJSON["error"] != nil {
-		er := &errResp{}
-		err := json.Unmarshal(*respJSON["error"], er)
-		if err != nil {
-			return &errorWithCode{err: err, code: errCodeDecodeError}
-		}
+	if er != nil {
 		msg := er.Message
 		if len(er.Data) > 0 {
 			msg += ": " + er.Data
 		}
 		return &errorWithCode{err: errors.New(msg), code: er.Code}
-	}
-
-	err = json.Unmarshal(*respJSON["result"], result)
-	if err != nil {
-		return &errorWithCode{err: err, code: errCodeDecodeError}
 	}
 
 	return nil
