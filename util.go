@@ -6,8 +6,6 @@ import (
 	"crypto/sha256"
 	"log"
 	"math/big"
-	mathRand "math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -93,111 +91,8 @@ func (amount *Amount) ToFixed64() common.Fixed64 {
 	return amount.Fixed64
 }
 
-// StringArray is a wrapper type for gomobile compatibility. StringArray is not
-// protected by lock and should not be read and write at the same time.
-type StringArray struct{ elems []string }
-
-// NewStringArray creates a StringArray from a list of string elements.
-func NewStringArray(elems ...string) *StringArray {
-	return &StringArray{elems}
-}
-
-// NewStringArrayFromString creates a StringArray from a single string input.
-// The input string will be split to string array by whitespace.
-func NewStringArrayFromString(s string) *StringArray {
-	return &StringArray{strings.Fields(s)}
-}
-
-// Elems returns the string array elements.
-func (sa *StringArray) Elems() []string {
-	if sa == nil {
-		return nil
-	}
-	return sa.elems
-}
-
-// Len returns the string array length.
-func (sa *StringArray) Len() int {
-	return len(sa.Elems())
-}
-
-// Append adds an element to the string array.
-func (sa *StringArray) Append(s string) {
-	sa.elems = append(sa.elems, s)
-}
-
-// RandomElem returns a randome element from the string array. The random number
-// is generated using math/rand and thus not cryptographically secure.
-func (sa *StringArray) RandomElem() string {
-	if sa.Len() == 0 {
-		return ""
-	}
-	return sa.Elems()[mathRand.Intn(sa.Len())]
-}
-
-// StringArray returns a single string by concatenates the elements
-func (sa *StringArray) Join(separator string) string {
-	if sa == nil {
-		return ""
-	}
-	return strings.Join(sa.elems, separator)
-}
-
-// StringMapFunc is a wrapper type for gomobile compatibility.
-type StringMapFunc interface{ OnVisit(string, string) bool }
-
-// StringMap is a wrapper type for gomobile compatibility. StringMap is not
-// protected by lock and should not be read and write at the same time.
-type StringMap struct{ Map map[string]string }
-
-// NewStringMap creates a StringMap from a map.
-func NewStringMap(m map[string]string) *StringMap {
-	return &StringMap{m}
-}
-
-// NewStringMapWithSize creates an empty StringMap with a given size.
-func NewStringMapWithSize(size int) *StringMap {
-	return &StringMap{make(map[string]string, size)}
-}
-
-// Get returns the value of a key, or ErrKeyNotInMap if key does not exist.
-func (sm *StringMap) Get(key string) (string, error) {
-	if value, ok := sm.Map[key]; ok {
-		return value, nil
-	}
-	return "", ErrKeyNotInMap
-}
-
-// Set sets the value of a key to a value.
-func (sm *StringMap) Set(key, value string) {
-	sm.Map[key] = value
-}
-
-// Delete deletes a key and its value from the map.
-func (sm *StringMap) Delete(key string) {
-	delete(sm.Map, key)
-}
-
-// Len returns the number of elements in the map.
-func (sm *StringMap) Len() int {
-	return len(sm.Map)
-}
-
-// Range iterates over the StringMap and call the OnVisit callback function with
-// each element in the map. If the OnVisit function returns false, the iterator
-// will stop and no longer visit the rest elements.
-func (sm *StringMap) Range(cb StringMapFunc) {
-	if cb != nil {
-		for key, value := range sm.Map {
-			if !cb.OnVisit(key, value) {
-				return
-			}
-		}
-	}
-}
-
 // Subscribers is a wrapper type for gomobile compatibility.
-type Subscribers struct{ Subscribers, SubscribersInTxPool *StringMap }
+type Subscribers struct{ Subscribers, SubscribersInTxPool StringMap }
 
 // OnConnectFunc is a wrapper type for gomobile compatibility.
 type OnConnectFunc interface{ OnConnect(*Node) }
@@ -438,7 +333,7 @@ func VerifyWalletAddress(address string) error {
 
 // MeasureSeedRPCServer wraps MeasureSeedRPCServerContext with background
 // context.
-func MeasureSeedRPCServer(seedRPCList *StringArray, timeout int32) (*StringArray, error) {
+func MeasureSeedRPCServer(seedRPCList StringArray, timeout int32) (StringArray, error) {
 	return MeasureSeedRPCServerContext(context.Background(), seedRPCList, timeout)
 }
 
@@ -447,7 +342,7 @@ func MeasureSeedRPCServer(seedRPCList *StringArray, timeout int32) (*StringArray
 // to high). If none of the given seed rpc node is accessable or in persist
 // finished state, returned string array will contain zero elements. Timeout is
 // in millisecond.
-func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *StringArray, timeout int32) (*StringArray, error) {
+func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList StringArray, timeout int32) (StringArray, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	rpcAddrs := make([]string, 0, seedRPCList.Len())

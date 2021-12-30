@@ -19,7 +19,7 @@ var DefaultSeedRPCServerAddr = []string{
 
 // ClientConfig is the client configuration.
 type ClientConfig struct {
-	SeedRPCServerAddr       *StringArray   // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
+	SeedRPCServerAddr       StringArray    // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
 	RPCTimeout              int32          // Timeout for each RPC call in millisecond
 	RPCConcurrency          int32          // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 	MsgChanLen              int32          // Channel length for received but unproccessed messages.
@@ -63,7 +63,7 @@ func GetDefaultClientConfig() *ClientConfig {
 
 // RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
 // added to avoid gomobile compile error.
-func (c *ClientConfig) RPCGetSeedRPCServerAddr() *StringArray {
+func (c *ClientConfig) RPCGetSeedRPCServerAddr() StringArray {
 	return c.SeedRPCServerAddr
 }
 
@@ -152,7 +152,7 @@ type ScryptConfig struct {
 
 // WalletConfig is the wallet configuration.
 type WalletConfig struct {
-	SeedRPCServerAddr *StringArray
+	SeedRPCServerAddr StringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 	Password          string
@@ -182,7 +182,7 @@ func GetDefaultWalletConfig() *WalletConfig {
 
 // RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
 // added to avoid gomobile compile error.
-func (c *WalletConfig) RPCGetSeedRPCServerAddr() *StringArray {
+func (c *WalletConfig) RPCGetSeedRPCServerAddr() StringArray {
 	return c.SeedRPCServerAddr
 }
 
@@ -200,7 +200,7 @@ func (c *WalletConfig) RPCGetConcurrency() int32 {
 
 // RPCConfig is the rpc call configuration.
 type RPCConfig struct {
-	SeedRPCServerAddr *StringArray
+	SeedRPCServerAddr StringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 }
@@ -222,7 +222,7 @@ func GetDefaultRPCConfig() *RPCConfig {
 
 // RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
 // added to avoid gomobile compile error.
-func (c *RPCConfig) RPCGetSeedRPCServerAddr() *StringArray {
+func (c *RPCConfig) RPCGetSeedRPCServerAddr() StringArray {
 	return c.SeedRPCServerAddr
 }
 

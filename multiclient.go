@@ -329,7 +329,7 @@ func (m *MultiClient) GetDefaultClient() *Client {
 
 // SendWithClient sends bytes or string data to one or multiple destinations
 // using a specific client with given index.
-func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) SendWithClient(clientID int, dests StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	client := m.GetClient(clientID)
 	if client == nil {
 		return nil, ErrNilClient
@@ -359,13 +359,13 @@ func (m *MultiClient) SendWithClient(clientID int, dests *StringArray, data inte
 
 // SendBinaryWithClient is a wrapper of SendWithClient without interface type
 // for gomobile compatibility.
-func (m *MultiClient) SendBinaryWithClient(clientID int, dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) SendBinaryWithClient(clientID int, dests StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return m.SendWithClient(clientID, dests, data, config)
 }
 
 // SendTextWithClient is a wrapper of SendWithClient without interface type for
 // gomobile compatibility.
-func (m *MultiClient) SendTextWithClient(clientID int, dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) SendTextWithClient(clientID int, dests StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return m.SendWithClient(clientID, dests, data, config)
 }
 
@@ -380,7 +380,7 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 // Send sends bytes or string data to one or multiple destinations with an
 // optional config. Returned OnMessage channel will emit if a reply or ACK for
 // this message is received.
-func (m *MultiClient) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) Send(dests StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(m.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
@@ -448,13 +448,13 @@ func (m *MultiClient) Send(dests *StringArray, data interface{}, config *Message
 
 // SendBinary is a wrapper of Send without interface type for gomobile
 // compatibility.
-func (m *MultiClient) SendBinary(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) SendBinary(dests StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return m.Send(dests, data, config)
 }
 
 // SendText is a wrapper of Send without interface type for gomobile
 // compatibility.
-func (m *MultiClient) SendText(dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+func (m *MultiClient) SendText(dests StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return m.Send(dests, data, config)
 }
 
@@ -589,7 +589,7 @@ func (m *MultiClient) handleSessionMsg(localClientID, src string, sessionID, dat
 // matches any of the given regular expressions. If addrsRe is nil, any address
 // will be accepted. Each function call will overwrite previous listening
 // addresses.
-func (m *MultiClient) Listen(addrsRe *StringArray) error {
+func (m *MultiClient) Listen(addrsRe StringArray) error {
 	var addrs []string
 	if addrsRe == nil {
 		addrs = []string{DefaultSessionAllowAddr}

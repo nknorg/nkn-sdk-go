@@ -757,7 +757,7 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 // Send sends bytes or string data to one or multiple destinations with an
 // optional config. Returned OnMessage channel will emit if a reply or ACK for
 // this message is received.
-func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) Send(dests StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(c.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
@@ -782,13 +782,13 @@ func (c *Client) Send(dests *StringArray, data interface{}, config *MessageConfi
 
 // SendBinary is a wrapper of Send without interface type for gomobile
 // compatibility.
-func (c *Client) SendBinary(dests *StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) SendBinary(dests StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
 }
 
 // SendText is a wrapper of Send without interface type for gomobile
 // compatibility.
-func (c *Client) SendText(dests *StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) SendText(dests StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
 }
 
@@ -1060,8 +1060,8 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		return err
 	}
 
-	subscribers := res.Subscribers.Map
-	subscribersInTxPool := res.SubscribersInTxPool.Map
+	subscribers := res.Subscribers.Map()
+	subscribersInTxPool := res.SubscribersInTxPool.Map()
 
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber := range subscribers {
@@ -1074,7 +1074,7 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		if err != nil {
 			return err
 		}
-		for subscriber := range res.Subscribers.Map {
+		for subscriber := range res.Subscribers.Map() {
 			dests = append(dests, subscriber)
 		}
 	}
