@@ -232,8 +232,8 @@ github.com/nknorg/ncp-go v1.0.3/go.mod h1:ALtnk9lKKSwoOXatbfLLQvQWGkRnJomrmbTZjv
 github.com/nknorg/nkn-sdk-go v1.3.7/go.mod h1:JSksFP+VQ0S54Ztiht6WHC3tNZklcGg+JaxENuFnqRc=
 github.com/nknorg/nkn/v2 v2.0.6 h1:spbY0WzPBNe1xgrNB/d0coUmXK8tzv44fjvL5YAAF2k=
 github.com/nknorg/nkn/v2 v2.0.6/go.mod h1:cXl2WTv72trEXKJiNH0dCMygMtL8nJne07dWajDlRIo=
-github.com/nknorg/nkngomobile v0.0.0-20211230085803-82d1d0d6c8ef h1:kObA7lgpnBBIgxDQ4oQTF5j6RpgQg/bIGLIlg/xCM8U=
-github.com/nknorg/nkngomobile v0.0.0-20211230085803-82d1d0d6c8ef/go.mod h1:UR/wt+6fFEamWuXx3JKhOABXqVe5dzrlTUpEVu0QOCA=
+github.com/nknorg/nkngomobile v0.0.0-20220106103951-8ce8cf457978 h1:uxPpDCzmTD7drM02UuZfemB7uNqSMD53FlHB7Z164pI=
+github.com/nknorg/nkngomobile v0.0.0-20220106103951-8ce8cf457978/go.mod h1:UR/wt+6fFEamWuXx3JKhOABXqVe5dzrlTUpEVu0QOCA=
 github.com/nknorg/nnet v0.0.0-20200521002812-357d1b11179f/go.mod h1:4DHEQEMhlRGIKGSyhATdjeusdqaHafDatadtpeHBpvI=
 github.com/nknorg/portmapper v0.0.0-20200114081049-1c03cdccc283/go.mod h1:dL4PQJ4670oTO6LqvkjrBQEkD+iMiOYjlKRBBw55Csg=
 github.com/nrdcg/auroradns v1.0.1/go.mod h1:y4pc0i9QXYlFCWrhWrUSIETnZgrf4KuwjDIWmmXo3JI=
