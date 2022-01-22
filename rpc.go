@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/nknorg/nkngomobile"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -73,7 +74,7 @@ type signerRPCClient interface {
 // directly. RPC prefix is added to all public methods to avoid gomobile compile
 // error.
 type RPCConfigInterface interface {
-	RPCGetSeedRPCServerAddr() StringArray
+	RPCGetSeedRPCServerAddr() nkngomobile.IStringArray
 	RPCGetRPCTimeout() int32
 	RPCGetConcurrency() int32
 }
@@ -240,7 +241,7 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 		}()
 	}
 
-	for _, rpcAddr := range config.RPCGetSeedRPCServerAddr().Elems() {
+	for _, rpcAddr := range nkngomobile.GetStringArrayElems(config.RPCGetSeedRPCServerAddr()) {
 		select {
 		case rpcAddrChan <- rpcAddr:
 		case <-ctx.Done():
@@ -414,8 +415,8 @@ func GetSubscribersContext(ctx context.Context, topic string, offset, limit int,
 	}
 
 	return &Subscribers{
-		Subscribers:         NewStringMap(subscribers),
-		SubscribersInTxPool: NewStringMap(subscribersInTxPool),
+		Subscribers:         nkngomobile.NewStringMap(subscribers),
+		SubscribersInTxPool: nkngomobile.NewStringMap(subscribersInTxPool),
 	}, nil
 }
 

@@ -1,6 +1,7 @@
 package nkn
 
 import (
+	"github.com/nknorg/nkngomobile"
 	"math/rand"
 	"time"
 
@@ -19,19 +20,19 @@ var DefaultSeedRPCServerAddr = []string{
 
 // ClientConfig is the client configuration.
 type ClientConfig struct {
-	SeedRPCServerAddr       StringArray    // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
-	RPCTimeout              int32          // Timeout for each RPC call in millisecond
-	RPCConcurrency          int32          // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
-	MsgChanLen              int32          // Channel length for received but unproccessed messages.
-	ConnectRetries          int32          // Connnect to node retries (including the initial connect). 0 means unlimited retries.
-	MsgCacheExpiration      int32          // Message cache expiration in millisecond for response channel, multiclient message id deduplicate, etc.
-	MsgCacheCleanupInterval int32          // Message cache cleanup interval in millisecond.
-	WsHandshakeTimeout      int32          // WebSocket handshake timeout in millisecond.
-	WsWriteTimeout          int32          // WebSocket write timeout in millisecond.
-	MinReconnectInterval    int32          // Min reconnect interval in millisecond.
-	MaxReconnectInterval    int32          // Max reconnect interval in millisecond.
-	MessageConfig           *MessageConfig // Default message config of the client if per-message config is not provided.
-	SessionConfig           *ncp.Config    // Default session config of the client if per-session config is not provided.
+	SeedRPCServerAddr       nkngomobile.IStringArray // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
+	RPCTimeout              int32                    // Timeout for each RPC call in millisecond
+	RPCConcurrency          int32                    // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
+	MsgChanLen              int32                    // Channel length for received but unproccessed messages.
+	ConnectRetries          int32                    // Connnect to node retries (including the initial connect). 0 means unlimited retries.
+	MsgCacheExpiration      int32                    // Message cache expiration in millisecond for response channel, multiclient message id deduplicate, etc.
+	MsgCacheCleanupInterval int32                    // Message cache cleanup interval in millisecond.
+	WsHandshakeTimeout      int32                    // WebSocket handshake timeout in millisecond.
+	WsWriteTimeout          int32                    // WebSocket write timeout in millisecond.
+	MinReconnectInterval    int32                    // Min reconnect interval in millisecond.
+	MaxReconnectInterval    int32                    // Max reconnect interval in millisecond.
+	MessageConfig           *MessageConfig           // Default message config of the client if per-message config is not provided.
+	SessionConfig           *ncp.Config              // Default session config of the client if per-session config is not provided.
 }
 
 // DefaultClientConfig is the default client config.
@@ -55,7 +56,7 @@ var DefaultClientConfig = ClientConfig{
 // fields set to default.
 func GetDefaultClientConfig() *ClientConfig {
 	clientConf := DefaultClientConfig
-	clientConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	clientConf.SeedRPCServerAddr = nkngomobile.NewStringArray(DefaultSeedRPCServerAddr...)
 	clientConf.MessageConfig = GetDefaultMessageConfig()
 	clientConf.SessionConfig = GetDefaultSessionConfig()
 	return &clientConf
@@ -63,7 +64,7 @@ func GetDefaultClientConfig() *ClientConfig {
 
 // RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
 // added to avoid gomobile compile error.
-func (c *ClientConfig) RPCGetSeedRPCServerAddr() StringArray {
+func (c *ClientConfig) RPCGetSeedRPCServerAddr() nkngomobile.IStringArray {
 	return c.SeedRPCServerAddr
 }
 
@@ -152,7 +153,7 @@ type ScryptConfig struct {
 
 // WalletConfig is the wallet configuration.
 type WalletConfig struct {
-	SeedRPCServerAddr StringArray
+	SeedRPCServerAddr nkngomobile.IStringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 	Password          string
@@ -175,14 +176,14 @@ var DefaultWalletConfig = WalletConfig{
 // fields set to default.
 func GetDefaultWalletConfig() *WalletConfig {
 	walletConf := DefaultWalletConfig
-	walletConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	walletConf.SeedRPCServerAddr = nkngomobile.NewStringArray(DefaultSeedRPCServerAddr...)
 	walletConf.ScryptConfig = &ScryptConfig{}
 	return &walletConf
 }
 
 // RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
 // added to avoid gomobile compile error.
-func (c *WalletConfig) RPCGetSeedRPCServerAddr() StringArray {
+func (c *WalletConfig) RPCGetSeedRPCServerAddr() nkngomobile.IStringArray {
 	return c.SeedRPCServerAddr
 }
 
@@ -200,7 +201,7 @@ func (c *WalletConfig) RPCGetConcurrency() int32 {
 
 // RPCConfig is the rpc call configuration.
 type RPCConfig struct {
-	SeedRPCServerAddr StringArray
+	SeedRPCServerAddr nkngomobile.IStringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 }
@@ -216,13 +217,13 @@ var DefaultRPCConfig = RPCConfig{
 // set to default.
 func GetDefaultRPCConfig() *RPCConfig {
 	rpcConf := DefaultRPCConfig
-	rpcConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+	rpcConf.SeedRPCServerAddr = nkngomobile.NewStringArray(DefaultSeedRPCServerAddr...)
 	return &rpcConf
 }
 
 // RPCGetSeedRPCServerAddr returns all seed rpc server addresses. RPC prefix is
 // added to avoid gomobile compile error.
-func (c *RPCConfig) RPCGetSeedRPCServerAddr() StringArray {
+func (c *RPCConfig) RPCGetSeedRPCServerAddr() nkngomobile.IStringArray {
 	return c.SeedRPCServerAddr
 }
 
@@ -270,7 +271,7 @@ func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
 		}
 	}
 	if merged.SeedRPCServerAddr.Len() == 0 {
-		merged.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+		merged.SeedRPCServerAddr = nkngomobile.NewStringArray(DefaultSeedRPCServerAddr...)
 	}
 	return merged, nil
 }
@@ -313,7 +314,7 @@ func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
 		}
 	}
 	if merged.SeedRPCServerAddr.Len() == 0 {
-		merged.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
+		merged.SeedRPCServerAddr = nkngomobile.NewStringArray(DefaultSeedRPCServerAddr...)
 	}
 	return merged, nil
 }
