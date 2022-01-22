@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/nknorg/nkngomobile"
 	"log"
 	"net/url"
 	"strings"
@@ -536,7 +537,7 @@ func (c *Client) connectToNode(node *Node) error {
 			defer wg.Done()
 			addr := (&url.URL{Scheme: "http", Host: node.RPCAddr}).String()
 			nodeState, err := GetNodeStateContext(ctx, &RPCConfig{
-				SeedRPCServerAddr: NewStringArray(addr),
+				SeedRPCServerAddr: nkngomobile.NewStringArray(addr),
 				RPCTimeout:        c.config.WsHandshakeTimeout,
 			})
 			if err != nil {
@@ -565,9 +566,9 @@ func (c *Client) connectToNode(node *Node) error {
 	c.conn = conn
 	c.node = node
 	if len(rpcAddr) > 0 {
-		c.wallet.config.SeedRPCServerAddr = NewStringArray(rpcAddr)
+		c.wallet.config.SeedRPCServerAddr = nkngomobile.NewStringArray(rpcAddr)
 	} else {
-		c.wallet.config.SeedRPCServerAddr = NewStringArray()
+		c.wallet.config.SeedRPCServerAddr = nkngomobile.NewStringArray()
 	}
 	c.lock.Unlock()
 
@@ -757,7 +758,7 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 // Send sends bytes or string data to one or multiple destinations with an
 // optional config. Returned OnMessage channel will emit if a reply or ACK for
 // this message is received.
-func (c *Client) Send(dests StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) Send(dests nkngomobile.IStringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(c.config.MessageConfig, config)
 	if err != nil {
 		return nil, err
@@ -768,7 +769,7 @@ func (c *Client) Send(dests StringArray, data interface{}, config *MessageConfig
 		return nil, err
 	}
 
-	if err := c.send(dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := c.send(nkngomobile.GetStringArrayElems(dests), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
@@ -782,13 +783,13 @@ func (c *Client) Send(dests StringArray, data interface{}, config *MessageConfig
 
 // SendBinary is a wrapper of Send without interface type for gomobile
 // compatibility.
-func (c *Client) SendBinary(dests StringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) SendBinary(dests nkngomobile.IStringArray, data []byte, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
 }
 
 // SendText is a wrapper of Send without interface type for gomobile
 // compatibility.
-func (c *Client) SendText(dests StringArray, data string, config *MessageConfig) (*OnMessage, error) {
+func (c *Client) SendText(dests nkngomobile.IStringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
 }
 
@@ -1060,8 +1061,8 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		return err
 	}
 
-	subscribers := res.Subscribers.Map()
-	subscribersInTxPool := res.SubscribersInTxPool.Map()
+	subscribers := nkngomobile.GetStringMap(res.Subscribers)
+	subscribersInTxPool := nkngomobile.GetStringMap(res.SubscribersInTxPool)
 
 	dests := make([]string, 0, len(subscribers)+len(subscribersInTxPool))
 	for subscriber := range subscribers {
@@ -1074,7 +1075,7 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		if err != nil {
 			return err
 		}
-		for subscriber := range res.Subscribers.Map() {
+		for subscriber := range nkngomobile.GetStringMap(res.Subscribers) {
 			dests = append(dests, subscriber)
 		}
 	}

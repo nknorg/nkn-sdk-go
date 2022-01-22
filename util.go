@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"github.com/nknorg/nkngomobile"
 	"log"
 	"math/big"
 	"sync"
@@ -92,7 +93,7 @@ func (amount *Amount) ToFixed64() common.Fixed64 {
 }
 
 // Subscribers is a wrapper type for gomobile compatibility.
-type Subscribers struct{ Subscribers, SubscribersInTxPool StringMap }
+type Subscribers struct{ Subscribers, SubscribersInTxPool nkngomobile.IStringMap }
 
 // OnConnectFunc is a wrapper type for gomobile compatibility.
 type OnConnectFunc interface{ OnConnect(*Node) }
@@ -333,7 +334,7 @@ func VerifyWalletAddress(address string) error {
 
 // MeasureSeedRPCServer wraps MeasureSeedRPCServerContext with background
 // context.
-func MeasureSeedRPCServer(seedRPCList StringArray, timeout int32) (StringArray, error) {
+func MeasureSeedRPCServer(seedRPCList nkngomobile.IStringArray, timeout int32) (nkngomobile.IStringArray, error) {
 	return MeasureSeedRPCServerContext(context.Background(), seedRPCList, timeout)
 }
 
@@ -342,17 +343,17 @@ func MeasureSeedRPCServer(seedRPCList StringArray, timeout int32) (StringArray, 
 // to high). If none of the given seed rpc node is accessable or in persist
 // finished state, returned string array will contain zero elements. Timeout is
 // in millisecond.
-func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList StringArray, timeout int32) (StringArray, error) {
+func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList nkngomobile.IStringArray, timeout int32) (nkngomobile.IStringArray, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	rpcAddrs := make([]string, 0, seedRPCList.Len())
 
-	for _, node := range seedRPCList.Elems() {
+	for _, node := range nkngomobile.GetStringArrayElems(seedRPCList) {
 		wg.Add(1)
 		go func(addr string) {
 			defer wg.Done()
 			nodeState, err := GetNodeStateContext(ctx, &RPCConfig{
-				SeedRPCServerAddr: NewStringArray(addr),
+				SeedRPCServerAddr: nkngomobile.NewStringArray(addr),
 				RPCTimeout:        timeout,
 			})
 			if err != nil {
@@ -379,5 +380,5 @@ func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList StringArray, t
 	case <-done:
 	}
 
-	return NewStringArray(rpcAddrs...), nil
+	return nkngomobile.NewStringArray(rpcAddrs...), nil
 }
