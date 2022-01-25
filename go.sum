@@ -249,10 +249,8 @@ github.com/nknorg/nkn-sdk-go v1.3.7/go.mod h1:JSksFP+VQ0S54Ztiht6WHC3tNZklcGg+Ja
 github.com/nknorg/nkn/v2 v2.0.6/go.mod h1:cXl2WTv72trEXKJiNH0dCMygMtL8nJne07dWajDlRIo=
 github.com/nknorg/nkn/v2 v2.1.7 h1:MYrA+Nfg2vnYJPP10OmAePRAMjbXfwmOXyknE1djudY=
 github.com/nknorg/nkn/v2 v2.1.7/go.mod h1:4xzrHJCI/FDFZmlt606Mn9ScKY4UUCFoaWydL1TzQRs=
-github.com/nknorg/nkngomobile v0.0.0-20220122111457-1acc65d029fc h1:BYlF9qtHr0zFoKlEHtZ+EIfI2FbQwvZ8bfBCAuDgzX4=
-github.com/nknorg/nkngomobile v0.0.0-20220122111457-1acc65d029fc/go.mod h1:UR/wt+6fFEamWuXx3JKhOABXqVe5dzrlTUpEVu0QOCA=
-github.com/nknorg/nkngomobile v0.0.0-20220124083621-6978de845b20 h1:5Z0rVyUBUmQJKO5djuHNAYagZ8twF+m6vXnqceejBcE=
-github.com/nknorg/nkngomobile v0.0.0-20220124083621-6978de845b20/go.mod h1:UR/wt+6fFEamWuXx3JKhOABXqVe5dzrlTUpEVu0QOCA=
+github.com/nknorg/nkngomobile v0.0.0-20220125080321-848ddd2e5157 h1:boS8HmbvuSYZ3unKjoTp/C4wulQBcAvNiQfkEcCqv0Q=
+github.com/nknorg/nkngomobile v0.0.0-20220125080321-848ddd2e5157/go.mod h1:UR/wt+6fFEamWuXx3JKhOABXqVe5dzrlTUpEVu0QOCA=
 github.com/nknorg/nnet v0.0.0-20200521002812-357d1b11179f/go.mod h1:4DHEQEMhlRGIKGSyhATdjeusdqaHafDatadtpeHBpvI=
 github.com/nknorg/nnet v0.0.0-20210516000534-f80d3763d1bd/go.mod h1:4DHEQEMhlRGIKGSyhATdjeusdqaHafDatadtpeHBpvI=
 github.com/nknorg/portmapper v0.0.0-20200114081049-1c03cdccc283/go.mod h1:dL4PQJ4670oTO6LqvkjrBQEkD+iMiOYjlKRBBw55Csg=
@@ -387,7 +385,6 @@ golang.org/x/lint v0.0.0-20191125180803-fdd1cda4f05f/go.mod h1:5qLYkcX4OjUUV8bRu
 golang.org/x/lint v0.0.0-20200130185559-910be7a94367/go.mod h1:3xt1FjdF8hUf6vQPIChWIBhFzV8gjjsPE/fR3IyQdNY=
 golang.org/x/lint v0.0.0-20200302205851-738671d3881b/go.mod h1:3xt1FjdF8hUf6vQPIChWIBhFzV8gjjsPE/fR3IyQdNY=
 golang.org/x/mobile v0.0.0-20190312151609-d3739f865fa6/go.mod h1:z+o9i4GpDbdi3rU15maQ/Ox0txvL9dWGYEHz965HBQE=
-golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028 h1:4+4C/Iv2U4fMZBiMCc98MG1In4gJY5YRhtpDNeDeHWs=
 golang.org/x/mobile v0.0.0-20190719004257-d2bd2a29d028/go.mod h1:E/iHnbuqvinMTCcRqshq8CkpyQDoeVncDDYHnLhea+o=
 golang.org/x/mod v0.0.0-20190513183733-4bf6d317e70e/go.mod h1:mXi4GBBbnImb6dmsKGUJ2LatrhH/nqhxcFungHvyanc=
 golang.org/x/mod v0.1.0/go.mod h1:0QHyrYULN0/3qlju5TqG8bIK38QM8yzMo5ekMj3DlcY=

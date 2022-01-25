@@ -74,7 +74,7 @@ type signerRPCClient interface {
 // directly. RPC prefix is added to all public methods to avoid gomobile compile
 // error.
 type RPCConfigInterface interface {
-	RPCGetSeedRPCServerAddr() nkngomobile.IStringArray
+	RPCGetSeedRPCServerAddr() *nkngomobile.StringArray
 	RPCGetRPCTimeout() int32
 	RPCGetConcurrency() int32
 }
@@ -241,7 +241,7 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 		}()
 	}
 
-	for _, rpcAddr := range nkngomobile.GetStringArrayElems(config.RPCGetSeedRPCServerAddr()) {
+	for _, rpcAddr := range config.RPCGetSeedRPCServerAddr().Elems() {
 		select {
 		case rpcAddrChan <- rpcAddr:
 		case <-ctx.Done():

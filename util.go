@@ -93,7 +93,7 @@ func (amount *Amount) ToFixed64() common.Fixed64 {
 }
 
 // Subscribers is a wrapper type for gomobile compatibility.
-type Subscribers struct{ Subscribers, SubscribersInTxPool nkngomobile.IStringMap }
+type Subscribers struct{ Subscribers, SubscribersInTxPool *nkngomobile.StringMap }
 
 // OnConnectFunc is a wrapper type for gomobile compatibility.
 type OnConnectFunc interface{ OnConnect(*Node) }
@@ -334,7 +334,7 @@ func VerifyWalletAddress(address string) error {
 
 // MeasureSeedRPCServer wraps MeasureSeedRPCServerContext with background
 // context.
-func MeasureSeedRPCServer(seedRPCList nkngomobile.IStringArray, timeout int32) (nkngomobile.IStringArray, error) {
+func MeasureSeedRPCServer(seedRPCList *nkngomobile.StringArray, timeout int32) (*nkngomobile.StringArray, error) {
 	return MeasureSeedRPCServerContext(context.Background(), seedRPCList, timeout)
 }
 
@@ -343,12 +343,12 @@ func MeasureSeedRPCServer(seedRPCList nkngomobile.IStringArray, timeout int32) (
 // to high). If none of the given seed rpc node is accessable or in persist
 // finished state, returned string array will contain zero elements. Timeout is
 // in millisecond.
-func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList nkngomobile.IStringArray, timeout int32) (nkngomobile.IStringArray, error) {
+func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.StringArray, timeout int32) (*nkngomobile.StringArray, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	rpcAddrs := make([]string, 0, seedRPCList.Len())
 
-	for _, node := range nkngomobile.GetStringArrayElems(seedRPCList) {
+	for _, node := range seedRPCList.Elems() {
 		wg.Add(1)
 		go func(addr string) {
 			defer wg.Done()
