@@ -1,9 +1,10 @@
 package nkn
 
 import (
-	"github.com/nknorg/nkngomobile"
 	"math/rand"
 	"time"
+
+	"github.com/nknorg/nkngomobile"
 
 	"github.com/imdario/mergo"
 	ncp "github.com/nknorg/ncp-go"
@@ -31,6 +32,7 @@ type ClientConfig struct {
 	WsWriteTimeout          int32                    // WebSocket write timeout in millisecond.
 	MinReconnectInterval    int32                    // Min reconnect interval in millisecond.
 	MaxReconnectInterval    int32                    // Max reconnect interval in millisecond.
+	AllowUnencrypted        bool                     // Allow receiving unencrypted message. Unencrypted message might have sender or body viewed/modified by middleman or forged by sender.
 	MessageConfig           *MessageConfig           // Default message config of the client if per-message config is not provided.
 	SessionConfig           *ncp.Config              // Default session config of the client if per-session config is not provided.
 }
@@ -48,6 +50,7 @@ var DefaultClientConfig = ClientConfig{
 	WsWriteTimeout:          10000,
 	MinReconnectInterval:    1000,
 	MaxReconnectInterval:    64000,
+	AllowUnencrypted:        false,
 	MessageConfig:           nil,
 	SessionConfig:           nil,
 }

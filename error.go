@@ -60,4 +60,5 @@ var (
 	ErrExpiredNanoPayTxn    = errors.New("nanopay transaction expired")
 	ErrWrongPassword        = errors.New("wrong password")
 	ErrInvalidWalletVersion = fmt.Errorf("invalid wallet version, should be between %v and %v", vault.MinCompatibleWalletVersion, vault.MaxCompatibleWalletVersion)
+	ErrUnencryptedMessage   = errors.New("message is unencrypted")
 )

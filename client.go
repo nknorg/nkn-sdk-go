@@ -9,12 +9,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/nknorg/nkngomobile"
 	"log"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nknorg/nkngomobile"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
@@ -454,8 +455,10 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				if err != nil {
 					return err
 				}
-			} else {
+			} else if c.config.AllowUnencrypted {
 				payloadBytes = payloadMsg.Payload
+			} else {
+				return ErrUnencryptedMessage
 			}
 			payload := &payloads.Payload{}
 			if err := proto.Unmarshal(payloadBytes, payload); err != nil {

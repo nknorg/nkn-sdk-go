@@ -5,6 +5,7 @@ vendor
 .DS_Store
 main
 Nkn.framework
+Nkn.xcframework
 nkn.aar
 nkn-sources.jar
 /build/
