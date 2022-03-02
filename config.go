@@ -4,10 +4,9 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/nknorg/nkngomobile"
-
 	"github.com/imdario/mergo"
 	ncp "github.com/nknorg/ncp-go"
+	"github.com/nknorg/nkngomobile"
 )
 
 func init() {
@@ -17,6 +16,14 @@ func init() {
 // DefaultSeedRPCServerAddr is the default seed rpc server address list.
 var DefaultSeedRPCServerAddr = []string{
 	"http://seed.nkn.org:30003",
+	"http://mainnet-seed-0001.nkn.org:30003",
+	"http://mainnet-seed-0002.nkn.org:30003",
+	"http://mainnet-seed-0003.nkn.org:30003",
+	"http://mainnet-seed-0004.nkn.org:30003",
+	"http://mainnet-seed-0005.nkn.org:30003",
+	"http://mainnet-seed-0006.nkn.org:30003",
+	"http://mainnet-seed-0007.nkn.org:30003",
+	"http://mainnet-seed-0008.nkn.org:30003",
 }
 
 // ClientConfig is the client configuration.
