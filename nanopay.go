@@ -96,9 +96,12 @@ func (np *NanoPay) Recipient() string {
 }
 
 // IncrementAmount increments the NanoPay amount by delta and returns the signed
-// NanoPay transaction. Delta is the string representation of the amount in unit
-// of NKN to avoid precision loss. For example, "0.1" will be parsed as 0.1 NKN.
-func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, error) {
+// NanoPay transaction. If length of fee is greater than zero, it will parsed as
+// transaction fee, otherwise the default transaction fee (passed when creating
+// nanopay) will be used. Delta and fee are the string representation of the
+// amount in unit of NKN to avoid precision loss. For example, "0.1" will be
+// parsed as 0.1 NKN.
+func (np *NanoPay) IncrementAmount(delta, fee string) (*transaction.Transaction, error) {
 	height, err := np.rpcClient.GetHeight()
 
 	np.lock.Lock()
@@ -132,7 +135,15 @@ func (np *NanoPay) IncrementAmount(delta string) (*transaction.Transaction, erro
 		return nil, err
 	}
 
-	tx.UnsignedTx.Fee = int64(np.fee)
+	if len(fee) > 0 {
+		feeFixed64, err := common.StringToFixed64(fee)
+		if err != nil {
+			return nil, err
+		}
+		tx.UnsignedTx.Fee = int64(feeFixed64)
+	} else {
+		tx.UnsignedTx.Fee = int64(np.fee)
+	}
 
 	if err := np.senderWallet.SignTransaction(tx); err != nil {
 		return nil, err
@@ -396,7 +407,7 @@ func (npc *NanoPayClaimer) Claim(tx *transaction.Transaction) (*Amount, error) {
 		return nil, err
 	}
 
-	if senderBalance.ToFixed64()+npc.prevFlushAmount < common.Fixed64(npPayload.Amount) {
+	if senderBalance.ToFixed64()+npc.prevFlushAmount < common.Fixed64(npPayload.Amount+tx.UnsignedTx.Fee) {
 		return nil, npc.closeWithError(ErrInsufficientBalance)
 	}
 

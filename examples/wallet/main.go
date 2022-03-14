@@ -88,7 +88,7 @@ func main() {
 			return err
 		}
 		// Send 100 NKN into channel
-		tx, err := np.IncrementAmount("100")
+		tx, err := np.IncrementAmount("100", "0.1")
 		txHash := tx.Hash()
 		txHashRef := &txHash
 		if err != nil {
