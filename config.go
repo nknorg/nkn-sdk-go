@@ -249,10 +249,12 @@ func (c *RPCConfig) RPCGetConcurrency() int32 {
 	return c.RPCConcurrency
 }
 
-// TransactionConfig is the config for making a transaction.
+// TransactionConfig is the config for making a transaction. If Nonce is 0 and
+// FixNonce is false, then nonce will be fetched from RPC call.
 type TransactionConfig struct {
 	Fee        string
 	Nonce      int64 // nonce is changed to signed int for gomobile compatibility
+	FixNonce   bool
 	Attributes []byte
 }
 
@@ -260,6 +262,7 @@ type TransactionConfig struct {
 var DefaultTransactionConfig = TransactionConfig{
 	Fee:        "0",
 	Nonce:      0,
+	FixNonce:   false,
 	Attributes: nil,
 }
 
