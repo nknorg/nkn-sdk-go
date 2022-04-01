@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"github.com/nknorg/nkngomobile"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	nknConfig "github.com/nknorg/nkn/v2/config"
 	"github.com/nknorg/nkn/v2/program"
 	"github.com/nknorg/nkn/v2/transaction"
+	"github.com/nknorg/nkngomobile"
 )
 
 // Signer is the interface that can sign transactions.
@@ -534,7 +534,7 @@ func TransferContext(ctx context.Context, s signerRPCClient, address, amount str
 	}
 
 	nonce := config.Nonce
-	if nonce == 0 {
+	if nonce == 0 && !config.FixNonce {
 		nonce, err = s.GetNonce(true)
 		if err != nil {
 			return "", err
@@ -580,7 +580,7 @@ func RegisterNameContext(ctx context.Context, s signerRPCClient, name string, co
 	}
 
 	nonce := config.Nonce
-	if nonce == 0 {
+	if nonce == 0 && !config.FixNonce {
 		nonce, err = s.GetNonce(true)
 		if err != nil {
 			return "", err
@@ -623,7 +623,7 @@ func TransferNameContext(ctx context.Context, s signerRPCClient, name string, re
 	}
 
 	nonce := config.Nonce
-	if nonce == 0 {
+	if nonce == 0 && !config.FixNonce {
 		nonce, err = s.GetNonce(true)
 		if err != nil {
 			return "", err
@@ -665,7 +665,7 @@ func DeleteNameContext(ctx context.Context, s signerRPCClient, name string, conf
 	}
 
 	nonce := config.Nonce
-	if nonce == 0 {
+	if nonce == 0 && !config.FixNonce {
 		nonce, err = s.GetNonce(true)
 		if err != nil {
 			return "", err
@@ -713,7 +713,7 @@ func SubscribeContext(ctx context.Context, s signerRPCClient, identifier, topic 
 	}
 
 	nonce := config.Nonce
-	if nonce == 0 {
+	if nonce == 0 && !config.FixNonce {
 		nonce, err = s.GetNonce(true)
 		if err != nil {
 			return "", err
@@ -764,7 +764,7 @@ func UnsubscribeContext(ctx context.Context, s signerRPCClient, identifier, topi
 	}
 
 	nonce := config.Nonce
-	if nonce == 0 {
+	if nonce == 0 && !config.FixNonce {
 		nonce, err = s.GetNonce(true)
 		if err != nil {
 			return "", err
