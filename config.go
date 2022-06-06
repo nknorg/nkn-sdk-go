@@ -42,6 +42,7 @@ type ClientConfig struct {
 	AllowUnencrypted        bool                     // Allow receiving unencrypted message. Unencrypted message might have sender or body viewed/modified by middleman or forged by sender.
 	MessageConfig           *MessageConfig           // Default message config of the client if per-message config is not provided.
 	SessionConfig           *ncp.Config              // Default session config of the client if per-session config is not provided.
+	Resolver                []ResolverInterface
 }
 
 // DefaultClientConfig is the default client config.

@@ -375,6 +375,11 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 	if client == nil {
 		return ErrNilClient
 	}
+
+	dests, err := ResolveDests(dests, m.config.Resolver)
+	if err != nil {
+		return err
+	}
 	return client.send(addMultiClientPrefix(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
