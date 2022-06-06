@@ -16,3 +16,7 @@ var NewStringMap = nkngomobile.NewStringMap
 
 // NewStringMapWithSize creates an empty StringMap with a given size.
 var NewStringMapWithSize = nkngomobile.NewStringMapWithSize
+
+type ResolverInterface interface {
+	Resolve(address string) (string, error)
+}

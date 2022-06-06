@@ -382,3 +382,39 @@ func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.S
 
 	return nkngomobile.NewStringArray(rpcAddrs...), nil
 }
+
+func ResolveDest(dest string, resolver []ResolverInterface) (string, error) {
+	var err error
+	for _, r := range resolver {
+		var d string
+		d, err = r.Resolve(dest)
+		if err != nil {
+			return "", err
+		} else {
+			if len(d) == 0 {
+				continue
+			}
+			return d, nil
+		}
+	}
+	return dest, err
+}
+
+func ResolveDests(dests []string, resolver []ResolverInterface) ([]string, error) {
+	if len(dests) == 0 {
+		return nil, nil
+	}
+	resolvedDests := make([]string, 0, len(dests))
+	for _, dest := range dests {
+		resolvedDest, err := ResolveDest(dest, resolver)
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		resolvedDests = append(resolvedDests, resolvedDest)
+	}
+	if len(resolvedDests) == 0 {
+		return nil, ErrInvalidDestination
+	}
+	return resolvedDests, nil
+}

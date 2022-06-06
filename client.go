@@ -961,8 +961,11 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 	if maxHoldingSeconds < 0 {
 		maxHoldingSeconds = 0
 	}
-
-	dests, err := c.processDests(dests)
+	dests, err := ResolveDests(dests, c.config.Resolver)
+	if err != nil {
+		return err
+	}
+	dests, err = c.processDests(dests)
 	if err != nil {
 		return err
 	}
