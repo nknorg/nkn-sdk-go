@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"github.com/nknorg/nkngomobile"
 	"log"
 	"math/big"
 	"sync"
@@ -16,6 +15,7 @@ import (
 	"github.com/nknorg/nkn/v2/program"
 	"github.com/nknorg/nkn/v2/util/address"
 	"github.com/nknorg/nkn/v2/vault"
+	"github.com/nknorg/nkngomobile"
 )
 
 const (
@@ -383,30 +383,43 @@ func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.S
 	return nkngomobile.NewStringArray(rpcAddrs...), nil
 }
 
-func ResolveDest(dest string, resolver []ResolverInterface) (string, error) {
+func ResolveDest(dest string, resolver []nkngomobile.Resolver) (string, bool, error) {
 	var err error
 	for _, r := range resolver {
 		var d string
 		d, err = r.Resolve(dest)
 		if err != nil {
-			return "", err
-		} else {
-			if len(d) == 0 {
-				continue
-			}
-			return d, nil
+			return "", true, err
 		}
+		if len(d) == 0 {
+			continue
+		}
+		return d, true, nil
 	}
-	return dest, err
+	return dest, false, err
 }
 
-func ResolveDests(dests []string, resolver []ResolverInterface) ([]string, error) {
+func ResolveDestN(dest string, resolver []nkngomobile.Resolver, depth int32) (string, error) {
+	for i := int32(0); i < depth; i++ {
+		d, isResolved, err := ResolveDest(dest, resolver)
+		if err != nil {
+			return "", err
+		}
+		if !isResolved {
+			return dest, nil
+		}
+		dest = d
+	}
+	return "", ErrResolveLimit
+}
+
+func ResolveDests(dests []string, resolver []nkngomobile.Resolver, depth int32) ([]string, error) {
 	if len(dests) == 0 {
 		return nil, nil
 	}
 	resolvedDests := make([]string, 0, len(dests))
 	for _, dest := range dests {
-		resolvedDest, err := ResolveDest(dest, resolver)
+		resolvedDest, err := ResolveDestN(dest, resolver, depth)
 		if err != nil {
 			log.Println(err)
 			continue
