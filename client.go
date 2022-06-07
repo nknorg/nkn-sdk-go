@@ -767,12 +767,17 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, config *
 		return nil, err
 	}
 
+	destArr, err := ResolveDests(dests.Elems(), c.config.Resolvers.Elems(), c.config.ResolverDepth)
+	if err != nil {
+		return nil, err
+	}
+
 	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := c.send(dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := c.send(destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
@@ -961,11 +966,8 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 	if maxHoldingSeconds < 0 {
 		maxHoldingSeconds = 0
 	}
-	dests, err := ResolveDests(dests, c.config.Resolver)
-	if err != nil {
-		return err
-	}
-	dests, err = c.processDests(dests)
+
+	dests, err := c.processDests(dests)
 	if err != nil {
 		return err
 	}

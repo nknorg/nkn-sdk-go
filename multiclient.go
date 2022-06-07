@@ -341,12 +341,17 @@ func (m *MultiClient) SendWithClient(clientID int, dests *nkngomobile.StringArra
 		return nil, err
 	}
 
+	destArr, err := ResolveDests(dests.Elems(), m.config.Resolvers.Elems(), m.config.ResolverDepth)
+	if err != nil {
+		return nil, err
+	}
+
 	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := m.sendWithClient(clientID, dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := m.sendWithClient(clientID, destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
@@ -376,10 +381,6 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 		return ErrNilClient
 	}
 
-	dests, err := ResolveDests(dests, m.config.Resolver)
-	if err != nil {
-		return err
-	}
 	return client.send(addMultiClientPrefix(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
@@ -388,6 +389,12 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 // this message is received.
 func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
 	config, err := MergeMessageConfig(m.config.MessageConfig, config)
+	if err != nil {
+		return nil, err
+	}
+
+	destArr, err := ResolveDests(dests.Elems(), m.config.Resolvers.Elems(), m.config.ResolverDepth)
+
 	if err != nil {
 		return nil, err
 	}
@@ -417,7 +424,7 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 	go func() {
 		sent := 0
 		for clientID := range clients {
-			err := m.sendWithClient(clientID, dests.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds)
+			err := m.sendWithClient(clientID, destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds)
 			if err == nil {
 				select {
 				case success <- struct{}{}:
