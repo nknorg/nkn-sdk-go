@@ -140,6 +140,11 @@ type errResp struct {
 	Data    string
 }
 
+type rpcResp struct {
+	Error  errResp     `json:"error"`
+	Result interface{} `json:"result"`
+}
+
 func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Duration, dialContext func(ctx context.Context, network, addr string) (net.Conn, error)) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", addr, bytes.NewBuffer(reqBody))
 	if err != nil {
@@ -160,7 +165,7 @@ func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Dur
 }
 
 // RPCCall makes a RPC call and put results to result passed in.
-func RPCCall(parentCtx context.Context, method string, params map[string]interface{}, result interface{}, config RPCConfigInterface) error {
+func RPCCall(parentCtx context.Context, method string, params interface{}, result interface{}, config RPCConfigInterface) error {
 	if config == nil {
 		config = GetDefaultRPCConfig()
 	}
@@ -207,26 +212,8 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 					continue
 				}
 
-				respJSON := make(map[string]*json.RawMessage)
-				err = json.Unmarshal(body, &respJSON)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				if respJSON["error"] != nil {
-					er := &errResp{}
-					err := json.Unmarshal(*respJSON["error"], er)
-					if err != nil {
-						log.Println(err)
-						continue
-					}
-					select {
-					case respErrChan <- er:
-						cancel()
-					case <-ctx.Done():
-						return
-					}
-					return
+				resp := &rpcResp{
+					Result: result,
 				}
 
 				respLock.Lock()
@@ -236,21 +223,31 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 					return
 				default:
 				}
-				err = json.Unmarshal(*respJSON["result"], result)
+
+				err = json.Unmarshal(body, &resp)
 				if err != nil {
 					log.Println(err)
 					respLock.Unlock()
 					continue
 				}
 
-				select {
-				case respErrChan <- nil:
-					cancel()
-					respLock.Unlock()
-				case <-ctx.Done():
+				if resp.Error.Code != 0 || len(resp.Error.Data) > 0 || len(resp.Error.Message) > 0 {
+					select {
+					case respErrChan <- &resp.Error:
+						cancel()
+					case <-ctx.Done():
+					}
 					respLock.Unlock()
 					return
 				}
+
+				select {
+				case respErrChan <- nil:
+					cancel()
+				case <-ctx.Done():
+				}
+				respLock.Unlock()
+				return
 			}
 		}()
 	}
