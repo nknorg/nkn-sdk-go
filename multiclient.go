@@ -626,6 +626,16 @@ func (m *MultiClient) Listen(addrsRe *nkngomobile.StringArray) error {
 	return nil
 }
 
+// DialUDP is an empty method for nknDialer interface compatible
+func (m *MultiClient) DialUDP(remoteAddr string) (*net.UDPConn, error) {
+	return nil, nil
+}
+
+// DialUDPWithConfig is an empty method for nknDialer interface compatible
+func (m *MultiClient) DialUDPWithConfig(remoteAddr string, config *DialConfig) (*net.UDPConn, error) {
+	return nil, nil
+}
+
 // Dial is the same as DialSession, but return type is net.Conn interface.
 func (m *MultiClient) Dial(remoteAddr string) (net.Conn, error) {
 	return m.DialSession(remoteAddr)
