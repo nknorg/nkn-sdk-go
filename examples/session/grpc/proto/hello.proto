@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+option go_package = "grpc/proto";
+
+package proto;
+
+message req {
+  string msg = 1;
+}
+
+message resp {
+  string msg = 1;
+}
+
+service x {
+  rpc hello(req) returns (resp) {}
+}
