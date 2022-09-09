@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -67,6 +68,10 @@ type signerRPCClient interface {
 	SubscribeContext(ctx context.Context, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error)
 	Unsubscribe(identifier, topic string, config *TransactionConfig) (string, error)
 	UnsubscribeContext(ctx context.Context, identifier, topic string, config *TransactionConfig) (string, error)
+}
+
+type dialConfigInterface interface {
+	RPCGetHttpDialContext() func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // RPCConfigInterface is the config interface for making rpc call. ClientConfig,
@@ -135,13 +140,16 @@ type errResp struct {
 	Data    string
 }
 
-func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Duration) ([]byte, error) {
+func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Duration, dialContext func(ctx context.Context, network, addr string) (net.Conn, error)) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, "POST", addr, bytes.NewBuffer(reqBody))
 	if err != nil {
 		return nil, err
 	}
 	client := &http.Client{
 		Timeout: timeout,
+		Transport: &http.Transport{
+			DialContext: dialContext,
+		},
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -182,7 +190,13 @@ func RPCCall(parentCtx context.Context, method string, params map[string]interfa
 		go func() {
 			defer wg.Done()
 			for rpcAddr := range rpcAddrChan {
-				body, err := httpPost(ctx, rpcAddr, req, time.Duration(config.RPCGetRPCTimeout())*time.Millisecond)
+				cfg, ok := config.(dialConfigInterface)
+				if !ok {
+					log.Println("type conversion failed")
+					return
+				}
+
+				body, err := httpPost(ctx, rpcAddr, req, time.Duration(config.RPCGetRPCTimeout())*time.Millisecond, cfg.RPCGetHttpDialContext())
 				if err != nil {
 					select {
 					case <-ctx.Done():
