@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
@@ -153,9 +154,13 @@ func (c *Client) PubKey() []byte {
 
 // Address returns the NKN client address of the client. Client address is in
 // the form of
-//   identifier.pubKeyHex
+//
+//	identifier.pubKeyHex
+//
 // if identifier is not an empty string, or
-//   pubKeyHex
+//
+//	pubKeyHex
+//
 // if identifier is an empty string.
 //
 // Note that client address is different from wallet address using the same key
@@ -542,6 +547,7 @@ func (c *Client) connectToNode(node *Node) error {
 			nodeState, err := GetNodeStateContext(ctx, &RPCConfig{
 				SeedRPCServerAddr: nkngomobile.NewStringArray(addr),
 				RPCTimeout:        c.config.WsHandshakeTimeout,
+				HttpDialContext:   c.config.HttpDialContext,
 			})
 			if err != nil {
 				return
@@ -554,7 +560,10 @@ func (c *Client) connectToNode(node *Node) error {
 	}
 
 	wsAddr := (&url.URL{Scheme: "ws", Host: node.Addr}).String()
-	dialer := websocket.DefaultDialer
+	dialer := &websocket.Dialer{
+		NetDialContext: c.config.WsDialContext,
+		Proxy:          http.ProxyFromEnvironment,
+	}
 	dialer.HandshakeTimeout = time.Duration(c.config.WsHandshakeTimeout) * time.Millisecond
 
 	conn, _, err := dialer.Dial(wsAddr, nil)

@@ -1,7 +1,9 @@
 package nkn
 
 import (
+	"context"
 	"math/rand"
+	"net"
 	"time"
 
 	"github.com/imdario/mergo"
@@ -42,6 +44,8 @@ type ClientConfig struct {
 	AllowUnencrypted        bool                     // Allow receiving unencrypted message. Unencrypted message might have sender or body viewed/modified by middleman or forged by sender.
 	MessageConfig           *MessageConfig           // Default message config of the client if per-message config is not provided.
 	SessionConfig           *ncp.Config              // Default session config of the client if per-session config is not provided.
+	HttpDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
+	WsDialContext           func(ctx context.Context, network, addr string) (net.Conn, error)
 	Resolvers               *nkngomobile.ResolverArray
 	ResolverDepth           int32
 }
@@ -62,6 +66,8 @@ var DefaultClientConfig = ClientConfig{
 	AllowUnencrypted:        false,
 	MessageConfig:           nil,
 	SessionConfig:           nil,
+	HttpDialContext:         nil,
+	WsDialContext:           nil,
 	Resolvers:               nil,
 	ResolverDepth:           16,
 }
@@ -92,6 +98,10 @@ func (c *ClientConfig) RPCGetRPCTimeout() int32 {
 // gomobile compile error.
 func (c *ClientConfig) RPCGetConcurrency() int32 {
 	return c.RPCConcurrency
+}
+
+func (c *ClientConfig) RPCGetHttpDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return c.HttpDialContext
 }
 
 // MessageConfig is the config for sending messages.
@@ -174,6 +184,7 @@ type WalletConfig struct {
 	IV                []byte
 	MasterKey         []byte
 	ScryptConfig      *ScryptConfig
+	HttpDialContext   func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // DefaultWalletConfig is the default wallet configuration.
@@ -184,6 +195,7 @@ var DefaultWalletConfig = WalletConfig{
 	IV:                nil,
 	MasterKey:         nil,
 	ScryptConfig:      nil,
+	HttpDialContext:   nil,
 }
 
 // GetDefaultWalletConfig returns the default wallet config with nil pointer
@@ -213,11 +225,16 @@ func (c *WalletConfig) RPCGetConcurrency() int32 {
 	return c.RPCConcurrency
 }
 
+func (c *WalletConfig) RPCGetHttpDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return c.HttpDialContext
+}
+
 // RPCConfig is the rpc call configuration.
 type RPCConfig struct {
 	SeedRPCServerAddr *nkngomobile.StringArray
 	RPCTimeout        int32 // Timeout for each RPC call in millisecond
 	RPCConcurrency    int32 // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
+	HttpDialContext   func(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // DefaultRPCConfig is the default rpc configuration.
@@ -225,6 +242,7 @@ var DefaultRPCConfig = RPCConfig{
 	SeedRPCServerAddr: nil,
 	RPCTimeout:        10000,
 	RPCConcurrency:    1,
+	HttpDialContext:   nil,
 }
 
 // GetDefaultRPCConfig returns the default rpc config with nil pointer fields
@@ -251,6 +269,10 @@ func (c *RPCConfig) RPCGetRPCTimeout() int32 {
 // gomobile compile error.
 func (c *RPCConfig) RPCGetConcurrency() int32 {
 	return c.RPCConcurrency
+}
+
+func (c *RPCConfig) RPCGetHttpDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return c.HttpDialContext
 }
 
 // TransactionConfig is the config for making a transaction. If Nonce is 0 and
