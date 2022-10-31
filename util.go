@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"log"
 	"math/big"
+	"net"
 	"sync"
 	"time"
 
@@ -334,8 +335,8 @@ func VerifyWalletAddress(address string) error {
 
 // MeasureSeedRPCServer wraps MeasureSeedRPCServerContext with background
 // context.
-func MeasureSeedRPCServer(seedRPCList *nkngomobile.StringArray, timeout int32) (*nkngomobile.StringArray, error) {
-	return MeasureSeedRPCServerContext(context.Background(), seedRPCList, timeout)
+func MeasureSeedRPCServer(seedRPCList *nkngomobile.StringArray, timeout int32, dialContext func(ctx context.Context, network, addr string) (net.Conn, error)) (*nkngomobile.StringArray, error) {
+	return MeasureSeedRPCServerContext(context.Background(), seedRPCList, timeout, dialContext)
 }
 
 // MeasureSeedRPCServerContext measures the latency to seed rpc node list, only
@@ -343,7 +344,7 @@ func MeasureSeedRPCServer(seedRPCList *nkngomobile.StringArray, timeout int32) (
 // to high). If none of the given seed rpc node is accessable or in persist
 // finished state, returned string array will contain zero elements. Timeout is
 // in millisecond.
-func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.StringArray, timeout int32) (*nkngomobile.StringArray, error) {
+func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.StringArray, timeout int32, dialContext func(ctx context.Context, network, addr string) (net.Conn, error)) (*nkngomobile.StringArray, error) {
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 	rpcAddrs := make([]string, 0, seedRPCList.Len())
@@ -355,6 +356,7 @@ func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.S
 			nodeState, err := GetNodeStateContext(ctx, &RPCConfig{
 				SeedRPCServerAddr: nkngomobile.NewStringArray(addr),
 				RPCTimeout:        timeout,
+				HttpDialContext:   dialContext,
 			})
 			if err != nil {
 				return
