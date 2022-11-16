@@ -49,6 +49,11 @@ const (
 
 	// Should match the setClient action string on node side.
 	setClientAction = "setClient"
+
+	// client authorization challenge
+	authChallengeAction = "authChallenge"
+	// duration waiting for challenge from node after connecting
+	waitForChallengeTimeout = 5 * time.Second
 )
 
 // Client sends and receives data between any NKN clients regardless their
@@ -75,6 +80,15 @@ type Client struct {
 	node       *Node
 	sharedKeys map[string]*[sharedKeySize]byte
 	wallet     *Wallet
+
+	// client auth
+	chChallengeSignature chan *stSaltAndSignature
+}
+
+// client auth
+type stSaltAndSignature struct {
+	ClientSalt []byte
+	Signature  []byte
 }
 
 // clientInterface is the common interface of client and multiclient.
@@ -112,18 +126,19 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 	}
 
 	c := Client{
-		config:           config,
-		account:          account,
-		publicKey:        pk,
-		curveSecretKey:   curveSecretKey,
-		address:          addr,
-		addressID:        addressToID(addr),
-		OnConnect:        NewOnConnect(1, nil),
-		OnMessage:        NewOnMessage(int(config.MsgChanLen), nil),
-		reconnectChan:    make(chan struct{}),
-		responseChannels: cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
-		sharedKeys:       make(map[string]*[sharedKeySize]byte),
-		wallet:           w,
+		config:               config,
+		account:              account,
+		publicKey:            pk,
+		curveSecretKey:       curveSecretKey,
+		address:              addr,
+		addressID:            addressToID(addr),
+		OnConnect:            NewOnConnect(1, nil),
+		OnMessage:            NewOnMessage(int(config.MsgChanLen), nil),
+		reconnectChan:        make(chan struct{}),
+		responseChannels:     cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
+		sharedKeys:           make(map[string]*[sharedKeySize]byte),
+		wallet:               w,
+		chChallengeSignature: make(chan *stSaltAndSignature, 1), // client auth
 	}
 
 	go c.handleReconnect()
@@ -194,6 +209,9 @@ func (c *Client) Close() error {
 	close(c.reconnectChan)
 
 	c.conn.Close()
+
+	// client auth
+	close(c.chChallengeSignature)
 
 	return nil
 }
@@ -428,6 +446,37 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return err
 			}
 			c.sigChainBlockHash = sigChainBlockHash
+
+		// client auth
+		case authChallengeAction:
+			var challenge string
+			if err := json.Unmarshal(*msg["Challenge"], &challenge); err != nil {
+				return err
+			}
+			byteChallenge, err := hex.DecodeString(challenge)
+			if err != nil {
+				return err
+			}
+
+			clientSalt, err := RandomBytes(32)
+			if err != nil {
+				return err
+			}
+
+			// add client salt to the node's challenge
+			byteChallenge = append(byteChallenge, clientSalt...)
+			hash := sha256.Sum256(byteChallenge)
+			signature, err := crypto.Sign(c.account.PrivateKey, hash[:])
+			if err != nil {
+				return err
+			}
+
+			saltAndSig := &stSaltAndSignature{ClientSalt: clientSalt, Signature: signature}
+			select {
+			case c.chChallengeSignature <- saltAndSig:
+			default:
+			}
+
 		}
 	case websocket.BinaryMessage:
 		clientMsg := &pb.ClientMessage{}
@@ -618,10 +667,25 @@ func (c *Client) connectToNode(node *Node) error {
 		}
 	}()
 
-	go func() {
+	go func() { // setClient Action function
+		// client auth
+		timer := time.NewTimer(waitForChallengeTimeout)
+
+		var saltAndSig *stSaltAndSignature
+		select { // time out or get challenge signature
+		case <-timer.C:
+		case saltAndSig = <-c.chChallengeSignature:
+		}
+
 		req := make(map[string]interface{})
 		req["Action"] = "setClient"
 		req["Addr"] = c.Address()
+
+		// client auth
+		if saltAndSig != nil {
+			req["ClientSalt"] = hex.EncodeToString(saltAndSig.ClientSalt)
+			req["Signature"] = hex.EncodeToString(saltAndSig.Signature)
+		}
 
 		c.lock.Lock()
 		err := conn.WriteJSON(req)
