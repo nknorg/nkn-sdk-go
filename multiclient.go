@@ -212,7 +212,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 							}
 						} else {
 							msg.reply = func(data interface{}) error {
-								payload, err := newReplyPayload(data, msg.MessageID)
+								payload, err := NewReplyPayload(data, msg.MessageID)
 								if err != nil {
 									return err
 								}
@@ -276,9 +276,13 @@ func (m *MultiClient) PubKey() []byte {
 
 // Address returns the NKN client address of the multiclient. Client address is
 // in the form of
-//   identifier.pubKeyHex
+//
+//	identifier.pubKeyHex
+//
 // if identifier is not an empty string, or
-//   pubKeyHex
+//
+//	pubKeyHex
+//
 // if identifier is an empty string.
 //
 // Note that client address is different from wallet address using the same key
@@ -398,10 +402,12 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 	if err != nil {
 		return nil, err
 	}
-
-	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
-	if err != nil {
-		return nil, err
+	payload, ok := data.(*payloads.Payload)
+	if !ok {
+		payload, err = newMessagePayload(data, config.MessageID, config.NoReply)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	var lock sync.Mutex
@@ -469,6 +475,12 @@ func (m *MultiClient) SendBinary(dests *nkngomobile.StringArray, data []byte, co
 // compatibility.
 func (m *MultiClient) SendText(dests *nkngomobile.StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return m.Send(dests, data, config)
+}
+
+// SendPayload is a wrapper of Send without interface type for gomobile
+// compatibility.
+func (m *MultiClient) SendPayload(dests *nkngomobile.StringArray, payload *payloads.Payload, config *MessageConfig) (*OnMessage, error) {
+	return m.Send(dests, payload, config)
 }
 
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
