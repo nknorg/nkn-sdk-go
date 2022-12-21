@@ -510,7 +510,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				}
 			} else {
 				msg.reply = func(data interface{}) error {
-					payload, err := newReplyPayload(data, payload.MessageId)
+					payload, err := NewReplyPayload(data, payload.MessageId)
 					if err != nil {
 						return err
 					}
@@ -781,11 +781,13 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, config *
 		return nil, err
 	}
 
-	payload, err := newMessagePayload(data, config.MessageID, config.NoReply)
-	if err != nil {
-		return nil, err
+	payload, ok := data.(*payloads.Payload)
+	if !ok {
+		payload, err = newMessagePayload(data, config.MessageID, config.NoReply)
+		if err != nil {
+			return nil, err
+		}
 	}
-
 	if err := c.send(destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
@@ -808,6 +810,12 @@ func (c *Client) SendBinary(dests *nkngomobile.StringArray, data []byte, config 
 // compatibility.
 func (c *Client) SendText(dests *nkngomobile.StringArray, data string, config *MessageConfig) (*OnMessage, error) {
 	return c.Send(dests, data, config)
+}
+
+// SendPayload is a wrapper of Send without interface type for gomobile
+// compatibility.
+func (c *Client) SendPayload(dests *nkngomobile.StringArray, payload *payloads.Payload, config *MessageConfig) (*OnMessage, error) {
+	return c.Send(dests, payload, config)
 }
 
 func (c *Client) processDest(dest string) (string, error) {

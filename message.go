@@ -128,7 +128,7 @@ func newMessagePayload(data interface{}, messageID []byte, noReply bool) (*paylo
 	}
 }
 
-func newReplyPayload(data interface{}, replyToID []byte) (*payloads.Payload, error) {
+func NewReplyPayload(data interface{}, replyToID []byte) (*payloads.Payload, error) {
 	switch v := data.(type) {
 	case []byte:
 		return newBinaryPayload(v, nil, replyToID, false)
