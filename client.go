@@ -783,9 +783,9 @@ func (c *Client) handleReconnect() {
 	}
 }
 
-func (c *Client) writeMessage(buf []byte) error {
+func (c *Client) writeMessage(buf []byte, writeTimeout time.Duration) error {
 	c.lock.Lock()
-	c.conn.SetWriteDeadline(time.Now().Add(time.Duration(c.config.WsWriteTimeout) * time.Millisecond))
+	c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
 	err := c.conn.WriteMessage(websocket.BinaryMessage, buf)
 	c.lock.Unlock()
 	if err != nil {
@@ -828,7 +828,7 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 		return err
 	}
 
-	return c.writeMessage(buf)
+	return c.writeMessage(buf, time.Duration(c.config.WsWriteTimeout)*time.Millisecond)
 }
 
 // Send sends bytes or string data to one or multiple destinations with an
@@ -1119,7 +1119,7 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 			return err
 		}
 
-		err = c.writeMessage(buf)
+		err = c.writeMessage(buf, writeTimeout)
 		if err != nil {
 			return err
 		}
