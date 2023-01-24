@@ -34,7 +34,7 @@ type ClientConfig struct {
 	RPCTimeout              int32                    // Timeout for each RPC call in millisecond
 	RPCConcurrency          int32                    // If greater than 1, the same rpc request will be concurrently sent to multiple seed rpc nodes
 	MsgChanLen              int32                    // Channel length for received but unproccessed messages.
-	ConnectRetries          int32                    // Connnect to node retries (including the initial connect). 0 means unlimited retries.
+	ConnectRetries          int32                    // Connnect to node retries (including the initial connect). A negative value means unlimited retries.
 	MsgCacheExpiration      int32                    // Message cache expiration in millisecond for response channel, multiclient message id deduplicate, etc.
 	MsgCacheCleanupInterval int32                    // Message cache cleanup interval in millisecond.
 	WsHandshakeTimeout      int32                    // WebSocket handshake timeout in millisecond.
