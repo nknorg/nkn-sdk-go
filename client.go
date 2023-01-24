@@ -726,7 +726,7 @@ func (c *Client) connectToNode(node *Node) error {
 
 func (c *Client) connect(maxRetries int) error {
 	retryInterval := c.config.MinReconnectInterval
-	for retry := 1; maxRetries == 0 || retry <= maxRetries; retry++ {
+	for retry := 1; maxRetries < 0 || retry <= maxRetries; retry++ {
 		if retry > 1 {
 			log.Printf("Retry in %v ms...", retryInterval)
 			time.Sleep(time.Duration(retryInterval) * time.Millisecond)
