@@ -785,7 +785,11 @@ func (c *Client) handleReconnect() {
 
 func (c *Client) writeMessage(buf []byte, writeTimeout time.Duration) error {
 	c.lock.Lock()
-	c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	if writeTimeout == 0 {
+		c.conn.SetWriteDeadline(zeroTime)
+	} else {
+		c.conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	}
 	err := c.conn.WriteMessage(websocket.BinaryMessage, buf)
 	c.lock.Unlock()
 	if err != nil {
