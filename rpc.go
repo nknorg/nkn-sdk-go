@@ -546,7 +546,7 @@ func TransferContext(ctx context.Context, s signerRPCClient, address, amount str
 
 	nonce := config.Nonce
 	if nonce == 0 && !config.FixNonce {
-		nonce, err = s.GetNonce(true)
+		nonce, err = s.GetNonceContext(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -592,7 +592,7 @@ func RegisterNameContext(ctx context.Context, s signerRPCClient, name string, co
 
 	nonce := config.Nonce
 	if nonce == 0 && !config.FixNonce {
-		nonce, err = s.GetNonce(true)
+		nonce, err = s.GetNonceContext(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -635,7 +635,7 @@ func TransferNameContext(ctx context.Context, s signerRPCClient, name string, re
 
 	nonce := config.Nonce
 	if nonce == 0 && !config.FixNonce {
-		nonce, err = s.GetNonce(true)
+		nonce, err = s.GetNonceContext(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -677,7 +677,7 @@ func DeleteNameContext(ctx context.Context, s signerRPCClient, name string, conf
 
 	nonce := config.Nonce
 	if nonce == 0 && !config.FixNonce {
-		nonce, err = s.GetNonce(true)
+		nonce, err = s.GetNonceContext(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -725,7 +725,7 @@ func SubscribeContext(ctx context.Context, s signerRPCClient, identifier, topic 
 
 	nonce := config.Nonce
 	if nonce == 0 && !config.FixNonce {
-		nonce, err = s.GetNonce(true)
+		nonce, err = s.GetNonceContext(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -776,7 +776,7 @@ func UnsubscribeContext(ctx context.Context, s signerRPCClient, identifier, topi
 
 	nonce := config.Nonce
 	if nonce == 0 && !config.FixNonce {
-		nonce, err = s.GetNonce(true)
+		nonce, err = s.GetNonceContext(ctx, true)
 		if err != nil {
 			return "", err
 		}

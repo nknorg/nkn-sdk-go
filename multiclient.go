@@ -2,7 +2,6 @@ package nkn
 
 import (
 	"context"
-	"github.com/nknorg/nkngomobile"
 	"log"
 	"net"
 	"regexp"
@@ -17,6 +16,7 @@ import (
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/v2/transaction"
 	"github.com/nknorg/nkn/v2/util/address"
+	"github.com/nknorg/nkngomobile"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -810,7 +810,7 @@ func (m *MultiClient) GetNonce(txPool bool) (int64, error) {
 // connected node as the RPC server, followed by this multiclient's
 // SeedRPCServerAddr if failed.
 func (m *MultiClient) GetNonceContext(ctx context.Context, txPool bool) (int64, error) {
-	return m.GetNonceByAddress(m.GetDefaultClient().wallet.address, txPool)
+	return m.GetNonceByAddressContext(ctx, m.GetDefaultClient().wallet.address, txPool)
 }
 
 // GetNonceByAddress wraps GetNonceByAddressContext with background context.
@@ -824,13 +824,13 @@ func (m *MultiClient) GetNonceByAddress(address string, txPool bool) (int64, err
 func (m *MultiClient) GetNonceByAddressContext(ctx context.Context, address string, txPool bool) (int64, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetNonce(address, txPool, c.wallet.config)
+			res, err := GetNonceContext(ctx, address, txPool, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetNonce(address, txPool, m.config)
+	return GetNonceContext(ctx, address, txPool, m.config)
 }
 
 // GetHeight wraps GetHeightContext with background context.
@@ -844,13 +844,13 @@ func (m *MultiClient) GetHeight() (int32, error) {
 func (m *MultiClient) GetHeightContext(ctx context.Context) (int32, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetHeight(c.wallet.config)
+			res, err := GetHeightContext(ctx, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetHeight(m.config)
+	return GetHeightContext(ctx, m.config)
 }
 
 // Balance wraps BalanceContext with background context.
@@ -862,7 +862,7 @@ func (m *MultiClient) Balance() (*Amount, error) {
 // connected node as the RPC server, followed by this multiclient's
 // SeedRPCServerAddr if failed.
 func (m *MultiClient) BalanceContext(ctx context.Context) (*Amount, error) {
-	return m.BalanceByAddress(m.GetDefaultClient().wallet.address)
+	return m.BalanceByAddressContext(ctx, m.GetDefaultClient().wallet.address)
 }
 
 // BalanceByAddress wraps BalanceByAddressContext with background context.
@@ -876,13 +876,13 @@ func (m *MultiClient) BalanceByAddress(address string) (*Amount, error) {
 func (m *MultiClient) BalanceByAddressContext(ctx context.Context, address string) (*Amount, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetBalance(address, c.wallet.config)
+			res, err := GetBalanceContext(ctx, address, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetBalance(address, m.config)
+	return GetBalanceContext(ctx, address, m.config)
 }
 
 // GetSubscribers wraps GetSubscribersContext with background context.
@@ -896,13 +896,13 @@ func (m *MultiClient) GetSubscribers(topic string, offset, limit int, meta, txPo
 func (m *MultiClient) GetSubscribersContext(ctx context.Context, topic string, offset, limit int, meta, txPool bool, subscriberHashPrefix []byte) (*Subscribers, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetSubscribers(topic, offset, limit, meta, txPool, subscriberHashPrefix, c.wallet.config)
+			res, err := GetSubscribersContext(ctx, topic, offset, limit, meta, txPool, subscriberHashPrefix, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetSubscribers(topic, offset, limit, meta, txPool, subscriberHashPrefix, m.config)
+	return GetSubscribersContext(ctx, topic, offset, limit, meta, txPool, subscriberHashPrefix, m.config)
 }
 
 // GetSubscription wraps GetSubscriptionContext with background context.
@@ -916,13 +916,13 @@ func (m *MultiClient) GetSubscription(topic string, subscriber string) (*Subscri
 func (m *MultiClient) GetSubscriptionContext(ctx context.Context, topic string, subscriber string) (*Subscription, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetSubscription(topic, subscriber, c.wallet.config)
+			res, err := GetSubscriptionContext(ctx, topic, subscriber, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetSubscription(topic, subscriber, m.config)
+	return GetSubscriptionContext(ctx, topic, subscriber, m.config)
 }
 
 // GetSubscribersCount wraps GetSubscribersCountContext with background context.
@@ -936,13 +936,13 @@ func (m *MultiClient) GetSubscribersCount(topic string, subscriberHashPrefix []b
 func (m *MultiClient) GetSubscribersCountContext(ctx context.Context, topic string, subscriberHashPrefix []byte) (int, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetSubscribersCount(topic, subscriberHashPrefix, c.wallet.config)
+			res, err := GetSubscribersCountContext(ctx, topic, subscriberHashPrefix, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetSubscribersCount(topic, subscriberHashPrefix, m.config)
+	return GetSubscribersCountContext(ctx, topic, subscriberHashPrefix, m.config)
 }
 
 // GetRegistrant wraps GetRegistrantContext with background context.
@@ -956,13 +956,13 @@ func (m *MultiClient) GetRegistrant(name string) (*Registrant, error) {
 func (m *MultiClient) GetRegistrantContext(ctx context.Context, name string) (*Registrant, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := GetRegistrant(name, c.wallet.config)
+			res, err := GetRegistrantContext(ctx, name, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return GetRegistrant(name, m.config)
+	return GetRegistrantContext(ctx, name, m.config)
 }
 
 // SendRawTransaction wraps SendRawTransactionContext with background context.
@@ -976,13 +976,13 @@ func (m *MultiClient) SendRawTransaction(txn *transaction.Transaction) (string, 
 func (m *MultiClient) SendRawTransactionContext(ctx context.Context, txn *transaction.Transaction) (string, error) {
 	for _, c := range m.GetClients() {
 		if c.wallet.config.SeedRPCServerAddr.Len() > 0 {
-			res, err := SendRawTransaction(txn, c.wallet.config)
+			res, err := SendRawTransactionContext(ctx, txn, c.wallet.config)
 			if err == nil {
 				return res, err
 			}
 		}
 	}
-	return SendRawTransaction(txn, m.config)
+	return SendRawTransactionContext(ctx, txn, m.config)
 }
 
 // Transfer wraps TransferContext with background context.
@@ -993,7 +993,7 @@ func (m *MultiClient) Transfer(address, amount string, config *TransactionConfig
 // TransferContext is a shortcut for TransferContext using this multiclient as
 // SignerRPCClient.
 func (m *MultiClient) TransferContext(ctx context.Context, address, amount string, config *TransactionConfig) (string, error) {
-	return Transfer(m, address, amount, config)
+	return TransferContext(ctx, m, address, amount, config)
 }
 
 // RegisterName wraps RegisterNameContext with background context.
@@ -1004,7 +1004,7 @@ func (m *MultiClient) RegisterName(name string, config *TransactionConfig) (stri
 // RegisterNameContext is a shortcut for RegisterNameContext using this
 // multiclient as SignerRPCClient.
 func (m *MultiClient) RegisterNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error) {
-	return RegisterName(m, name, config)
+	return RegisterNameContext(ctx, m, name, config)
 }
 
 // TransferName wraps TransferNameContext with background context.
@@ -1015,7 +1015,7 @@ func (m *MultiClient) TransferName(name string, recipientPubKey []byte, config *
 // TransferNameContext is a shortcut for TransferNameContext using this
 // multiclient as SignerRPCClient.
 func (m *MultiClient) TransferNameContext(ctx context.Context, name string, recipientPubKey []byte, config *TransactionConfig) (string, error) {
-	return TransferName(m, name, recipientPubKey, config)
+	return TransferNameContext(ctx, m, name, recipientPubKey, config)
 }
 
 // DeleteName wraps DeleteNameContext with background context.
@@ -1026,7 +1026,7 @@ func (m *MultiClient) DeleteName(name string, config *TransactionConfig) (string
 // DeleteNameContext is a shortcut for DeleteNameContext using this multiclient
 // as SignerRPCClient.
 func (m *MultiClient) DeleteNameContext(ctx context.Context, name string, config *TransactionConfig) (string, error) {
-	return DeleteName(m, name, config)
+	return DeleteNameContext(ctx, m, name, config)
 }
 
 // Subscribe wraps SubscribeContext with background context.
@@ -1039,7 +1039,7 @@ func (m *MultiClient) Subscribe(identifier, topic string, duration int, meta str
 //
 // Duration is changed to signed int for gomobile compatibility.
 func (m *MultiClient) SubscribeContext(ctx context.Context, identifier, topic string, duration int, meta string, config *TransactionConfig) (string, error) {
-	return Subscribe(m, identifier, topic, duration, meta, config)
+	return SubscribeContext(ctx, m, identifier, topic, duration, meta, config)
 }
 
 // Unsubscribe wraps UnsubscribeContext with background context.
@@ -1050,5 +1050,5 @@ func (m *MultiClient) Unsubscribe(identifier, topic string, config *TransactionC
 // UnsubscribeContext is a shortcut for UnsubscribeContext using this
 // multiclient as SignerRPCClient.
 func (m *MultiClient) UnsubscribeContext(ctx context.Context, identifier, topic string, config *TransactionConfig) (string, error) {
-	return Unsubscribe(m, identifier, topic, config)
+	return UnsubscribeContext(ctx, m, identifier, topic, config)
 }
