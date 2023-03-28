@@ -774,7 +774,7 @@ func (c *Client) handleReconnect() {
 		log.Printf("Reconnect in %v ms...", c.config.MinReconnectInterval)
 		time.Sleep(time.Duration(c.config.MinReconnectInterval) * time.Millisecond)
 
-		err := c.connect(0)
+		err := c.connect(-1)
 		if err != nil {
 			log.Println(err)
 			c.Close()
