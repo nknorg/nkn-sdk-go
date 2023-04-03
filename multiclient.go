@@ -520,6 +520,20 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	}
 }
 
+// ResolveDest resolvers an address, returns NKN address
+func (m *MultiClient) ResolveDest(dest string) (string, error) {
+	return ResolveDestN(dest, m.config.Resolvers.Elems(), m.config.ResolverDepth)
+}
+
+// ResolveDests resolvers multi address, returns multi NKN address
+func (m *MultiClient) ResolveDests(dests *nkngomobile.StringArray) (*nkngomobile.StringArray, error) {
+	destArr, err := ResolveDests(dests.Elems(), m.config.Resolvers.Elems(), m.config.ResolverDepth)
+	if err != nil {
+		return nil, err
+	}
+	return nkngomobile.NewStringArray(destArr...), nil
+}
+
 // Publish sends bytes or string data to all subscribers of a topic with an
 // optional config.
 func (m *MultiClient) Publish(topic string, data interface{}, config *MessageConfig) error {

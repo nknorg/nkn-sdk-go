@@ -886,6 +886,20 @@ func (c *Client) SendPayload(dests *nkngomobile.StringArray, payload *payloads.P
 	return c.Send(dests, payload, config)
 }
 
+// ResolveDest resolvers an address, returns NKN address
+func (c *Client) ResolveDest(dest string) (string, error) {
+	return ResolveDestN(dest, c.config.Resolvers.Elems(), c.config.ResolverDepth)
+}
+
+// ResolveDests resolvers multi address, returns multi NKN address
+func (c *Client) ResolveDests(dests *nkngomobile.StringArray) (*nkngomobile.StringArray, error) {
+	destArr, err := ResolveDests(dests.Elems(), c.config.Resolvers.Elems(), c.config.ResolverDepth)
+	if err != nil {
+		return nil, err
+	}
+	return nkngomobile.NewStringArray(destArr...), nil
+}
+
 func (c *Client) processDest(dest string) (string, error) {
 	if len(dest) == 0 {
 		return "", ErrNoDestination
