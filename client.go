@@ -73,6 +73,7 @@ type Client struct {
 	sigChainBlockHash string
 	reconnectChan     chan struct{}
 	responseChannels  *cache.Cache
+	resolvers         []Resolver
 
 	lock       sync.RWMutex
 	isClosed   bool
@@ -125,6 +126,16 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		return nil, err
 	}
 
+	gomobileResolvers := config.Resolvers.Elems()
+	resolvers := make([]Resolver, 0, len(gomobileResolvers))
+	for i := 0; i < len(resolvers); i++ {
+		r, ok := gomobileResolvers[i].(Resolver)
+		if !ok {
+			return nil, ErrInvalidResolver
+		}
+		resolvers = append(resolvers, r)
+	}
+
 	c := Client{
 		config:               config,
 		account:              account,
@@ -139,6 +150,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		sharedKeys:           make(map[string]*[sharedKeySize]byte),
 		wallet:               w,
 		chChallengeSignature: make(chan *stSaltAndSignature, 1), // client auth
+		resolvers:            resolvers,
 	}
 
 	go c.handleReconnect()
@@ -844,7 +856,10 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, config *
 		return nil, err
 	}
 
-	destArr, err := ResolveDests(dests.Elems(), c.config.Resolvers.Elems(), c.config.ResolverDepth)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.config.ResolverTimeout)*time.Millisecond)
+	defer cancel()
+
+	destArr, err := c.ResolveDestsContext(ctx, dests)
 	if err != nil {
 		return nil, err
 	}
@@ -856,7 +871,7 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, config *
 			return nil, err
 		}
 	}
-	if err := c.send(destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := c.send(destArr.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
@@ -886,27 +901,37 @@ func (c *Client) SendPayload(dests *nkngomobile.StringArray, payload *payloads.P
 	return c.Send(dests, payload, config)
 }
 
-// ResolveDest resolvers an address, returns NKN address
+// ResolveDest wraps ResolveDestContext with background context
 func (c *Client) ResolveDest(dest string) (string, error) {
-	return ResolveDestN(dest, c.config.Resolvers.Elems(), c.config.ResolverDepth)
+	return c.ResolveDestContext(context.Background(), dest)
 }
 
-// ResolveDests resolvers multi address, returns multi NKN address
+// ResolveDestContext resolvers an address, returns NKN address
+func (c *Client) ResolveDestContext(ctx context.Context, dest string) (string, error) {
+	return ResolveDestN(ctx, dest, c.resolvers, c.config.ResolverDepth)
+}
+
+// ResolveDests wraps ResolveDestsContext with background context
 func (c *Client) ResolveDests(dests *nkngomobile.StringArray) (*nkngomobile.StringArray, error) {
-	destArr, err := ResolveDests(dests.Elems(), c.config.Resolvers.Elems(), c.config.ResolverDepth)
+	return c.ResolveDestsContext(context.Background(), dests)
+}
+
+// ResolveDestsContext resolvers multiple addresses
+func (c *Client) ResolveDestsContext(ctx context.Context, dests *nkngomobile.StringArray) (*nkngomobile.StringArray, error) {
+	destArr, err := ResolveDests(ctx, dests.Elems(), c.resolvers, c.config.ResolverDepth)
 	if err != nil {
 		return nil, err
 	}
 	return nkngomobile.NewStringArray(destArr...), nil
 }
 
-func (c *Client) processDest(dest string) (string, error) {
+func (c *Client) processDest(ctx context.Context, dest string) (string, error) {
 	if len(dest) == 0 {
 		return "", ErrNoDestination
 	}
 	addr := strings.Split(dest, ".")
 	if len(addr[len(addr)-1]) < 2*ed25519.PublicKeySize {
-		reg, err := c.GetRegistrant(addr[len(addr)-1])
+		reg, err := c.GetRegistrantContext(ctx, addr[len(addr)-1])
 		if err != nil {
 			return "", err
 		}
@@ -918,13 +943,13 @@ func (c *Client) processDest(dest string) (string, error) {
 	return strings.Join(addr, "."), nil
 }
 
-func (c *Client) processDests(dests []string) ([]string, error) {
+func (c *Client) processDests(ctx context.Context, dests []string) ([]string, error) {
 	if len(dests) == 0 {
 		return nil, nil
 	}
 	processedDests := make([]string, 0, len(dests))
 	for _, dest := range dests {
-		processedDest, err := c.processDest(dest)
+		processedDest, err := c.processDest(ctx, dest)
 		if err != nil {
 			log.Println(err)
 			continue
@@ -1066,7 +1091,10 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 		maxHoldingSeconds = 0
 	}
 
-	dests, err := c.processDests(dests)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(c.config.RPCTimeout)*time.Millisecond)
+	defer cancel()
+
+	dests, err := c.processDests(ctx, dests)
 	if err != nil {
 		return err
 	}

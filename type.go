@@ -2,6 +2,10 @@ package nkn
 
 import (
 	"github.com/nknorg/nkngomobile"
+
+	// blank import to prevent gomobile from being removed by go mod tidy and
+	// causing gomobile compile error
+	_ "golang.org/x/mobile/asset"
 )
 
 // NewStringArray creates a StringArray from a list of string elements.

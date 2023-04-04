@@ -79,6 +79,7 @@ type MultiClient struct {
 	acceptSession chan *ncp.Session
 	onClose       chan struct{}
 	msgCache      *cache.Cache
+	resolvers     []Resolver
 
 	lock          sync.RWMutex
 	clients       map[int]*Client
@@ -112,6 +113,16 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 
 	addr := address.MakeAddressString(account.PublicKey, baseIdentifier)
 
+	gomobileResolvers := config.Resolvers.Elems()
+	resolvers := make([]Resolver, 0, len(gomobileResolvers))
+	for i := 0; i < len(resolvers); i++ {
+		r, ok := gomobileResolvers[i].(Resolver)
+		if !ok {
+			return nil, ErrInvalidResolver
+		}
+		resolvers = append(resolvers, r)
+	}
+
 	m := &MultiClient{
 		config:        config,
 		offset:        offset,
@@ -124,6 +135,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 		clients:       make(map[int]*Client, numClients),
 		defaultClient: nil,
 		sessions:      make(map[string]*ncp.Session, 0),
+		resolvers:     resolvers,
 	}
 
 	var wg sync.WaitGroup
@@ -345,7 +357,10 @@ func (m *MultiClient) SendWithClient(clientID int, dests *nkngomobile.StringArra
 		return nil, err
 	}
 
-	destArr, err := ResolveDests(dests.Elems(), m.config.Resolvers.Elems(), m.config.ResolverDepth)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(m.config.ResolverTimeout)*time.Millisecond)
+	defer cancel()
+
+	destArr, err := m.ResolveDestsContext(ctx, dests)
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +370,7 @@ func (m *MultiClient) SendWithClient(clientID int, dests *nkngomobile.StringArra
 		return nil, err
 	}
 
-	if err := m.sendWithClient(clientID, destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := m.sendWithClient(clientID, destArr.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
@@ -397,11 +412,14 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 		return nil, err
 	}
 
-	destArr, err := ResolveDests(dests.Elems(), m.config.Resolvers.Elems(), m.config.ResolverDepth)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(m.config.ResolverTimeout)*time.Millisecond)
+	defer cancel()
 
+	destArr, err := m.ResolveDestsContext(ctx, dests)
 	if err != nil {
 		return nil, err
 	}
+
 	payload, ok := data.(*payloads.Payload)
 	if !ok {
 		payload, err = newMessagePayload(data, config.MessageID, config.NoReply)
@@ -430,7 +448,7 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 	go func() {
 		sent := 0
 		for clientID := range clients {
-			err := m.sendWithClient(clientID, destArr, payload, !config.Unencrypted, config.MaxHoldingSeconds)
+			err := m.sendWithClient(clientID, destArr.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds)
 			if err == nil {
 				select {
 				case success <- struct{}{}:
@@ -520,14 +538,24 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	}
 }
 
-// ResolveDest resolvers an address, returns NKN address
+// ResolveDest wraps ResolveDestContext with background context
 func (m *MultiClient) ResolveDest(dest string) (string, error) {
-	return ResolveDestN(dest, m.config.Resolvers.Elems(), m.config.ResolverDepth)
+	return m.ResolveDestContext(context.Background(), dest)
 }
 
-// ResolveDests resolvers multi address, returns multi NKN address
+// ResolveDestContext resolvers an address, returns NKN address
+func (m *MultiClient) ResolveDestContext(ctx context.Context, dest string) (string, error) {
+	return ResolveDestN(ctx, dest, m.resolvers, m.config.ResolverDepth)
+}
+
+// ResolveDests wraps ResolveDestsContext with background context
 func (m *MultiClient) ResolveDests(dests *nkngomobile.StringArray) (*nkngomobile.StringArray, error) {
-	destArr, err := ResolveDests(dests.Elems(), m.config.Resolvers.Elems(), m.config.ResolverDepth)
+	return m.ResolveDestsContext(context.Background(), dests)
+}
+
+// ResolveDestsContext resolvers multiple addresses
+func (m *MultiClient) ResolveDestsContext(ctx context.Context, dests *nkngomobile.StringArray) (*nkngomobile.StringArray, error) {
+	destArr, err := ResolveDests(ctx, dests.Elems(), m.resolvers, m.config.ResolverDepth)
 	if err != nil {
 		return nil, err
 	}
