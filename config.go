@@ -44,10 +44,13 @@ type ClientConfig struct {
 	AllowUnencrypted        bool                     // Allow receiving unencrypted message. Unencrypted message might have sender or body viewed/modified by middleman or forged by sender.
 	MessageConfig           *MessageConfig           // Default message config of the client if per-message config is not provided.
 	SessionConfig           *ncp.Config              // Default session config of the client if per-session config is not provided.
-	HttpDialContext         func(ctx context.Context, network, addr string) (net.Conn, error)
-	WsDialContext           func(ctx context.Context, network, addr string) (net.Conn, error)
-	Resolvers               *nkngomobile.ResolverArray
-	ResolverDepth           int32
+
+	HttpDialContext func(ctx context.Context, network, addr string) (net.Conn, error) // Customized http dialcontext function
+	WsDialContext   func(ctx context.Context, network, addr string) (net.Conn, error) // Customized websocket dialcontext function
+
+	Resolvers       *nkngomobile.ResolverArray // Resolvers resolve a string to a NKN address
+	ResolverDepth   int32                      // Max recursive resolve calls
+	ResolverTimeout int32                      // Timeout for the whole resolving process
 }
 
 // DefaultClientConfig is the default client config.
@@ -70,6 +73,7 @@ var DefaultClientConfig = ClientConfig{
 	WsDialContext:           nil,
 	Resolvers:               nil,
 	ResolverDepth:           16,
+	ResolverTimeout:         10000,
 }
 
 // GetDefaultClientConfig returns the default client config with nil pointer

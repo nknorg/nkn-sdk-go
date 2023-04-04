@@ -12,6 +12,7 @@ require (
 	github.com/nknorg/nkngomobile v0.0.0-20220615081414-671ad1afdfa9
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
+	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c
 )
 
 require (
