@@ -812,7 +812,7 @@ func (m *MultiClient) Reconnect() {
 	}
 
 	for _, client := range m.clients {
-		client.Reconnect()
+		client.Reconnect(nil)
 	}
 }
 
