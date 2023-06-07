@@ -71,7 +71,7 @@ type Client struct {
 	address           string
 	addressID         []byte
 	sigChainBlockHash string
-	reconnectChan     chan struct{}
+	reconnectChan     chan *Node
 	responseChannels  *cache.Cache
 	resolvers         []Resolver
 
@@ -145,7 +145,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 		addressID:            addressToID(addr),
 		OnConnect:            NewOnConnect(1, nil),
 		OnMessage:            NewOnMessage(int(config.MsgChanLen), nil),
-		reconnectChan:        make(chan struct{}),
+		reconnectChan:        make(chan *Node),
 		responseChannels:     cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
 		sharedKeys:           make(map[string]*[sharedKeySize]byte),
 		wallet:               w,
@@ -155,7 +155,7 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 
 	go c.handleReconnect()
 
-	err = c.connect(int(c.config.ConnectRetries))
+	err = c.connect(int(c.config.ConnectRetries), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -423,10 +423,7 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					return err
 				}
 				go func() {
-					err := c.connectToNode(&node)
-					if err != nil {
-						c.Reconnect()
-					}
+					c.Reconnect(&node)
 				}()
 			} else if action == setClientAction {
 				c.Close()
@@ -670,7 +667,7 @@ func (c *Client) connectToNode(node *Node) error {
 				c.lock.Unlock()
 				if err != nil {
 					log.Println(err)
-					c.Reconnect()
+					c.Reconnect(nil)
 					return
 				}
 			case <-done:
@@ -704,7 +701,7 @@ func (c *Client) connectToNode(node *Node) error {
 		c.lock.Unlock()
 		if err != nil {
 			log.Println(err)
-			c.Reconnect()
+			c.Reconnect(nil)
 			return
 		}
 	}()
@@ -719,7 +716,7 @@ func (c *Client) connectToNode(node *Node) error {
 			msgType, data, err := conn.ReadMessage()
 			if err != nil {
 				log.Println(err)
-				c.Reconnect()
+				c.Reconnect(nil)
 				return
 			}
 
@@ -736,7 +733,7 @@ func (c *Client) connectToNode(node *Node) error {
 	return nil
 }
 
-func (c *Client) connect(maxRetries int) error {
+func (c *Client) connect(maxRetries int, node *Node) error {
 	retryInterval := c.config.MinReconnectInterval
 	for retry := 1; maxRetries < 0 || retry <= maxRetries; retry++ {
 		if retry > 1 {
@@ -748,10 +745,13 @@ func (c *Client) connect(maxRetries int) error {
 			}
 		}
 
-		node, err := GetWsAddr(c.Address(), c.config)
-		if err != nil {
-			log.Println(err)
-			continue
+		var err error
+		if node == nil {
+			node, err = GetWsAddr(c.Address(), c.config)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
 		}
 
 		err = c.connectToNode(node)
@@ -767,18 +767,18 @@ func (c *Client) connect(maxRetries int) error {
 }
 
 // Reconnect forces the client to find node and connect again.
-func (c *Client) Reconnect() {
+func (c *Client) Reconnect(node *Node) {
 	if c.IsClosed() {
 		return
 	}
 	select {
-	case c.reconnectChan <- struct{}{}:
+	case c.reconnectChan <- node:
 	default:
 	}
 }
 
 func (c *Client) handleReconnect() {
-	for range c.reconnectChan {
+	for node := range c.reconnectChan {
 		if c.IsClosed() {
 			return
 		}
@@ -786,7 +786,7 @@ func (c *Client) handleReconnect() {
 		log.Printf("Reconnect in %v ms...", c.config.MinReconnectInterval)
 		time.Sleep(time.Duration(c.config.MinReconnectInterval) * time.Millisecond)
 
-		err := c.connect(-1)
+		err := c.connect(-1, node)
 		if err != nil {
 			log.Println(err)
 			c.Close()
@@ -805,7 +805,7 @@ func (c *Client) writeMessage(buf []byte, writeTimeout time.Duration) error {
 	err := c.conn.WriteMessage(websocket.BinaryMessage, buf)
 	c.lock.Unlock()
 	if err != nil {
-		c.Reconnect()
+		c.Reconnect(nil)
 	}
 	return err
 }
