@@ -838,7 +838,7 @@ func (m *MultiClient) NewNanoPay(recipientAddress, fee string, duration int) (*N
 // as RPC client.
 func (m *MultiClient) NewNanoPayClaimer(recipientAddress string, claimIntervalMs, lingerMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	if len(recipientAddress) == 0 {
-		recipientAddress = m.GetDefaultClient().wallet.address
+		recipientAddress = m.GetDefaultClient().wallet.Address()
 	}
 	return NewNanoPayClaimer(m, recipientAddress, claimIntervalMs, lingerMs, minFlushAmount, onError)
 }
@@ -852,7 +852,7 @@ func (m *MultiClient) GetNonce(txPool bool) (int64, error) {
 // connected node as the RPC server, followed by this multiclient's
 // SeedRPCServerAddr if failed.
 func (m *MultiClient) GetNonceContext(ctx context.Context, txPool bool) (int64, error) {
-	return m.GetNonceByAddressContext(ctx, m.GetDefaultClient().wallet.address, txPool)
+	return m.GetNonceByAddressContext(ctx, m.GetDefaultClient().wallet.Address(), txPool)
 }
 
 // GetNonceByAddress wraps GetNonceByAddressContext with background context.
@@ -904,7 +904,7 @@ func (m *MultiClient) Balance() (*Amount, error) {
 // connected node as the RPC server, followed by this multiclient's
 // SeedRPCServerAddr if failed.
 func (m *MultiClient) BalanceContext(ctx context.Context) (*Amount, error) {
-	return m.BalanceByAddressContext(ctx, m.GetDefaultClient().wallet.address)
+	return m.BalanceByAddressContext(ctx, m.GetDefaultClient().wallet.Address())
 }
 
 // BalanceByAddress wraps BalanceByAddressContext with background context.

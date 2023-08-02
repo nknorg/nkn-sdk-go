@@ -251,7 +251,7 @@ func (w *Wallet) GetNonce(txPool bool) (int64, error) {
 // GetNonceContext is the same as package level GetNonceContext, but using this
 // wallet's SeedRPCServerAddr.
 func (w *Wallet) GetNonceContext(ctx context.Context, txPool bool) (int64, error) {
-	return w.GetNonceByAddressContext(ctx, w.address, txPool)
+	return w.GetNonceByAddressContext(ctx, w.Address(), txPool)
 }
 
 // GetNonceByAddress wraps GetNonceByAddressContext with background context.
@@ -284,7 +284,7 @@ func (w *Wallet) Balance() (*Amount, error) {
 // BalanceContext is the same as package level GetBalanceContext, but using this
 // wallet's SeedRPCServerAddr.
 func (w *Wallet) BalanceContext(ctx context.Context) (*Amount, error) {
-	return w.BalanceByAddressContext(ctx, w.address)
+	return w.BalanceByAddressContext(ctx, w.Address())
 }
 
 // BalanceByAddress wraps BalanceByAddressContext with background context.
