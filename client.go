@@ -1273,7 +1273,7 @@ func (c *Client) NewNanoPay(recipientAddress, fee string, duration int) (*NanoPa
 // RPC client.
 func (c *Client) NewNanoPayClaimer(recipientAddress string, claimIntervalMs, lingerMs int32, minFlushAmount string, onError *OnError) (*NanoPayClaimer, error) {
 	if len(recipientAddress) == 0 {
-		recipientAddress = c.wallet.address
+		recipientAddress = c.wallet.Address()
 	}
 	return NewNanoPayClaimer(c, recipientAddress, claimIntervalMs, lingerMs, minFlushAmount, onError)
 }
@@ -1287,7 +1287,7 @@ func (c *Client) GetNonce(txPool bool) (int64, error) {
 // connected node as the RPC server, followed by this client's SeedRPCServerAddr
 // if failed.
 func (c *Client) GetNonceContext(ctx context.Context, txPool bool) (int64, error) {
-	return c.GetNonceByAddressContext(ctx, c.wallet.address, txPool)
+	return c.GetNonceByAddressContext(ctx, c.wallet.Address(), txPool)
 }
 
 // GetNonceByAddress wraps GetNonceByAddressContext with background context.
@@ -1335,7 +1335,7 @@ func (c *Client) Balance() (*Amount, error) {
 // connected node as the RPC server, followed by this client's SeedRPCServerAddr
 // if failed.
 func (c *Client) BalanceContext(ctx context.Context) (*Amount, error) {
-	return c.BalanceByAddressContext(ctx, c.wallet.address)
+	return c.BalanceByAddressContext(ctx, c.wallet.Address())
 }
 
 // BalanceByAddress wraps BalanceByAddressContext with background context.
