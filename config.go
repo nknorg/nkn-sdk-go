@@ -304,7 +304,7 @@ func GetDefaultTransactionConfig() *TransactionConfig {
 }
 
 // MergeClientConfig merges a given client config with the default client config
-// recursively. Any non zero value fields will override the default config.
+// recursively. Any non-zero value fields will override the default config.
 func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
 	merged := GetDefaultClientConfig()
 	if conf != nil {
@@ -347,7 +347,7 @@ func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConf
 }
 
 // MergeWalletConfig merges a given wallet config with the default wallet config
-// recursively. Any non zero value fields will override the default config.
+// recursively. Any non-zero value fields will override the default config.
 func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
 	merged := GetDefaultWalletConfig()
 	if conf != nil {

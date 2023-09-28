@@ -22,7 +22,7 @@ const (
 	// blocks until actual expiration.
 	forceFlushDelta = 2
 
-	// NanoPay will be consider expired by the receiver when it's less than
+	// NanoPay will be considered expired by the receiver when it's less than
 	// specified amount of blocks until actual expiration.
 	receiverExpirationDelta = 3
 )

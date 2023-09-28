@@ -94,7 +94,7 @@ type MultiClient struct {
 
 // NewMultiClient creates a multiclient with an account, an optional identifier,
 // number of sub clients to create, whether to create original client without
-// identifier prefix, and a optional client config that will be applied to all
+// identifier prefix, and an optional client config that will be applied to all
 // clients created. For any zero value field in config, the default client
 // config value will be used. If config is nil, the default client config will
 // be used.
@@ -130,11 +130,11 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 		OnConnect:     NewOnConnect(1, nil),
 		OnMessage:     NewOnMessage(int(config.MsgChanLen), nil),
 		acceptSession: make(chan *ncp.Session, acceptSessionBufSize),
-		onClose:       make(chan struct{}, 0),
+		onClose:       make(chan struct{}),
 		msgCache:      cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
 		clients:       make(map[int]*Client, numClients),
 		defaultClient: nil,
-		sessions:      make(map[string]*ncp.Session, 0),
+		sessions:      make(map[string]*ncp.Session),
 		resolvers:     resolvers,
 	}
 
@@ -337,7 +337,7 @@ func (m *MultiClient) GetClient(i int) *Client {
 }
 
 // GetDefaultClient returns the default client, which is the client with
-// smallest index.
+// the smallest index.
 func (m *MultiClient) GetDefaultClient() *Client {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
@@ -590,7 +590,7 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *nc
 		clients[clientID] = client
 	}
 	sort.Strings(clientIDs)
-	return ncp.NewSession(m.addr, NewClientAddr(remoteAddr), clientIDs, nil, (func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
+	return ncp.NewSession(m.addr, NewClientAddr(remoteAddr), clientIDs, nil, func(localClientID, remoteClientID string, buf []byte, writeTimeout time.Duration) error {
 		payload := &payloads.Payload{
 			Type:      payloads.PayloadType_SESSION,
 			MessageId: sessionID,
@@ -602,7 +602,7 @@ func (m *MultiClient) newSession(remoteAddr string, sessionID []byte, config *nc
 			return err
 		}
 		return nil
-	}), config)
+	}, config)
 }
 
 func (m *MultiClient) shouldAcceptAddr(addr string) bool {

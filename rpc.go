@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -161,7 +161,7 @@ func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Dur
 		return nil, err
 	}
 	defer resp.Body.Close()
-	return ioutil.ReadAll(resp.Body)
+	return io.ReadAll(resp.Body)
 }
 
 // RPCCall makes a RPC call and put results to result passed in.
