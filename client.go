@@ -58,7 +58,7 @@ const (
 
 // Client sends and receives data between any NKN clients regardless their
 // network condition without setting up a server or relying on any third party
-// services. Data are end to end encrypted by default. Typically you might want
+// services. Data are end-to-end encrypted by default. Typically, you might want
 // to use multiclient instead of using client directly.
 type Client struct {
 	OnConnect *OnConnect // Event emitting channel when client connects to node and becomes ready to send messages. One should only use the first event of the channel.
