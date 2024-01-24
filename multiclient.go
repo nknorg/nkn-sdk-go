@@ -180,18 +180,26 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 
 			wg.Done()
 
-			node, ok := <-client.OnConnect.C
-			if !ok {
-				return
-			}
+			go func() {
+				for {
+					select {
+					case node, ok := <-client.OnConnect.C:
+						if !ok {
+							return
+						}
 
-			m.lock.RLock()
-			if m.isClosed {
-				m.lock.RUnlock()
-				return
-			}
-			m.OnConnect.receive(node)
-			m.lock.RUnlock()
+						m.lock.RLock()
+						if m.isClosed {
+							m.lock.RUnlock()
+							return
+						}
+						m.OnConnect.receive(node)
+						m.lock.RUnlock()
+					case <-m.onClose:
+						return
+					}
+				}
+			}()
 
 			for {
 				select {
