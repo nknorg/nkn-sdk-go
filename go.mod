@@ -12,7 +12,7 @@ require (
 	github.com/nknorg/nkngomobile v0.0.0-20220615081414-671ad1afdfa9
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/stretchr/testify v1.8.1
-	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e
+	golang.org/x/crypto v0.17.0
 	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c
 )
 
@@ -22,7 +22,7 @@ require (
 	github.com/itchyny/base58-go v0.0.5 // indirect
 	github.com/pbnjay/memory v0.0.0-20190104145345-974d429e7ae4 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/sys v0.1.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
 	google.golang.org/protobuf v1.26.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
