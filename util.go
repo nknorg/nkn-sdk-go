@@ -119,6 +119,17 @@ func (c *OnConnect) Next() *Node {
 	return <-c.C
 }
 
+// MaybeNext returns the next element in the channel and true, if channel is
+// empty it returns nil and false.
+func (c *OnConnect) MaybeNext() (*Node, bool) {
+	select {
+	case v := <-c.C:
+		return v, true
+	default:
+		return nil, false
+	}
+}
+
 func (c *OnConnect) receive(node *Node) {
 	if c.Callback != nil {
 		c.Callback.OnConnect(node)
@@ -155,6 +166,17 @@ func NewOnMessage(size int, cb OnMessageFunc) *OnMessage {
 // Next waits and returns the next element from the channel.
 func (c *OnMessage) Next() *Message {
 	return <-c.C
+}
+
+// MaybeNext returns the next element in the channel and true, if channel is
+// empty it returns nil and false.
+func (c *OnMessage) MaybeNext() (*Message, bool) {
+	select {
+	case v := <-c.C:
+		return v, true
+	default:
+		return nil, false
+	}
 }
 
 // NextWithTimeout waits and returns the next element from the channel, timeout in millisecond.
