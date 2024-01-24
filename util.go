@@ -119,14 +119,14 @@ func (c *OnConnect) Next() *Node {
 	return <-c.C
 }
 
-// MaybeNext returns the next element in the channel and true, if channel is
-// empty it returns nil and false.
-func (c *OnConnect) MaybeNext() (*Node, bool) {
+// MaybeNext returns the next element in the channel, or nil if channel is
+// empty.
+func (c *OnConnect) MaybeNext() *Node {
 	select {
 	case v := <-c.C:
-		return v, true
+		return v
 	default:
-		return nil, false
+		return nil
 	}
 }
 
@@ -168,14 +168,14 @@ func (c *OnMessage) Next() *Message {
 	return <-c.C
 }
 
-// MaybeNext returns the next element in the channel and true, if channel is
-// empty it returns nil and false.
-func (c *OnMessage) MaybeNext() (*Message, bool) {
+// MaybeNext returns the next element in the channel, or nil if channel is
+// empty.
+func (c *OnMessage) MaybeNext() *Message {
 	select {
 	case v := <-c.C:
-		return v, true
+		return v
 	default:
-		return nil, false
+		return nil
 	}
 }
 
@@ -231,6 +231,17 @@ func NewOnError(size int, cb OnErrorFunc) *OnError {
 // Next waits and returns the next element from the channel.
 func (c *OnError) Next() error {
 	return <-c.C
+}
+
+// MaybeNext returns the next element in the channel, or nil if channel is
+// empty.
+func (c *OnError) MaybeNext() error {
+	select {
+	case v := <-c.C:
+		return v
+	default:
+		return nil
+	}
 }
 
 func (c *OnError) receive(err error) {
