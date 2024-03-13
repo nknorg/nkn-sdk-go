@@ -5,7 +5,7 @@ go 1.17
 require (
 	github.com/nknorg/nkn-sdk-go v1.4.1
 	google.golang.org/grpc v1.53.0
-	google.golang.org/protobuf v1.28.1
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
