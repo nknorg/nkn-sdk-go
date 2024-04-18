@@ -9,7 +9,7 @@ import (
 
 // go test -v -timeout=0 -run=TestClientSendAndRecv
 func TestClientSendAndRecv(t *testing.T) {
-	listener, err := CreateClient(listenerId, seedHex)
+	listener, err := CreateClient(listenerId, seedHex, webrtc)
 	require.Nil(t, err)
 
 	ch := make(chan int, 2)
@@ -22,7 +22,7 @@ func TestClientSendAndRecv(t *testing.T) {
 		wg.Done()
 	}()
 
-	dialer, err := CreateClient(dialerId, seedHex)
+	dialer, err := CreateClient(dialerId, seedHex, webrtc)
 	require.Nil(t, err)
 	wg.Add(1)
 	go func() {
@@ -35,7 +35,7 @@ func TestClientSendAndRecv(t *testing.T) {
 
 // go test -v -timeout=0 -run=TestMcSendAndRecv
 func TestMcSendAndRecv(t *testing.T) {
-	listener, err := CreateMultiClient(listenerId, "", numClients, 100)
+	listener, err := CreateMultiClient(listenerId, "", numClients, 100, webrtc)
 	require.Nil(t, err)
 
 	ch := make(chan int, 2)
@@ -48,7 +48,7 @@ func TestMcSendAndRecv(t *testing.T) {
 		wg.Done()
 	}()
 
-	dialer, err := CreateMultiClient(dialerId, "", numClients, 100)
+	dialer, err := CreateMultiClient(dialerId, "", numClients, 100, webrtc)
 	require.Nil(t, err)
 	wg.Add(1)
 	go func() {

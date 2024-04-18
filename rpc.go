@@ -91,6 +91,7 @@ type Node struct {
 	RPCAddr string `json:"rpcAddr"`
 	PubKey  string `json:"pubkey"`
 	ID      string `json:"id"`
+	Sdp     string `json:"sdp"`
 }
 
 // NodeState struct contains the state of a NKN full node.
@@ -230,7 +231,8 @@ func RPCCall(parentCtx context.Context, method string, params interface{}, resul
 
 				err = json.Unmarshal(body, &resp)
 				if err != nil {
-					log.Println(err)
+					log.Println("RPCCall json.Unmarshal(resp) error: ", err)
+					log.Println("RPCCall resp body: ", string(body))
 					respLock.Unlock()
 					continue
 				}
@@ -821,4 +823,20 @@ func GetNodeStateContext(ctx context.Context, config RPCConfigInterface) (*NodeS
 		return nil, err
 	}
 	return nodeState, nil
+}
+
+// GetWsAddr wraps GetWsAddrContext with background context.
+func GetPeerAddr(clientAddr string, offer string, config RPCConfigInterface) (*Node, error) {
+	return GetPeerAddrContext(context.Background(), clientAddr, offer, config)
+}
+
+// GetPeerAddrContext RPC gets the node that a client address should connect to
+// using ws.
+func GetPeerAddrContext(ctx context.Context, clientAddr string, offer string, config RPCConfigInterface) (*Node, error) {
+	node := &Node{}
+	err := RPCCall(ctx, "getpeeraddr", map[string]interface{}{"address": clientAddr, "offer": offer}, node, config)
+	if err != nil {
+		return nil, err
+	}
+	return node, nil
 }
