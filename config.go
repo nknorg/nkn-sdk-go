@@ -28,6 +28,12 @@ var DefaultSeedRPCServerAddr = []string{
 	"http://mainnet-seed-0008.nkn.org:30003",
 }
 
+var DefaultStunServerAddr = []string{
+	"stun:stun.l.google.com:19302",
+	"stun:stun.cloudflare.com:3478",
+	"stun:stunserver.stunprotocol.org:3478",
+}
+
 // ClientConfig is the client configuration.
 type ClientConfig struct {
 	SeedRPCServerAddr       *nkngomobile.StringArray // Seed RPC server address that client uses to find its node and make RPC requests (e.g. get subscribers).
@@ -51,6 +57,10 @@ type ClientConfig struct {
 	Resolvers       *nkngomobile.ResolverArray // Resolvers resolve a string to a NKN address
 	ResolverDepth   int32                      // Max recursive resolve calls
 	ResolverTimeout int32                      // Timeout for the whole resolving process
+
+	WebRTC               bool                     // Whether to use webrtc for data channel
+	StunServerAddr       *nkngomobile.StringArray // Stun server address that client uses to find its node
+	WebRTCConnectTimeout int32                    // Timeout for webrtc connection in milliseconds
 }
 
 // DefaultClientConfig is the default client config.
@@ -74,6 +84,9 @@ var DefaultClientConfig = ClientConfig{
 	Resolvers:               nil,
 	ResolverDepth:           16,
 	ResolverTimeout:         10000,
+	WebRTC:                  false,
+	StunServerAddr:          nil,
+	WebRTCConnectTimeout:    5000,
 }
 
 // GetDefaultClientConfig returns the default client config with nil pointer
@@ -83,6 +96,7 @@ func GetDefaultClientConfig() *ClientConfig {
 	clientConf.SeedRPCServerAddr = NewStringArray(DefaultSeedRPCServerAddr...)
 	clientConf.MessageConfig = GetDefaultMessageConfig()
 	clientConf.SessionConfig = GetDefaultSessionConfig()
+	clientConf.StunServerAddr = NewStringArray(DefaultStunServerAddr...)
 	return &clientConf
 }
 

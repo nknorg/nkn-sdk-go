@@ -11,8 +11,8 @@ import (
 	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
-func CreateClientConfig(retries int32) (config *nkn.ClientConfig) {
-	config = &nkn.ClientConfig{ConnectRetries: retries}
+func CreateClientConfig(retries int32, webrtc bool) (config *nkn.ClientConfig) {
+	config = &nkn.ClientConfig{ConnectRetries: retries, WebRTC: webrtc}
 	return
 }
 
@@ -21,8 +21,8 @@ func CreateMessageConfig(maxHoldingSeconds int32) (config *nkn.MessageConfig) {
 	return
 }
 
-func CreateMultiClient(id, seed string, numClient int, connectFailRate int) (mc *nkn.MultiClient, err error) {
-	clientConfig := CreateClientConfig(5)
+func CreateMultiClient(id, seed string, numClient int, connectFailRate int, webrtc bool) (mc *nkn.MultiClient, err error) {
+	clientConfig := CreateClientConfig(5, webrtc)
 	var byteSeed []byte
 	if len(seed) > 0 {
 		byteSeed, _ = hex.DecodeString(seed)
@@ -44,8 +44,8 @@ func CreateMultiClient(id, seed string, numClient int, connectFailRate int) (mc 
 	return
 }
 
-func CreateClient(id, seed string) (client *nkn.Client, err error) {
-	clientConfig := CreateClientConfig(5)
+func CreateClient(id, seed string, webrtc bool) (client *nkn.Client, err error) {
+	clientConfig := CreateClientConfig(5, webrtc)
 	var byteSeed []byte
 	if len(seed) > 0 {
 		byteSeed, _ = hex.DecodeString(seed)
