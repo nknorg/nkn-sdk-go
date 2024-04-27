@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -161,6 +162,9 @@ func httpPost(ctx context.Context, addr string, reqBody []byte, timeout time.Dur
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("rpc call failed with %d: %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
 	return io.ReadAll(resp.Body)
 }
 
