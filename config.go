@@ -86,7 +86,7 @@ var DefaultClientConfig = ClientConfig{
 	ResolverTimeout:         10000,
 	WebRTC:                  false,
 	StunServerAddr:          nil,
-	WebRTCConnectTimeout:    5000,
+	WebRTCConnectTimeout:    10000,
 }
 
 // GetDefaultClientConfig returns the default client config with nil pointer

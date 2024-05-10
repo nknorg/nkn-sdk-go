@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -777,7 +776,8 @@ func (c *Client) connect(maxRetries int, node *Node) error {
 			if c.config.WebRTC {
 				c.peer = webrtc.NewPeer(c.config.StunServerAddr.Elems())
 				if c.peer == nil {
-					return fmt.Errorf("failed to create peer")
+					log.Println("failed to create peer")
+					continue
 				}
 				err = c.peer.Offer(c.address)
 				if err != nil {
