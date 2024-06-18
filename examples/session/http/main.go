@@ -40,10 +40,13 @@ func main() {
 
 	log.Println("Seed:", hex.EncodeToString(account.Seed()))
 
-	clientConfig := &nkn.ClientConfig{ConnectRetries: 1}
+	clientConfig := &nkn.ClientConfig{
+		MultiClientNumClients: *numClients,
+		ConnectRetries:        1,
+	}
 
 	if *listen {
-		m, err := nkn.NewMultiClient(account, listenID, *numClients, false, clientConfig)
+		m, err := nkn.NewMultiClientV2(account, listenID, clientConfig)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -64,7 +67,7 @@ func main() {
 	}
 
 	if *dial {
-		m, err := nkn.NewMultiClient(account, dialID, *numClients, false, clientConfig)
+		m, err := nkn.NewMultiClientV2(account, dialID, clientConfig)
 		if err != nil {
 			log.Fatal(err)
 		}

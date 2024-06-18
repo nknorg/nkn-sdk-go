@@ -2,18 +2,12 @@ package nkn
 
 import (
 	"context"
-	"math/rand"
 	"net"
-	"time"
 
 	"github.com/imdario/mergo"
 	ncp "github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkngomobile"
 )
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
 
 // DefaultSeedRPCServerAddr is the default seed rpc server address list.
 var DefaultSeedRPCServerAddr = []string{
@@ -61,32 +55,37 @@ type ClientConfig struct {
 	WebRTC               bool                     // Whether to use webrtc for data channel
 	StunServerAddr       *nkngomobile.StringArray // Stun server address that client uses to find its node
 	WebRTCConnectTimeout int32                    // Timeout for webrtc connection in milliseconds
+
+	MultiClientNumClients     int  // Number of sub clients to create (MultiClient only)
+	MultiClientOriginalClient bool // Whether to create original client without identifier prefix (MultiClient only)
 }
 
 // DefaultClientConfig is the default client config.
 var DefaultClientConfig = ClientConfig{
-	SeedRPCServerAddr:       nil,
-	RPCTimeout:              10000,
-	RPCConcurrency:          1,
-	MsgChanLen:              1024,
-	ConnectRetries:          3,
-	MsgCacheExpiration:      300000,
-	MsgCacheCleanupInterval: 60000,
-	WsHandshakeTimeout:      5000,
-	WsWriteTimeout:          10000,
-	MinReconnectInterval:    1000,
-	MaxReconnectInterval:    64000,
-	AllowUnencrypted:        false,
-	MessageConfig:           nil,
-	SessionConfig:           nil,
-	HttpDialContext:         nil,
-	WsDialContext:           nil,
-	Resolvers:               nil,
-	ResolverDepth:           16,
-	ResolverTimeout:         10000,
-	WebRTC:                  false,
-	StunServerAddr:          nil,
-	WebRTCConnectTimeout:    10000,
+	SeedRPCServerAddr:         nil,
+	RPCTimeout:                10000,
+	RPCConcurrency:            1,
+	MsgChanLen:                1024,
+	ConnectRetries:            3,
+	MsgCacheExpiration:        300000,
+	MsgCacheCleanupInterval:   60000,
+	WsHandshakeTimeout:        5000,
+	WsWriteTimeout:            10000,
+	MinReconnectInterval:      1000,
+	MaxReconnectInterval:      64000,
+	AllowUnencrypted:          false,
+	MessageConfig:             nil,
+	SessionConfig:             nil,
+	HttpDialContext:           nil,
+	WsDialContext:             nil,
+	Resolvers:                 nil,
+	ResolverDepth:             16,
+	ResolverTimeout:           10000,
+	WebRTC:                    false,
+	StunServerAddr:            nil,
+	WebRTCConnectTimeout:      10000,
+	MultiClientNumClients:     4,
+	MultiClientOriginalClient: false,
 }
 
 // GetDefaultClientConfig returns the default client config with nil pointer

@@ -61,18 +61,18 @@ applications, it's more suitable to use multiclient (see
 [multiclient](#multiclient) section below) for better reliability, lower
 latency, and session mode support.
 
-Create a client with a generated key pair:
+Create a multiclient with a generated key pair and default config:
 
 ```go
 account, err := NewAccount(nil)
-client, err := NewClient(account, "", nil)
+client, err := NewMultiClientV2(account, "", nil)
 ```
 
 Or with an identifier (used to distinguish different clients sharing the same
 key pair):
 
 ```go
-client, err := NewClient(account, "any string", nil)
+client, err := NewMultiClientV2(account, "any string", nil)
 ```
 
 Get client key pair:
@@ -81,12 +81,12 @@ Get client key pair:
 fmt.Println(account.Seed(), account.PubKey())
 ```
 
-Create a client using an existing secret seed:
+Create a multiclient using an existing secret seed:
 
 ```go
 seed, err := hex.DecodeStrings("039e481266e5a05168c1d834a94db512dbc235877f150c5a3cc1e3903672c673")
 account, err := NewAccount(seed)
-client, err := NewClient(account, "any string", nil)
+client, err := NewMultiClientV2(account, "any string", nil)
 ```
 
 Secret seed should be kept **SECRET**! Never put it in version control system
@@ -94,11 +94,11 @@ like here.
 
 By default the client will use bootstrap RPC server (for getting node address)
 provided by NKN. Any NKN full node can serve as a bootstrap RPC server. To
-create a client using customized bootstrap RPC server:
+create a multiclient using customized bootstrap RPC server:
 
 ```go
 conf := &ClientConfig{SeedRPCServerAddr: NewStringArray("https://ip:port", "https://ip:port", ...)}
-client, err := NewClient(account, "any string", conf)
+client, err := NewMultiClientV2(account, "any string", conf)
 ```
 
 Get client NKN address, which is used to receive data from other clients:
@@ -156,52 +156,18 @@ subscription, err := client.GetSubscription("topic", "identifier.publickey")
 fmt.Printf("%+v\n", subscription) // &{Meta:meta ExpiresAt:100000}
 ```
 
-### Multiclient
-
-Multiclient creates multiple client instances by adding identifier prefix
-(`__0__.`, `__1__.`, `__2__.`, ...) to a nkn address and send/receive packets
-concurrently. This will greatly increase reliability and reduce latency at the
-cost of more bandwidth usage (proportional to the number of clients).
-
-Multiclient basically has the same API as client, except for a few more
-initial configurations:
-
-```go
-numSubClients := 3
-originalClient := false
-multiclient, err := NewMultiClient(account, identifier, numSubClient, originalClient)
-```
-
-where `originalClient` controls whether a client with original identifier
-(without adding any additional identifier prefix) will be created, and
-`numSubClients` controls how many sub-clients to create by adding prefix
-`__0__.`, `__1__.`, `__2__.`, etc. Using `originalClient == true` and
-`numSubClients == 0` is equivalent to using a standard client without any
-modification to the identifier. Note that if you use `originalClient == true`
-and `numSubClients` is greater than 0, your identifier should not starts with
-`__X__` where `X` is any number, otherwise you may end up with identifier
-collision.
-
-Any additional options will be passed to NKN client.
-
-multiclient instance shares the same API as regular NKN client, see above for
-usage and examples. If you need low-level property or API, you can use
-`multiclient.DefaultClient` to get the default client and `multiclient.Clients`
-to get all clients.
-
 ### Session
 
 Multiclient supports a reliable transmit protocol called session. It will be
 responsible for retransmission and ordering just like TCP. It uses multiple
 clients to send and receive data in multiple path to achieve better throughput.
-Unlike regular multiclient message, no redundant data is sent unless packet
-loss.
+Unlike regular multiclient message, no redundant data will be sent (other than retransmission when packets are lost).
 
 Any multiclient can start listening for incoming session where the remote
 address match any of the given regexp:
 
 ```go
-multiclient, err := NewMultiClient(...)
+multiclient, err := NewMultiClientV2(...)
 // Accepting any address, equivalent to multiclient.Listen(NewStringArray(".*"))
 err = multiclient.Listen(nil)
 // Only accepting pubkey 25d660916021ab1d182fb6b52d666b47a0f181ed68cf52a056041bdcf4faaf99 but with any identifiers
