@@ -3,7 +3,6 @@ module github.com/nknorg/nkn-sdk-go
 go 1.18
 
 require (
-	github.com/golang/protobuf v1.5.2
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/imdario/mergo v0.3.13
@@ -14,10 +13,12 @@ require (
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.21.0
 	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/errwrap v1.0.0 // indirect
 	github.com/itchyny/base58-go v0.0.5 // indirect
@@ -44,6 +45,5 @@ require (
 	golang.org/x/net v0.23.0 // indirect
 	golang.org/x/sys v0.18.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -3,9 +3,9 @@ package nkn
 import (
 	"crypto/rand"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"golang.org/x/crypto/nacl/box"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
