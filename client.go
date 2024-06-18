@@ -18,7 +18,6 @@ import (
 
 	"github.com/nknorg/nkngomobile"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/websocket"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/v2/api/common/errcode"
@@ -31,6 +30,7 @@ import (
 	"github.com/nknorg/nkn/v2/util/address"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/nacl/box"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -572,10 +572,6 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				return nil
 			}
 
-			if msg == nil {
-				return nil
-			}
-
 			if payload.NoReply {
 				msg.reply = func(data interface{}) error {
 					return nil
@@ -1036,7 +1032,7 @@ func (c *Client) newPayloads(dests []string, payload *payloads.Payload, encrypte
 	return [][]byte{data}, nil
 }
 
-func (c *Client) newOutboundMessage(dests []string, plds [][]byte, encrypted bool, maxHoldingSeconds int32) (*pb.OutboundMessage, error) {
+func (c *Client) newOutboundMessage(dests []string, plds [][]byte, maxHoldingSeconds int32) (*pb.OutboundMessage, error) {
 	outboundMsg := &pb.OutboundMessage{
 		Dests:             dests,
 		Payloads:          plds,
@@ -1170,7 +1166,7 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 				return ErrMessageOversize
 			}
 			if totalSize+size > maxClientMessageSize {
-				outboundMsg, err := c.newOutboundMessage(destList, pldList, encrypted, maxHoldingSeconds)
+				outboundMsg, err := c.newOutboundMessage(destList, pldList, maxHoldingSeconds)
 				if err != nil {
 					return err
 				}
@@ -1195,7 +1191,7 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 		pldList = plds
 	}
 
-	outboundMsg, err := c.newOutboundMessage(destList, pldList, encrypted, maxHoldingSeconds)
+	outboundMsg, err := c.newOutboundMessage(destList, pldList, maxHoldingSeconds)
 	if err != nil {
 		return err
 	}
