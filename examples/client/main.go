@@ -28,14 +28,14 @@ func main() {
 			return err
 		}
 
-		fromClient, err := nkn.NewMultiClient(account, hex.EncodeToString(fromIdentifier), 4, false, nil)
+		fromClient, err := nkn.NewMultiClientV2(account, hex.EncodeToString(fromIdentifier), nil)
 		if err != nil {
 			return err
 		}
 		defer fromClient.Close()
 		<-fromClient.OnConnect.C
 
-		toClient, err := nkn.NewMultiClient(account, hex.EncodeToString(toIdentifier), 4, false, nil)
+		toClient, err := nkn.NewMultiClientV2(account, hex.EncodeToString(toIdentifier), nil)
 		if err != nil {
 			return err
 		}

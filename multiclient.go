@@ -92,12 +92,22 @@ type MultiClient struct {
 	sessions    map[string]*ncp.Session
 }
 
+// NewMultiClientV2 creates a MultiClient with an account, an optional identifier,
+// and a optional client config. For any zero value field in config, the default
+// client config value will be used. If config is nil, the default client config
+// will be used.
+func NewMultiClientV2(account *Account, identifier string, config *ClientConfig) (*MultiClient, error) {
+	return NewMultiClient(account, identifier, config.MultiClientNumClients, config.MultiClientOriginalClient, config)
+}
+
 // NewMultiClient creates a multiclient with an account, an optional identifier,
 // number of sub clients to create, whether to create original client without
 // identifier prefix, and an optional client config that will be applied to all
 // clients created. For any zero value field in config, the default client
 // config value will be used. If config is nil, the default client config will
 // be used.
+//
+// Deprecated:  Use NewMultiClientV2 instead.
 func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, originalClient bool, config *ClientConfig) (*MultiClient, error) {
 	config, err := MergeClientConfig(config)
 	if err != nil {

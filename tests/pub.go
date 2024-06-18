@@ -11,8 +11,12 @@ import (
 	nkn "github.com/nknorg/nkn-sdk-go"
 )
 
-func CreateClientConfig(retries int32, webrtc bool) (config *nkn.ClientConfig) {
-	config = &nkn.ClientConfig{ConnectRetries: retries, WebRTC: webrtc}
+func CreateClientConfig(numClients int, retries int32, webrtc bool) (config *nkn.ClientConfig) {
+	config = &nkn.ClientConfig{
+		MultiClientNumClients: numClients,
+		ConnectRetries:        retries,
+		WebRTC:                webrtc,
+	}
 	return
 }
 
@@ -22,7 +26,7 @@ func CreateMessageConfig(maxHoldingSeconds int32) (config *nkn.MessageConfig) {
 }
 
 func CreateMultiClient(id, seed string, numClient int, connectFailRate int, webrtc bool) (mc *nkn.MultiClient, err error) {
-	clientConfig := CreateClientConfig(5, webrtc)
+	clientConfig := CreateClientConfig(numClients, 5, webrtc)
 	var byteSeed []byte
 	if len(seed) > 0 {
 		byteSeed, _ = hex.DecodeString(seed)
@@ -34,7 +38,7 @@ func CreateMultiClient(id, seed string, numClient int, connectFailRate int, webr
 	}
 
 	// clientConfig.ConnectFailRate = connectFailRate
-	mc, err = nkn.NewMultiClient(acc, id, numClient, false, clientConfig)
+	mc, err = nkn.NewMultiClientV2(acc, id, clientConfig)
 	if err != nil {
 		return
 	}
@@ -45,7 +49,7 @@ func CreateMultiClient(id, seed string, numClient int, connectFailRate int, webr
 }
 
 func CreateClient(id, seed string, webrtc bool) (client *nkn.Client, err error) {
-	clientConfig := CreateClientConfig(5, webrtc)
+	clientConfig := CreateClientConfig(0, 5, webrtc)
 	var byteSeed []byte
 	if len(seed) > 0 {
 		byteSeed, _ = hex.DecodeString(seed)
