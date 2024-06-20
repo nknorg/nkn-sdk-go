@@ -97,6 +97,11 @@ type MultiClient struct {
 // client config value will be used. If config is nil, the default client config
 // will be used.
 func NewMultiClientV2(account *Account, identifier string, config *ClientConfig) (*MultiClient, error) {
+	config, err := MergeClientConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	return NewMultiClient(account, identifier, config.MultiClientNumClients, config.MultiClientOriginalClient, config)
 }
 
