@@ -7,7 +7,7 @@ require (
 	github.com/hashicorp/go-multierror v1.0.0
 	github.com/imdario/mergo v0.3.13
 	github.com/nknorg/ncp-go v1.0.6
-	github.com/nknorg/nkn/v2 v2.2.1-0.20240509224846-24ade56074a3
+	github.com/nknorg/nkn/v2 v2.2.2-0.20240715231955-c2862f2d9d16
 	github.com/nknorg/nkngomobile v0.0.0-20220615081414-671ad1afdfa9
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/stretchr/testify v1.9.0
