@@ -19,6 +19,7 @@ import (
 	"github.com/nknorg/nkngomobile"
 
 	"github.com/gorilla/websocket"
+	"github.com/nknorg/nkn-sdk-go/nogomobile"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/v2/api/common/errcode"
 	"github.com/nknorg/nkn/v2/api/webrtc"
@@ -57,18 +58,6 @@ const (
 	waitForChallengeTimeout = 5 * time.Second
 )
 
-// interface for websocket and webrtc connection
-type wsConn interface {
-	SetReadLimit(int64)
-	SetReadDeadline(t time.Time) error
-	SetWriteDeadline(t time.Time) error
-	WriteMessage(messageType int, data []byte) (err error)
-	WriteJSON(v interface{}) error
-	ReadMessage() (messageType int, data []byte, err error)
-	SetPongHandler(func(string) error)
-	Close() error
-}
-
 // Client sends and receives data between any NKN clients regardless their
 // network condition without setting up a server or relying on any third party
 // services. Data are end-to-end encrypted by default. Typically, you might want
@@ -90,7 +79,7 @@ type Client struct {
 
 	lock       sync.RWMutex
 	isClosed   bool
-	conn       wsConn
+	conn       nogomobile.WsConn
 	node       *Node
 	sharedKeys map[string]*[sharedKeySize]byte
 	wallet     *Wallet
@@ -250,7 +239,7 @@ func (c *Client) GetNode() *Node {
 }
 
 // GetConn returns the current websocket connection client is using.
-func (c *Client) GetConn() wsConn { // *websocket.Conn {
+func (c *Client) GetConn() nogomobile.WsConn {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.conn
@@ -627,7 +616,7 @@ func (c *Client) connectToNode(node *Node) error {
 		}()
 	}
 
-	var conn wsConn
+	var conn nogomobile.WsConn
 	var err error
 	if c.config.WebRTC {
 		c.peer.SetRemoteSdp(node.Sdp)
