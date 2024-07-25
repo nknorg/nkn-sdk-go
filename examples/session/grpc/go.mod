@@ -17,7 +17,7 @@ require (
 	github.com/imdario/mergo v0.3.13 // indirect
 	github.com/itchyny/base58-go v0.0.5 // indirect
 	github.com/nknorg/ncp-go v1.0.6 // indirect
-	github.com/nknorg/nkn/v2 v2.2.1-0.20240509224846-24ade56074a3 // indirect
+	github.com/nknorg/nkn/v2 v2.2.2-0.20240715231955-c2862f2d9d16 // indirect
 	github.com/nknorg/nkngomobile v0.0.0-20220615081414-671ad1afdfa9 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pbnjay/memory v0.0.0-20190104145345-974d429e7ae4 // indirect
