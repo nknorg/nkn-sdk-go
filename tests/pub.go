@@ -217,7 +217,9 @@ func mcsend(client *nkn.MultiClient, peer, name string, ch chan int) (sent, send
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	for i := 0; i < numExitMsgs; i++ { // 多发几次exit，让接收端有机会收到更多的测试消息再退出
+	for i := 0; i < numExitMsgs; i++ {
+		// 多发几次exit，让接收端有机会收到更多的测试消息再退出
+		// Send exit a few more times to give the receiver a chance to receive more test messages before exiting
 		_, err := client.SendText(nkn.NewStringArray(peer), exitMsg, nil)
 		if err != nil {
 			log.Printf("%v SendText exit err: %v", name, err)
