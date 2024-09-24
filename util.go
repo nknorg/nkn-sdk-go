@@ -374,7 +374,7 @@ func MeasureSeedRPCServer(seedRPCList *nkngomobile.StringArray, timeout int32, d
 
 // MeasureSeedRPCServerContext measures the latency to seed rpc node list, only
 // select the ones in persist finished state, and sort them by latency (from low
-// to high). If none of the given seed rpc node is accessable or in persist
+// to high). If none of the given seed rpc node is accessible or in persist
 // finished state, returned string array will contain zero elements. Timeout is
 // in millisecond.
 func MeasureSeedRPCServerContext(ctx context.Context, seedRPCList *nkngomobile.StringArray, timeout int32, dialContext func(ctx context.Context, network, addr string) (net.Conn, error)) (*nkngomobile.StringArray, error) {

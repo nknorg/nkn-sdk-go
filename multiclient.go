@@ -93,7 +93,7 @@ type MultiClient struct {
 }
 
 // NewMultiClientV2 creates a MultiClient with an account, an optional identifier,
-// and a optional client config. For any zero value field in config, the default
+// and an optional client config. For any zero value field in config, the default
 // client config value will be used. If config is nil, the default client config
 // will be used.
 func NewMultiClientV2(account *Account, identifier string, config *ClientConfig) (*MultiClient, error) {
