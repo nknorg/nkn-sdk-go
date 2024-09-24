@@ -300,9 +300,9 @@ func sessionKey(remoteAddr string, sessionID []byte) string {
 }
 
 func randUint32() uint32 {
-	max := big.NewInt(4294967296)
+	m := big.NewInt(4294967296)
 	for {
-		result, err := rand.Int(rand.Reader, max)
+		result, err := rand.Int(rand.Reader, m)
 		if err != nil {
 			continue
 		}
@@ -311,10 +311,10 @@ func randUint32() uint32 {
 }
 
 func randUint64() uint64 {
-	max := new(big.Int).SetUint64(18446744073709551615)
-	max.Add(max, big.NewInt(1))
+	m := new(big.Int).SetUint64(18446744073709551615)
+	m.Add(m, big.NewInt(1))
 	for {
-		result, err := rand.Int(rand.Reader, max)
+		result, err := rand.Int(rand.Reader, m)
 		if err != nil {
 			continue
 		}
