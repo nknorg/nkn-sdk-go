@@ -111,8 +111,8 @@ type setClientResult struct {
 // optional client config. For any zero value field in config, the default
 // client config value will be used. If config is nil, the default client config
 // will be used.
-func NewClient(account *Account, identifier string, config *ClientConfig) (*Client, error) {
-	config, err := MergeClientConfig(config)
+func NewClient(account *Account, identifier string, cfg *ClientConfig) (*Client, error) {
+	cfg, err := MergeClientConfig(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -124,12 +124,12 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 	copy(sk[:], account.PrivKey())
 	curveSecretKey := ed25519.PrivateKeyToCurve25519PrivateKey(&sk)
 
-	w, err := NewWallet(account, &WalletConfig{SeedRPCServerAddr: config.SeedRPCServerAddr})
+	w, err := NewWallet(account, &WalletConfig{SeedRPCServerAddr: cfg.SeedRPCServerAddr})
 	if err != nil {
 		return nil, err
 	}
 
-	gomobileResolvers := config.Resolvers.Elems()
+	gomobileResolvers := cfg.Resolvers.Elems()
 	resolvers := make([]Resolver, 0, len(gomobileResolvers))
 	for i := 0; i < len(resolvers); i++ {
 		r, ok := gomobileResolvers[i].(Resolver)
@@ -140,16 +140,16 @@ func NewClient(account *Account, identifier string, config *ClientConfig) (*Clie
 	}
 
 	c := Client{
-		config:               config,
+		config:               cfg,
 		account:              account,
 		publicKey:            pk,
 		curveSecretKey:       curveSecretKey,
 		address:              addr,
 		addressID:            addressToID(addr),
 		OnConnect:            NewOnConnect(1, nil),
-		OnMessage:            NewOnMessage(int(config.MsgChanLen), nil),
+		OnMessage:            NewOnMessage(int(cfg.MsgChanLen), nil),
 		reconnectChan:        make(chan *Node),
-		responseChannels:     cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
+		responseChannels:     cache.New(time.Duration(cfg.MsgCacheExpiration)*time.Millisecond, time.Duration(cfg.MsgCacheCleanupInterval)*time.Millisecond),
 		sharedKeys:           make(map[string]*[sharedKeySize]byte),
 		wallet:               w,
 		chChallengeSignature: make(chan *stSaltAndSignature, 1), // client auth
@@ -223,12 +223,12 @@ func (c *Client) Close() error {
 
 	close(c.reconnectChan)
 
-	c.conn.Close()
+	err := c.conn.Close()
 
 	// client auth
 	close(c.chChallengeSignature)
 
-	return nil
+	return err
 }
 
 // GetNode returns the node that client is currently connected to.
@@ -886,8 +886,8 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 // Send sends bytes or string data to one or multiple destinations with an
 // optional config. Returned OnMessage channel will emit if a reply or ACK for
 // this message is received.
-func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, config *MessageConfig) (*OnMessage, error) {
-	config, err := MergeMessageConfig(c.config.MessageConfig, config)
+func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, cfg *MessageConfig) (*OnMessage, error) {
+	cfg, err := MergeMessageConfig(c.config.MessageConfig, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -902,17 +902,17 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, config *
 
 	payload, ok := data.(*payloads.Payload)
 	if !ok {
-		payload, err = newMessagePayload(data, config.MessageID, config.NoReply)
+		payload, err = newMessagePayload(data, cfg.MessageID, cfg.NoReply)
 		if err != nil {
 			return nil, err
 		}
 	}
-	if err := c.send(destArr.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds); err != nil {
+	if err := c.send(destArr.Elems(), payload, !cfg.Unencrypted, cfg.MaxHoldingSeconds); err != nil {
 		return nil, err
 	}
 
 	onReply := NewOnMessage(1, nil)
-	if !config.NoReply {
+	if !cfg.NoReply {
 		c.responseChannels.Add(string(payload.MessageId), onReply, cache.DefaultExpiration)
 	}
 
@@ -1214,20 +1214,20 @@ func (c *Client) send(dests []string, payload *payloads.Payload, encrypted bool,
 	return c.sendTimeout(dests, payload, encrypted, maxHoldingSeconds, time.Duration(c.config.WsWriteTimeout)*time.Millisecond)
 }
 
-func publish(c clientInterface, topic string, data interface{}, config *MessageConfig) error {
-	config, err := MergeMessageConfig(c.getConfig().MessageConfig, config)
+func publish(c clientInterface, topic string, data interface{}, cfg *MessageConfig) error {
+	cfg, err := MergeMessageConfig(c.getConfig().MessageConfig, cfg)
 	if err != nil {
 		return err
 	}
 
-	payload, err := newMessagePayload(data, config.MessageID, true)
+	payload, err := newMessagePayload(data, cfg.MessageID, true)
 	if err != nil {
 		return err
 	}
 
-	offset := int(config.Offset)
-	limit := int(config.Limit)
-	res, err := c.GetSubscribers(topic, offset, limit, false, config.TxPool, nil)
+	offset := int(cfg.Offset)
+	limit := int(cfg.Limit)
+	res, err := c.GetSubscribers(topic, offset, limit, false, cfg.TxPool, nil)
 	if err != nil {
 		return err
 	}
@@ -1251,13 +1251,13 @@ func publish(c clientInterface, topic string, data interface{}, config *MessageC
 		}
 	}
 
-	if config.TxPool {
+	if cfg.TxPool {
 		for subscriber := range subscribersInTxPool {
 			dests = append(dests, subscriber)
 		}
 	}
 
-	return c.send(dests, payload, !config.Unencrypted, config.MaxHoldingSeconds)
+	return c.send(dests, payload, !cfg.Unencrypted, cfg.MaxHoldingSeconds)
 }
 
 // Publish sends bytes or string data to all subscribers of a topic with an
