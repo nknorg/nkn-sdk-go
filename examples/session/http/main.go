@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	nkn "github.com/nknorg/nkn-sdk-go"
+	"github.com/nknorg/nkn-sdk-go"
 )
 
 const (

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	nkn "github.com/nknorg/nkn-sdk-go"
+	"github.com/nknorg/nkn-sdk-go"
 )
 
 const (

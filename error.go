@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	ncp "github.com/nknorg/ncp-go"
+	"github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn/v2/vault"
 )
 

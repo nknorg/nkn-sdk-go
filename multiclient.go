@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	multierror "github.com/hashicorp/go-multierror"
-	ncp "github.com/nknorg/ncp-go"
+	"github.com/hashicorp/go-multierror"
+	"github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkn-sdk-go/payloads"
 	"github.com/nknorg/nkn/v2/transaction"
 	"github.com/nknorg/nkn/v2/util/address"

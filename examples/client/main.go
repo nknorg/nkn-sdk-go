@@ -7,7 +7,7 @@ import (
 	"log"
 	"time"
 
-	nkn "github.com/nknorg/nkn-sdk-go"
+	"github.com/nknorg/nkn-sdk-go"
 )
 
 func main() {
