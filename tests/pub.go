@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	nkn "github.com/nknorg/nkn-sdk-go"
+	"github.com/nknorg/nkn-sdk-go"
 )
 
 func CreateClientConfig(numClients int, retries int32, webrtc bool) (config *nkn.ClientConfig) {

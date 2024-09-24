@@ -4,15 +4,14 @@ import (
 	"context"
 	"encoding/hex"
 	"flag"
+	"github.com/nknorg/nkn-sdk-go/examples/session/grpc/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"net"
 	"strings"
-	"time"
 
-	"github.com/nknorg/nkn-sdk-go/examples/session/grpc/proto"
-	"google.golang.org/grpc"
-
-	nkn "github.com/nknorg/nkn-sdk-go"
+	"github.com/nknorg/nkn-sdk-go"
 )
 
 const (
@@ -93,8 +92,8 @@ func main() {
 		}
 
 		var opts []grpc.DialOption
-		opts = append(opts, grpc.WithInsecure())
-		opts = append(opts, grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		opts = append(opts, grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			return m.Dial(addr)
 		}))
 		conn, err := grpc.Dial(*dialAddr, opts...)
