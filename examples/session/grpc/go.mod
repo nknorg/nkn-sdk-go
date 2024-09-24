@@ -1,6 +1,6 @@
 module github.com/nknorg/nkn-sdk-go/examples/session/grpc
 
-go 1.17
+go 1.22.0
 
 require (
 	github.com/nknorg/nkn-sdk-go v1.4.8
@@ -11,10 +11,10 @@ require (
 require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
-	github.com/hashicorp/errwrap v1.0.0 // indirect
-	github.com/hashicorp/go-multierror v1.0.0 // indirect
-	github.com/imdario/mergo v0.3.13 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/itchyny/base58-go v0.0.5 // indirect
 	github.com/nknorg/ncp-go v1.0.6 // indirect
 	github.com/nknorg/nkn/v2 v2.2.2-0.20240715231955-c2862f2d9d16 // indirect
@@ -39,11 +39,11 @@ require (
 	github.com/pion/transport/v3 v3.0.2 // indirect
 	github.com/pion/turn/v3 v3.0.2 // indirect
 	github.com/pion/webrtc/v4 v4.0.0-beta.17 // indirect
-	golang.org/x/crypto v0.21.0 // indirect
-	golang.org/x/mobile v0.0.0-20230301163155-e0f57694e12c // indirect
-	golang.org/x/net v0.23.0 // indirect
-	golang.org/x/sys v0.18.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/crypto v0.27.0 // indirect
+	golang.org/x/mobile v0.0.0-20240909163608-642950227fb3 // indirect
+	golang.org/x/net v0.29.0 // indirect
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/text v0.18.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/genproto v0.0.0-20230110181048-76db0878b65f // indirect
 )
