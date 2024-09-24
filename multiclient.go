@@ -2,6 +2,7 @@ package nkn
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"regexp"
@@ -228,7 +229,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 						}
 						err := m.handleSessionMsg(addIdentifier("", i-offset), msg.Src, msg.MessageID, msg.Data)
 						if err != nil {
-							if err != ncp.ErrSessionClosed && err != ErrAddrNotAllowed {
+							if !errors.Is(err, ncp.ErrSessionClosed) && !errors.Is(err, ErrAddrNotAllowed) {
 								log.Println(err)
 							}
 							continue
