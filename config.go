@@ -2,11 +2,10 @@ package nkn
 
 import (
 	"context"
-	"net"
-
-	"github.com/imdario/mergo"
-	ncp "github.com/nknorg/ncp-go"
+	"github.com/jinzhu/copier"
+	"github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkngomobile"
+	"net"
 )
 
 // DefaultSeedRPCServerAddr is the default seed rpc server address list.
@@ -321,7 +320,7 @@ func GetDefaultTransactionConfig() *TransactionConfig {
 func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
 	merged := GetDefaultClientConfig()
 	if conf != nil {
-		err := mergo.Merge(merged, conf, mergo.WithOverride)
+		err := copier.CopyWithOption(merged, conf, copier.Option{IgnoreEmpty: true})
 		if err != nil {
 			return nil, err
 		}
@@ -338,7 +337,7 @@ func MergeClientConfig(conf *ClientConfig) (*ClientConfig, error) {
 func MergeMessageConfig(base, conf *MessageConfig) (*MessageConfig, error) {
 	merged := *base
 	if conf != nil {
-		err := mergo.Merge(&merged, conf, mergo.WithOverride)
+		err := copier.CopyWithOption(&merged, conf, copier.Option{IgnoreEmpty: true})
 		if err != nil {
 			return nil, err
 		}
@@ -347,11 +346,11 @@ func MergeMessageConfig(base, conf *MessageConfig) (*MessageConfig, error) {
 }
 
 // MergeDialConfig merges a given dial config with the default dial config
-// recursively. Any non zero value fields will override the default config.
+// recursively. Any non-zero value fields will override the default config.
 func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConfig, error) {
 	merged := GetDefaultDialConfig(baseSessionConfig)
 	if conf != nil {
-		err := mergo.Merge(merged, conf, mergo.WithOverride)
+		err := copier.CopyWithOption(merged, conf, copier.Option{IgnoreEmpty: true})
 		if err != nil {
 			return nil, err
 		}
@@ -364,7 +363,7 @@ func MergeDialConfig(baseSessionConfig *ncp.Config, conf *DialConfig) (*DialConf
 func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
 	merged := GetDefaultWalletConfig()
 	if conf != nil {
-		err := mergo.Merge(merged, conf, mergo.WithOverride)
+		err := copier.CopyWithOption(merged, conf, copier.Option{IgnoreEmpty: true})
 		if err != nil {
 			return nil, err
 		}
@@ -376,12 +375,12 @@ func MergeWalletConfig(conf *WalletConfig) (*WalletConfig, error) {
 }
 
 // MergeTransactionConfig merges a given transaction config with the default
-// transaction config recursively. Any non zero value fields will override the
+// transaction config recursively. Any non-zero value fields will override the
 // default config.
 func MergeTransactionConfig(conf *TransactionConfig) (*TransactionConfig, error) {
 	merged := GetDefaultTransactionConfig()
 	if conf != nil {
-		err := mergo.Merge(merged, conf, mergo.WithOverride)
+		err := copier.CopyWithOption(merged, conf, copier.Option{IgnoreEmpty: true})
 		if err != nil {
 			return nil, err
 		}
