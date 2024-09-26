@@ -1,6 +1,6 @@
 module github.com/nknorg/nkn-sdk-go/examples/session/grpc
 
-go 1.22.0
+go 1.17
 
 require (
 	github.com/nknorg/nkn-sdk-go v1.4.8
