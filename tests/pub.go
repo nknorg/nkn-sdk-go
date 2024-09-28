@@ -84,7 +84,7 @@ func mcrecv(client *nkn.MultiClient, name string) (recv int, unreceived []int) {
 			gotExit++
 		} else {
 			if recvedNum, err := strconv.Atoi(string(msg.Data)); err == nil {
-				if _, ok := recved[recvedNum]; !ok { // 避开重复收取的计数
+				if _, ok := recved[recvedNum]; !ok {
 					recved[recvedNum] = 1 // record it.
 					log.Printf("%v recv: %v", name, recvedNum)
 					recv++
@@ -218,7 +218,6 @@ func mcsend(client *nkn.MultiClient, peer, name string, ch chan int) (sent, send
 	}
 
 	for i := 0; i < numExitMsgs; i++ {
-		// 多发几次exit，让接收端有机会收到更多的测试消息再退出
 		// Send exit a few more times to give the receiver a chance to receive more test messages before exiting
 		_, err := client.SendText(nkn.NewStringArray(peer), exitMsg, nil)
 		if err != nil {
