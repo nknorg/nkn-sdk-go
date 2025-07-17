@@ -87,6 +87,8 @@ type Client struct {
 	// client auth
 	chChallengeSignature chan *stSaltAndSignature
 	peer                 *webrtc.Peer
+
+	HasConnection bool
 }
 
 // client auth
@@ -452,6 +454,8 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 
 			node := c.GetNode()
 			c.OnConnect.receive(node)
+			c.HasConnection = true
+
 		case "updateSigChainBlockHash":
 			var sigChainBlockHash string
 			if err := json.Unmarshal(*msg["Result"], &sigChainBlockHash); err != nil {
@@ -804,6 +808,7 @@ func (c *Client) connect(maxRetries int, node *Node) error {
 
 // Reconnect forces the client to find node and connect again.
 func (c *Client) Reconnect(node *Node) {
+	c.HasConnection = false
 	if c.IsClosed() {
 		return
 	}
@@ -826,7 +831,10 @@ func (c *Client) handleReconnect() {
 		if err != nil {
 			log.Println(err)
 			c.Close()
+			c.HasConnection = true
 			return
+		} else {
+			c.HasConnection = false
 		}
 	}
 }
