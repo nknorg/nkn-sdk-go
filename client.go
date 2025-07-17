@@ -831,10 +831,7 @@ func (c *Client) handleReconnect() {
 		if err != nil {
 			log.Println(err)
 			c.Close()
-			c.HasConnection = true
 			return
-		} else {
-			c.HasConnection = false
 		}
 	}
 }
