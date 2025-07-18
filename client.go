@@ -363,7 +363,7 @@ func (c *Client) decryptPayload(msg *payloads.Message, srcAddr string) ([]byte, 
 
 	encryptedKey := msg.EncryptedKey
 	var decrypted []byte
-	if encryptedKey != nil && len(encryptedKey) > 0 {
+	if len(encryptedKey) > 0 {
 		var keyNonce, msgNonce [nonceSize]byte
 		copy(keyNonce[:], msg.Nonce[:nonceSize])
 		copy(msgNonce[:], msg.Nonce[nonceSize:])
