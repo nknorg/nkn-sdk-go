@@ -58,6 +58,23 @@ const (
 	waitForChallengeTimeout = 5 * time.Second
 )
 
+// ConnState represents the connection state of a client
+type ConnState int
+
+const (
+	ConnConnecting ConnState = iota
+	ConnConnected
+	ConnDisconnected
+)
+
+// ClientStats tracks statistics for a client to calculate stability score
+type ClientStats struct {
+	ConnectTime      time.Time // When the client first connected successfully to current node
+	ReconnectCount   int       // Number of reconnections
+	LastReconnect    time.Time // Last reconnection time
+	SendFailureCount int       // Number of send failures
+}
+
 // Client sends and receives data between any NKN clients regardless their
 // network condition without setting up a server or relying on any third party
 // services. Data are end-to-end encrypted by default. Typically, you might want
@@ -88,7 +105,8 @@ type Client struct {
 	chChallengeSignature chan *stSaltAndSignature
 	peer                 *webrtc.Peer
 
-	HasConnection bool
+	State ConnState
+	Stats *ClientStats // Statistics for stability scoring
 }
 
 // client auth
@@ -219,6 +237,7 @@ func (c *Client) Close() error {
 	}
 
 	c.isClosed = true
+	c.State = ConnDisconnected
 
 	c.OnConnect.close()
 	c.OnMessage.close()
@@ -444,18 +463,30 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			if err := json.Unmarshal(*msg["Result"], &result); err != nil {
 				return err
 			}
-			c.sigChainBlockHash = result.SigChainBlockHash
+			now := time.Now()
+			var node *Node
 
-			c.lock.RLock()
-			defer c.lock.RUnlock()
+			c.lock.Lock()
+			c.sigChainBlockHash = result.SigChainBlockHash
 			if c.isClosed {
+				c.lock.Unlock()
 				return nil
 			}
 
-			node := c.GetNode()
+			node = c.node
+			// Update connection statistics
+			if c.Stats == nil {
+				c.Stats = &ClientStats{
+					ConnectTime: now,
+				}
+			} else if c.State != ConnConnected {
+				// This is a reconnection to the same node
+				c.Stats.ReconnectCount++
+				c.Stats.LastReconnect = now
+			}
+			c.State = ConnConnected
+			c.lock.Unlock()
 			c.OnConnect.receive(node)
-			c.HasConnection = true
-
 		case "updateSigChainBlockHash":
 			var sigChainBlockHash string
 			if err := json.Unmarshal(*msg["Result"], &sigChainBlockHash); err != nil {
@@ -648,8 +679,29 @@ func (c *Client) connectToNode(node *Node) error {
 
 	c.lock.Lock()
 	prevConn := c.conn
+	prevNode := c.node
 	c.conn = conn
 	c.node = node
+	c.State = ConnConnecting // Set to connecting when establishing connection
+	now := time.Now()
+	// Check if node has changed - if so, reset statistics
+	if prevNode != nil && (prevNode.ID != node.ID || prevNode.Addr != node.Addr) {
+		// Node changed, reset statistics
+		if c.Stats == nil {
+			c.Stats = &ClientStats{}
+		}
+		c.Stats.ConnectTime = now
+		c.Stats.ReconnectCount = 0
+		c.Stats.LastReconnect = now
+		c.Stats.SendFailureCount = 0
+	} else if prevNode == nil {
+		// First connection
+		if c.Stats == nil {
+			c.Stats = &ClientStats{}
+		}
+		c.Stats.ConnectTime = now
+	}
+
 	if len(rpcAddr) > 0 {
 		c.wallet.config.SeedRPCServerAddr = nkngomobile.NewStringArray(rpcAddr)
 	} else {
@@ -808,7 +860,9 @@ func (c *Client) connect(maxRetries int, node *Node) error {
 
 // Reconnect forces the client to find node and connect again.
 func (c *Client) Reconnect(node *Node) {
-	c.HasConnection = false
+	c.lock.Lock()
+	c.State = ConnConnecting
+	c.lock.Unlock()
 	if c.IsClosed() {
 		return
 	}
@@ -885,7 +939,17 @@ func (c *Client) sendReceipt(prevSignature []byte) error {
 		return err
 	}
 
-	return c.writeMessage(buf, time.Duration(c.config.WsWriteTimeout)*time.Millisecond)
+	err = c.writeMessage(buf, time.Duration(c.config.WsWriteTimeout)*time.Millisecond)
+	if err != nil {
+		// Record send failure
+		c.lock.Lock()
+		if c.Stats == nil {
+			c.Stats = &ClientStats{}
+		}
+		c.Stats.SendFailureCount++
+		c.lock.Unlock()
+	}
+	return err
 }
 
 // Send sends bytes or string data to one or multiple destinations with an
@@ -1208,6 +1272,12 @@ func (c *Client) sendTimeout(dests []string, payload *payloads.Payload, encrypte
 
 		err = c.writeMessage(buf, writeTimeout)
 		if err != nil {
+			c.lock.Lock()
+			if c.Stats == nil {
+				c.Stats = &ClientStats{}
+			}
+			c.Stats.SendFailureCount++
+			c.lock.Unlock()
 			return err
 		}
 	}

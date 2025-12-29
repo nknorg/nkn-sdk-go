@@ -41,10 +41,37 @@ var (
 	multiClientIdentifierRe = regexp.MustCompile(MultiClientIdentifierRe)
 )
 
+// SubClientConnEvent contains connection state information for a sub-client
+type SubClientConnEvent struct {
+	BaseAddress string
+	SubAddress  string
+	Index       int
+	State       ConnState
+	Err         error
+
+	NodeAddr string
+	NodeID   string
+}
+
 func addMultiClientPrefix(dest []string, clientID int) []string {
 	result := make([]string, len(dest))
 	for i, addr := range dest {
 		result[i] = addIdentifier(addr, clientID)
+	}
+	return result
+}
+
+// addMultiClientPrefixForAllSubClients adds identifier prefix for all subclients to destinations.
+// This is used for cross send where message should be sent to all subclients.
+func addMultiClientPrefixForAllSubClients(dest []string, clientIDs []int) []string {
+	if len(clientIDs) == 0 {
+		return dest
+	}
+	result := make([]string, 0, len(dest)*len(clientIDs))
+	for _, addr := range dest {
+		for _, clientID := range clientIDs {
+			result = append(result, addIdentifier(addr, clientID))
+		}
 	}
 	return result
 }
@@ -82,12 +109,15 @@ type MultiClient struct {
 	msgCache      *cache.Cache
 	resolvers     []Resolver
 
-	lock          sync.RWMutex
-	clients       map[int]*Client
-	defaultClient *Client
-	acceptAddrs   []*regexp.Regexp
-	isClosed      bool
-	createDone    bool
+	lock           sync.RWMutex
+	clients        map[int]*Client
+	clientErrors   map[int]error
+	defaultClient  *Client
+	acceptAddrs    []*regexp.Regexp
+	isClosed       bool
+	createDone     bool
+	numSubClients  int
+	originalClient bool
 
 	sessionLock sync.Mutex
 	sessions    map[string]*ncp.Session
@@ -140,18 +170,21 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 	}
 
 	m := &MultiClient{
-		config:        config,
-		offset:        offset,
-		addr:          NewClientAddr(addr),
-		OnConnect:     NewOnConnect(1, nil),
-		OnMessage:     NewOnMessage(int(config.MsgChanLen), nil),
-		acceptSession: make(chan *ncp.Session, acceptSessionBufSize),
-		onClose:       make(chan struct{}),
-		msgCache:      cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
-		clients:       make(map[int]*Client, numClients),
-		defaultClient: nil,
-		sessions:      make(map[string]*ncp.Session),
-		resolvers:     resolvers,
+		config:         config,
+		offset:         offset,
+		addr:           NewClientAddr(addr),
+		OnConnect:      NewOnConnect(1, nil),
+		OnMessage:      NewOnMessage(int(config.MsgChanLen), nil),
+		acceptSession:  make(chan *ncp.Session, acceptSessionBufSize),
+		onClose:        make(chan struct{}),
+		msgCache:       cache.New(time.Duration(config.MsgCacheExpiration)*time.Millisecond, time.Duration(config.MsgCacheCleanupInterval)*time.Millisecond),
+		clients:        make(map[int]*Client, numClients),
+		clientErrors:   make(map[int]error),
+		defaultClient:  nil,
+		sessions:       make(map[string]*ncp.Session),
+		resolvers:      resolvers,
+		numSubClients:  numSubClients,
+		originalClient: originalClient,
 	}
 
 	var wg sync.WaitGroup
@@ -164,7 +197,14 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 		go func(i int) {
 			client, err := NewClient(account, addIdentifier(baseIdentifier, i), config)
 			if err != nil {
-				log.Println(err)
+				log.Printf("Failed to create client[%d]: %v", i, err)
+				// Record the error for this client index
+				m.lock.Lock()
+				if m.clientErrors == nil {
+					m.clientErrors = make(map[int]error)
+				}
+				m.clientErrors[i] = err
+				m.lock.Unlock()
 				wg.Done()
 				return
 			}
@@ -209,6 +249,7 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 							m.lock.RUnlock()
 							return
 						}
+						// Statistics are now managed by Client itself
 						m.OnConnect.receive(node)
 						m.lock.RUnlock()
 					case <-m.onClose:
@@ -424,6 +465,28 @@ func (m *MultiClient) sendWithClient(clientID int, dests []string, payload *payl
 		return ErrNilClient
 	}
 
+	// Check if cross send is enabled
+	useCrossSend := m.config.CrossSendPolicy != CrossSendPolicyNone
+	if useCrossSend {
+		m.lock.RLock()
+		offset := 0
+		if m.originalClient {
+			offset = 1
+		}
+		numSubClients := m.numSubClients
+		m.lock.RUnlock()
+		// Generate all expected client IDs (same format as in NewMultiClient)
+		allClientIDs := make([]int, 0, numSubClients+offset)
+		for i := -offset; i < numSubClients; i++ {
+			allClientIDs = append(allClientIDs, i)
+		}
+
+		// Add prefix for all subclients to destinations
+		finalDests := addMultiClientPrefixForAllSubClients(dests, allClientIDs)
+		return client.send(finalDests, payload, encrypted, maxHoldingSeconds)
+	}
+
+	// Normal send: add prefix only for this specific client
 	return client.send(addMultiClientPrefix(dests, clientID), payload, encrypted, maxHoldingSeconds)
 }
 
@@ -456,14 +519,10 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 	var errs error
 	var onRawReply *OnMessage
 	onReply := NewOnMessage(1, nil)
-	clients := m.GetClients()
 
 	if !config.NoReply {
 		onRawReply = NewOnMessage(1, nil)
-		// response channel is added first to prevent some client fail to handle response if send finish before receive response
-		for _, client := range clients {
-			client.responseChannels.Add(string(payload.MessageId), onRawReply, cache.DefaultExpiration)
-		}
+		// response channel will be added per client in the goroutine based on policy
 	}
 
 	success := make(chan struct{}, 1)
@@ -471,7 +530,16 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 
 	go func() {
 		sent := 0
-		for clientID := range clients {
+		clientIDs := m.getClientsByPolicy()
+		for _, clientID := range clientIDs {
+			client := m.GetClient(clientID)
+			if client == nil {
+				continue
+			}
+			// Only add response channel for clients that will actually send
+			if !config.NoReply {
+				client.responseChannels.Add(string(payload.MessageId), onRawReply, cache.DefaultExpiration)
+			}
 			err := m.sendWithClient(clientID, destArr.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds)
 			if err == nil {
 				select {
@@ -525,6 +593,162 @@ func (m *MultiClient) SendPayload(dests *nkngomobile.StringArray, payload *paylo
 	return m.Send(dests, payload, config)
 }
 
+// getAllClientIDs returns all client IDs from the clients map
+func (m *MultiClient) getAllClientIDs(allClients map[int]*Client) []int {
+	clientIDs := make([]int, 0, len(allClients))
+	for id := range allClients {
+		clientIDs = append(clientIDs, id)
+	}
+	return clientIDs
+}
+
+// CalculateClientScore calculates a stability score for a client based on:
+// - Connection duration (longer is better)
+// - Reconnect count (fewer is better)
+// - Send failure count (fewer is better)
+// - Connection state (must be connected)
+// Returns a score between 0 and 1, where higher is better
+func (m *MultiClient) CalculateClientScore(client *Client, now time.Time) float64 {
+	// Base score starts at 0.5 for being connected
+	score := 0.5
+
+	client.lock.RLock()
+	stats := client.Stats
+	client.lock.RUnlock()
+
+	if stats != nil {
+		// Connection duration score (0-0.4 points)
+		// Longer connection = higher score
+		// Max score at 1 hour of connection
+		connectionDuration := now.Sub(stats.ConnectTime)
+		if connectionDuration > 0 {
+			// Normalize to 0-0.4, with 1 hour = 0.4
+			durationScore := float64(connectionDuration) / float64(time.Hour)
+			if durationScore > 1.0 {
+				durationScore = 1.0
+			}
+			score += durationScore * 0.4
+		}
+
+		// Reconnect penalty (0-0.1 points deduction)
+		// Fewer reconnects = higher score
+		// Each reconnect reduces score by 0.02, max penalty 0.1
+		reconnectPenalty := float64(stats.ReconnectCount) * 0.02
+		if reconnectPenalty > 0.1 {
+			reconnectPenalty = 0.1
+		}
+		score -= reconnectPenalty
+
+		// Send failure penalty (0-0.1 points deduction)
+		// Fewer send failures = higher score
+		// Each send failure reduces score by 0.01, max penalty 0.1
+		sendFailurePenalty := float64(stats.SendFailureCount) * 0.01
+		if sendFailurePenalty > 0.1 {
+			sendFailurePenalty = 0.1
+		}
+		score -= sendFailurePenalty
+	}
+
+	// Ensure score is between 0 and 1
+	if score < 0 {
+		score = 0
+	}
+	if score > 1 {
+		score = 1
+	}
+
+	return score
+}
+
+// getClientsByPolicy returns a list of client IDs to use based on CrossSendPolicy
+func (m *MultiClient) getClientsByPolicy() []int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	allClients := m.clients
+	if len(allClients) == 0 {
+		return nil
+	}
+
+	// Get policy from config
+	policy := m.config.CrossSendPolicy
+
+	switch policy {
+	case CrossSendPolicyNone:
+		// No cross send - use all clients (default behavior)
+		return m.getAllClientIDs(allClients)
+
+	case CrossSendPolicyAnyConnected:
+		// Any connected line sends (cross) - return first connected client
+		for id, client := range allClients {
+			if client != nil && !client.IsClosed() {
+				client.lock.RLock()
+				state := client.State
+				client.lock.RUnlock()
+				if state == ConnConnected {
+					return []int{id}
+				}
+			}
+		}
+		// If no connected client, return all clients to try
+		return m.getAllClientIDs(allClients)
+
+	case CrossSendPolicyAllConnected:
+		// Broadcast all connected lines (redundant sending)
+		clientIDs := make([]int, 0, len(allClients))
+		for id, client := range allClients {
+			if client != nil && !client.IsClosed() {
+				client.lock.RLock()
+				state := client.State
+				client.lock.RUnlock()
+				if state == ConnConnected {
+					clientIDs = append(clientIDs, id)
+				}
+			}
+		}
+		// If no connected client, return all clients to try
+		if len(clientIDs) == 0 {
+			return m.getAllClientIDs(allClients)
+		}
+		return clientIDs
+
+	case CrossSendPolicyPreferStable:
+		// Select the most stable/low latency line using scoring system
+		var bestClientID int = -1
+		var bestScore float64 = -1
+		now := time.Now()
+
+		for id, client := range allClients {
+			if client == nil || client.IsClosed() {
+				continue
+			}
+			client.lock.RLock()
+			state := client.State
+			client.lock.RUnlock()
+			if state != ConnConnected {
+				continue
+			}
+
+			// Calculate stability score for this client
+			score := m.CalculateClientScore(client, now)
+			if score > bestScore {
+				bestScore = score
+				bestClientID = id
+			}
+		}
+
+		if bestClientID >= 0 {
+			return []int{bestClientID}
+		}
+		// If no connected client, return all clients to try
+		return m.getAllClientIDs(allClients)
+
+	default:
+		// Default behavior - use all clients
+		return m.getAllClientIDs(allClients)
+	}
+}
+
 func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted bool, maxHoldingSeconds int32) error {
 	var lock sync.Mutex
 	var errs error
@@ -532,7 +756,8 @@ func (m *MultiClient) send(dests []string, payload *payloads.Payload, encrypted 
 	fail := make(chan struct{}, 1)
 	go func() {
 		sent := 0
-		for clientID := range m.GetClients() {
+		clientIDs := m.getClientsByPolicy()
+		for _, clientID := range clientIDs {
 			err := m.sendWithClient(clientID, dests, payload, encrypted, maxHoldingSeconds)
 			if err == nil {
 				select {
@@ -1117,4 +1342,97 @@ func (m *MultiClient) Unsubscribe(identifier, topic string, config *TransactionC
 // multiclient as SignerRPCClient.
 func (m *MultiClient) UnsubscribeContext(ctx context.Context, identifier, topic string, config *TransactionConfig) (string, error) {
 	return UnsubscribeContext(ctx, m, identifier, topic, config)
+}
+
+// GetAllSubConnStates returns the connection state of all sub-clients.
+// It returns a slice of SubClientConnEvent containing state information for each client,
+// including clients that failed to create or connect.
+func (m *MultiClient) GetAllSubConnStates() []SubClientConnEvent {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	// Get base address (MultiClient address without sub-client identifier prefix)
+	baseAddr := m.addr.String()
+
+	// Calculate all expected client indices
+	expectedIndices := make(map[int]bool)
+	offset := 0
+	if m.originalClient {
+		offset = 1
+	}
+	for i := -offset; i < m.numSubClients; i++ {
+		expectedIndices[i] = true
+	}
+
+	states := make([]SubClientConnEvent, 0, len(expectedIndices))
+
+	// Process all expected clients
+	for index := range expectedIndices {
+		client, exists := m.clients[index]
+		var state ConnState
+		var subAddr string
+		var nodeAddr, nodeID string
+		var connErr error
+
+		if !exists {
+			// Client creation failed
+			connErr = m.clientErrors[index]
+			// If no error was recorded, create a generic error message
+			if connErr == nil {
+				connErr = ErrCreateClientFailed
+			}
+			// Construct expected address for failed client using the same logic as addIdentifier
+			subAddr = addIdentifier(baseAddr, index)
+		} else if client == nil {
+			subAddr = baseAddr
+		} else {
+			// Client exists, get its actual address and state
+			subAddr = client.Address()
+
+			client.lock.RLock()
+			isClosed := client.isClosed
+			connState := client.State
+			node := client.node
+			client.lock.RUnlock()
+
+			if isClosed {
+				state = ConnDisconnected
+			} else {
+				// Map Client's ConnState to ConnState (they are the same now)
+				state = connState
+				if connState == ConnConnected && node != nil {
+					nodeAddr = node.Addr
+					nodeID = node.ID
+				}
+			}
+		}
+
+		event := SubClientConnEvent{
+			BaseAddress: baseAddr, // MultiClient base address
+			SubAddress:  subAddr,  // Sub-client's actual address
+			Index:       index,
+			State:       state,
+			Err:         connErr,
+			NodeAddr:    nodeAddr,
+			NodeID:      nodeID,
+		}
+
+		states = append(states, event)
+	}
+
+	return states
+}
+
+// GetClientStats returns connection statistics for a specific client.
+// This is useful for understanding which client will be selected by CrossSendPolicyPreferStable.
+func (m *MultiClient) GetClientStats(clientID int) *ClientStats {
+	m.lock.RLock()
+	client := m.clients[clientID]
+	m.lock.RUnlock()
+
+	if client == nil || client.Stats == nil {
+		return nil
+	}
+
+	return client.Stats
 }

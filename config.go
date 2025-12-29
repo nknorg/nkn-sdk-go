@@ -2,10 +2,11 @@ package nkn
 
 import (
 	"context"
+	"net"
+
 	"github.com/jinzhu/copier"
 	"github.com/nknorg/ncp-go"
 	"github.com/nknorg/nkngomobile"
-	"net"
 )
 
 // DefaultSeedRPCServerAddr is the default seed rpc server address list.
@@ -26,6 +27,15 @@ var DefaultStunServerAddr = []string{
 	"stun:stun.cloudflare.com:3478",
 	"stun:stunserver.stunprotocol.org:3478",
 }
+
+type CrossSendPolicy int
+
+const (
+	CrossSendPolicyNone         CrossSendPolicy = iota // No cross send
+	CrossSendPolicyAnyConnected                        // Any connected line sends (cross)
+	CrossSendPolicyAllConnected                        // All connected lines (redundant sending)
+	CrossSendPolicyPreferStable                        // Select the most stable/low latency line
+)
 
 // ClientConfig is the client configuration.
 type ClientConfig struct {
@@ -57,6 +67,7 @@ type ClientConfig struct {
 
 	MultiClientNumClients     int  // Number of sub clients to create (MultiClient only)
 	MultiClientOriginalClient bool // Whether to create original client without identifier prefix (MultiClient only)
+	CrossSendPolicy           CrossSendPolicy
 }
 
 // DefaultClientConfig is the default client config.
@@ -85,6 +96,7 @@ var DefaultClientConfig = ClientConfig{
 	WebRTCConnectTimeout:      10000,
 	MultiClientNumClients:     4,
 	MultiClientOriginalClient: false,
+	CrossSendPolicy:           CrossSendPolicyNone,
 }
 
 // GetDefaultClientConfig returns the default client config with nil pointer
