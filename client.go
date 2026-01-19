@@ -80,8 +80,9 @@ type ClientStats struct {
 // services. Data are end-to-end encrypted by default. Typically, you might want
 // to use multiclient instead of using client directly.
 type Client struct {
-	OnConnect *OnConnect // Event emitting channel when client connects to node and becomes ready to send messages. One should only use the first event of the channel.
-	OnMessage *OnMessage // Event emitting channel when client receives a message (not including reply or ACK).
+	OnConnect      *OnConnect      // Event emitting channel when client connects to node and becomes ready to send messages. One should only use the first event of the channel.
+	OnMessage      *OnMessage      // Event emitting channel when client receives a message (not including reply or ACK).
+	OnMessageEvent *OnMessageEvent // Event emitting channel for message send/receive events for monitoring and reporting.
 
 	config            *ClientConfig
 	account           *Account
@@ -168,6 +169,7 @@ func NewClient(account *Account, identifier string, cfg *ClientConfig) (*Client,
 		addressID:            addressToID(addr),
 		OnConnect:            NewOnConnect(1, nil),
 		OnMessage:            NewOnMessage(int(cfg.MsgChanLen), nil),
+		OnMessageEvent:       NewOnMessageEvent(100, nil), // Buffer size for message events
 		reconnectChan:        make(chan *Node),
 		responseChannels:     cache.New(time.Duration(cfg.MsgCacheExpiration)*time.Millisecond, time.Duration(cfg.MsgCacheCleanupInterval)*time.Millisecond),
 		sharedKeys:           make(map[string]*[sharedKeySize]byte),
@@ -241,6 +243,9 @@ func (c *Client) Close() error {
 
 	c.OnConnect.close()
 	c.OnMessage.close()
+	if c.OnMessageEvent != nil {
+		c.OnMessageEvent.close()
+	}
 
 	close(c.reconnectChan)
 
@@ -586,14 +591,49 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 				NoReply:   payload.NoReply,
 			}
 
+			// Emit message receive event
+			dataSize := len(data)
+			if data == nil {
+				dataSize = 0
+			}
+
 			if len(payload.ReplyToId) > 0 {
 				msgIDString := string(payload.ReplyToId)
 				onReply, ok := c.responseChannels.Get(msgIDString)
 				if ok {
 					c.responseChannels.Delete(msgIDString)
+					// Emit reply receive event
+					if c.OnMessageEvent != nil {
+						c.OnMessageEvent.receive(&MessageEvent{
+							Type:        MessageEventTypeReceiveReply,
+							ClientAddr:  c.Address(),
+							Src:         inboundMsg.Src,
+							MessageID:   payload.MessageId,
+							MessageType: int32(payload.Type),
+							Encrypted:   payloadMsg.Encrypted,
+							DataSize:    dataSize,
+							NoReply:     payload.NoReply,
+							Timestamp:   time.Now(),
+						})
+					}
 					onReply.(*OnMessage).receive(msg, false)
 				}
 				return nil
+			}
+
+			// Emit regular receive event
+			if c.OnMessageEvent != nil {
+				c.OnMessageEvent.receive(&MessageEvent{
+					Type:        MessageEventTypeReceive,
+					ClientAddr:  c.Address(),
+					Src:         inboundMsg.Src,
+					MessageID:   payload.MessageId,
+					MessageType: int32(payload.Type),
+					Encrypted:   payloadMsg.Encrypted,
+					DataSize:    dataSize,
+					NoReply:     payload.NoReply,
+					Timestamp:   time.Now(),
+				})
 			}
 
 			if payload.NoReply {
@@ -976,8 +1016,52 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, cfg *Mes
 			return nil, err
 		}
 	}
+
+	// Emit message send event
+	destList := destArr.Elems()
+	if c.OnMessageEvent != nil {
+		c.OnMessageEvent.receive(&MessageEvent{
+			Type:         MessageEventTypeSend,
+			ClientAddr:   c.Address(),
+			Destinations: destList,
+			MessageID:    payload.MessageId,
+			MessageType:  int32(payload.Type),
+			Encrypted:    !cfg.Unencrypted,
+			NoReply:      cfg.NoReply,
+			Timestamp:    time.Now(),
+		})
+	}
+
 	if err := c.send(destArr.Elems(), payload, !cfg.Unencrypted, cfg.MaxHoldingSeconds); err != nil {
+		// Emit send failed event
+		if c.OnMessageEvent != nil {
+			c.OnMessageEvent.receive(&MessageEvent{
+				Type:         MessageEventTypeSendFailed,
+				ClientAddr:   c.Address(),
+				Destinations: destList,
+				MessageID:    payload.MessageId,
+				MessageType:  int32(payload.Type),
+				Encrypted:    !cfg.Unencrypted,
+				NoReply:      cfg.NoReply,
+				Error:        err,
+				Timestamp:    time.Now(),
+			})
+		}
 		return nil, err
+	}
+
+	// Emit send success event
+	if c.OnMessageEvent != nil {
+		c.OnMessageEvent.receive(&MessageEvent{
+			Type:         MessageEventTypeSendSuccess,
+			ClientAddr:   c.Address(),
+			Destinations: destList,
+			MessageID:    payload.MessageId,
+			MessageType:  int32(payload.Type),
+			Encrypted:    !cfg.Unencrypted,
+			NoReply:      cfg.NoReply,
+			Timestamp:    time.Now(),
+		})
 	}
 
 	onReply := NewOnMessage(1, nil)

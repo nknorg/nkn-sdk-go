@@ -260,6 +260,101 @@ func (c *OnError) close() {
 	close(c.C)
 }
 
+// MessageEventType represents the type of message event
+type MessageEventType int
+
+const (
+	// MessageEventTypeSend represents a message send event
+	MessageEventTypeSend MessageEventType = iota
+	// MessageEventTypeSendSuccess represents a successful message send
+	MessageEventTypeSendSuccess
+	// MessageEventTypeSendFailed represents a failed message send
+	MessageEventTypeSendFailed
+	// MessageEventTypeReceive represents a message receive event
+	MessageEventTypeReceive
+	// MessageEventTypeReceiveReply represents a reply message receive event
+	MessageEventTypeReceiveReply
+)
+
+// MessageEvent contains information about a message send or receive event
+type MessageEvent struct {
+	Type         MessageEventType // Event type
+	ClientAddr   string           // Client address that sent/received the message
+	SubClientID  *int             // Sub-client ID (nil for Client, set for MultiClient)
+	Destinations []string         // Destination addresses (for send events)
+	Src          string           // Source address (for receive events)
+	MessageID    []byte           // Message ID
+	MessageType  int32            // Message type (BinaryType, TextType, etc.)
+	Encrypted    bool             // Whether message is encrypted
+	DataSize     int              // Data size in bytes
+	NoReply      bool             // Whether message has NoReply flag
+	Error        error            // Error if operation failed (for send events)
+	Timestamp    time.Time        // Event timestamp
+}
+
+// OnMessageEventFunc is a wrapper type for gomobile compatibility.
+type OnMessageEventFunc interface{ OnMessageEvent(*MessageEvent) }
+
+// OnMessageEvent is a wrapper type for gomobile compatibility.
+type OnMessageEvent struct {
+	C        chan *MessageEvent
+	Callback OnMessageEventFunc
+}
+
+// NewOnMessageEvent creates an OnMessageEvent channel with a channel size and callback
+// function.
+func NewOnMessageEvent(size int, cb OnMessageEventFunc) *OnMessageEvent {
+	return &OnMessageEvent{
+		C:        make(chan *MessageEvent, size),
+		Callback: cb,
+	}
+}
+
+// Next waits and returns the next element from the channel.
+func (c *OnMessageEvent) Next() *MessageEvent {
+	return <-c.C
+}
+
+// MaybeNext returns the next element in the channel, or nil if channel is
+// empty.
+func (c *OnMessageEvent) MaybeNext() *MessageEvent {
+	select {
+	case v := <-c.C:
+		return v
+	default:
+		return nil
+	}
+}
+
+// NextWithTimeout waits and returns the next element from the channel, timeout in millisecond.
+func (c *OnMessageEvent) NextWithTimeout(timeout int32) *MessageEvent {
+	if timeout == 0 {
+		return <-c.C
+	}
+	select {
+	case msg := <-c.C:
+		return msg
+	case <-time.After(time.Duration(timeout) * time.Millisecond):
+		return nil
+	}
+}
+
+func (c *OnMessageEvent) receive(event *MessageEvent) {
+	if c.Callback != nil {
+		c.Callback.OnMessageEvent(event)
+	} else {
+		select {
+		case c.C <- event:
+		default:
+			// Channel full, silently drop event
+		}
+	}
+}
+
+func (c *OnMessageEvent) close() {
+	close(c.C)
+}
+
 // ClientAddr represents NKN client address. It implements net.Addr interface.
 type ClientAddr struct {
 	addr string
