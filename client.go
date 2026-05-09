@@ -59,20 +59,19 @@ const (
 )
 
 // ConnState represents the connection state of a client
-type ConnState int
 
 const (
-	ConnConnecting ConnState = iota
+	ConnConnecting int32 = iota
 	ConnConnected
 	ConnDisconnected
 )
 
 // ClientStats tracks statistics for a client to calculate stability score
 type ClientStats struct {
-	ConnectTime      time.Time // When the client first connected successfully to current node
-	ReconnectCount   int       // Number of reconnections
-	LastReconnect    time.Time // Last reconnection time
-	SendFailureCount int       // Number of send failures
+	ConnectTime      int64 // When the client first connected successfully (Unix milliseconds)
+	ReconnectCount   int   // Number of reconnections
+	LastReconnect    int64 // Last reconnection time (Unix milliseconds)
+	SendFailureCount int   // Number of send failures
 }
 
 // Client sends and receives data between any NKN clients regardless their
@@ -106,7 +105,7 @@ type Client struct {
 	chChallengeSignature chan *stSaltAndSignature
 	peer                 *webrtc.Peer
 
-	State ConnState
+	State int32
 	Stats *ClientStats // Statistics for stability scoring
 }
 
@@ -482,12 +481,12 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			// Update connection statistics
 			if c.Stats == nil {
 				c.Stats = &ClientStats{
-					ConnectTime: now,
+					ConnectTime: now.UnixMilli(),
 				}
 			} else if c.State != ConnConnected {
 				// This is a reconnection to the same node
 				c.Stats.ReconnectCount++
-				c.Stats.LastReconnect = now
+				c.Stats.LastReconnect = now.UnixMilli()
 			}
 			c.State = ConnConnected
 			c.lock.Unlock()
@@ -605,15 +604,16 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 					// Emit reply receive event
 					if c.OnMessageEvent != nil {
 						c.OnMessageEvent.receive(&MessageEvent{
-							Type:        MessageEventTypeReceiveReply,
+							Type:        int32(MessageEventTypeReceiveReply),
 							ClientAddr:  c.Address(),
+							SubClientID: -1, // Not applicable for Client
 							Src:         inboundMsg.Src,
 							MessageID:   payload.MessageId,
 							MessageType: int32(payload.Type),
 							Encrypted:   payloadMsg.Encrypted,
 							DataSize:    dataSize,
 							NoReply:     payload.NoReply,
-							Timestamp:   time.Now(),
+							Timestamp:   time.Now().UnixMilli(),
 						})
 					}
 					onReply.(*OnMessage).receive(msg, false)
@@ -624,15 +624,16 @@ func (c *Client) handleMessage(msgType int, data []byte) error {
 			// Emit regular receive event
 			if c.OnMessageEvent != nil {
 				c.OnMessageEvent.receive(&MessageEvent{
-					Type:        MessageEventTypeReceive,
+					Type:        int32(MessageEventTypeReceive),
 					ClientAddr:  c.Address(),
+					SubClientID: -1, // Not applicable for Client
 					Src:         inboundMsg.Src,
 					MessageID:   payload.MessageId,
 					MessageType: int32(payload.Type),
 					Encrypted:   payloadMsg.Encrypted,
 					DataSize:    dataSize,
 					NoReply:     payload.NoReply,
-					Timestamp:   time.Now(),
+					Timestamp:   time.Now().UnixMilli(),
 				})
 			}
 
@@ -730,16 +731,16 @@ func (c *Client) connectToNode(node *Node) error {
 		if c.Stats == nil {
 			c.Stats = &ClientStats{}
 		}
-		c.Stats.ConnectTime = now
+		c.Stats.ConnectTime = now.UnixMilli()
 		c.Stats.ReconnectCount = 0
-		c.Stats.LastReconnect = now
+		c.Stats.LastReconnect = now.UnixMilli()
 		c.Stats.SendFailureCount = 0
 	} else if prevNode == nil {
 		// First connection
 		if c.Stats == nil {
 			c.Stats = &ClientStats{}
 		}
-		c.Stats.ConnectTime = now
+		c.Stats.ConnectTime = now.UnixMilli()
 	}
 
 	if len(rpcAddr) > 0 {
@@ -1019,16 +1020,21 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, cfg *Mes
 
 	// Emit message send event
 	destList := destArr.Elems()
+	var destArray *nkngomobile.StringArray
+	if len(destList) > 0 {
+		destArray = nkngomobile.NewStringArray(destList...)
+	}
 	if c.OnMessageEvent != nil {
 		c.OnMessageEvent.receive(&MessageEvent{
-			Type:         MessageEventTypeSend,
+			Type:         int32(MessageEventTypeSend),
 			ClientAddr:   c.Address(),
-			Destinations: destList,
+			SubClientID:  -1, // Not applicable for Client
+			Destinations: destArray,
 			MessageID:    payload.MessageId,
 			MessageType:  int32(payload.Type),
 			Encrypted:    !cfg.Unencrypted,
 			NoReply:      cfg.NoReply,
-			Timestamp:    time.Now(),
+			Timestamp:    time.Now().UnixMilli(),
 		})
 	}
 
@@ -1036,15 +1042,16 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, cfg *Mes
 		// Emit send failed event
 		if c.OnMessageEvent != nil {
 			c.OnMessageEvent.receive(&MessageEvent{
-				Type:         MessageEventTypeSendFailed,
+				Type:         int32(MessageEventTypeSendFailed),
 				ClientAddr:   c.Address(),
-				Destinations: destList,
+				SubClientID:  -1, // Not applicable for Client
+				Destinations: destArray,
 				MessageID:    payload.MessageId,
 				MessageType:  int32(payload.Type),
 				Encrypted:    !cfg.Unencrypted,
 				NoReply:      cfg.NoReply,
 				Error:        err,
-				Timestamp:    time.Now(),
+				Timestamp:    time.Now().UnixMilli(),
 			})
 		}
 		return nil, err
@@ -1053,14 +1060,15 @@ func (c *Client) Send(dests *nkngomobile.StringArray, data interface{}, cfg *Mes
 	// Emit send success event
 	if c.OnMessageEvent != nil {
 		c.OnMessageEvent.receive(&MessageEvent{
-			Type:         MessageEventTypeSendSuccess,
+			Type:         int32(MessageEventTypeSendSuccess),
 			ClientAddr:   c.Address(),
-			Destinations: destList,
+			SubClientID:  -1, // Not applicable for Client
+			Destinations: destArray,
 			MessageID:    payload.MessageId,
 			MessageType:  int32(payload.Type),
 			Encrypted:    !cfg.Unencrypted,
 			NoReply:      cfg.NoReply,
-			Timestamp:    time.Now(),
+			Timestamp:    time.Now().UnixMilli(),
 		})
 	}
 

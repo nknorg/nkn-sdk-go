@@ -185,13 +185,13 @@ func displayClientScores(mc *nkn.MultiClient) {
 
 	log.Println("\nClient Scores (sorted by score, highest first):")
 	log.Println("┌───────┬────────────┬──────────────┬──────────────┬──────────────┬───────────┬─────────┐")
-	log.Println("│ Client│   State    │ Connect Time │ Reconnects   │ Send Failures │ Duration  │  Score  │")
+	log.Println("│ Client│   State    │ Connect Time │ Reconnects   │ Send Failures│ Duration  │  Score  │")
 	log.Println("├───────┼────────────┼──────────────┼──────────────┼──────────────┼───────────┼─────────┤")
 
 	type clientScoreInfo struct {
 		clientID         int
 		state            string
-		connectTime      time.Time
+		connectTimeMs    int64
 		reconnectCount   int
 		sendFailureCount int
 		duration         time.Duration
@@ -206,16 +206,16 @@ func displayClientScores(mc *nkn.MultiClient) {
 
 		var score float64
 		var duration time.Duration
-		var connectTime time.Time
+		var connectTimeMs int64
 		var reconnectCount int
 		var sendFailureCount int
 		stateStr := getStateString(state.State)
 
 		if state.State == nkn.ConnConnected && stats != nil {
-			connectTime = stats.ConnectTime
+			connectTimeMs = stats.ConnectTime
 			reconnectCount = stats.ReconnectCount
 			sendFailureCount = stats.SendFailureCount
-			duration = now.Sub(connectTime)
+			duration = time.Duration(now.UnixMilli()-connectTimeMs) * time.Millisecond
 			score = calculateScore(duration, reconnectCount, sendFailureCount)
 		} else {
 			score = 0.0
@@ -224,7 +224,7 @@ func displayClientScores(mc *nkn.MultiClient) {
 		scoreInfos = append(scoreInfos, clientScoreInfo{
 			clientID:         clientID,
 			state:            stateStr,
-			connectTime:      connectTime,
+			connectTimeMs:    connectTimeMs,
 			reconnectCount:   reconnectCount,
 			sendFailureCount: sendFailureCount,
 			duration:         duration,
@@ -244,8 +244,8 @@ func displayClientScores(mc *nkn.MultiClient) {
 	// Display sorted results
 	for _, info := range scoreInfos {
 		var connectTimeStr string
-		if !info.connectTime.IsZero() {
-			connectTimeStr = formatDuration(now.Sub(info.connectTime))
+		if info.connectTimeMs > 0 {
+			connectTimeStr = formatDuration(time.Duration(now.UnixMilli()-info.connectTimeMs) * time.Millisecond)
 		} else {
 			connectTimeStr = "N/A"
 		}
@@ -322,7 +322,7 @@ func formatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fm", d.Minutes())
 }
 
-func getStateString(state nkn.ConnState) string {
+func getStateString(state int32) string {
 	switch state {
 	case nkn.ConnConnecting:
 		return "Connecting"

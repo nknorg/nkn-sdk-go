@@ -278,18 +278,18 @@ const (
 
 // MessageEvent contains information about a message send or receive event
 type MessageEvent struct {
-	Type         MessageEventType // Event type
-	ClientAddr   string           // Client address that sent/received the message
-	SubClientID  *int             // Sub-client ID (nil for Client, set for MultiClient)
-	Destinations []string         // Destination addresses (for send events)
-	Src          string           // Source address (for receive events)
-	MessageID    []byte           // Message ID
-	MessageType  int32            // Message type (BinaryType, TextType, etc.)
-	Encrypted    bool             // Whether message is encrypted
-	DataSize     int              // Data size in bytes
-	NoReply      bool             // Whether message has NoReply flag
-	Error        error            // Error if operation failed (for send events)
-	Timestamp    time.Time        // Event timestamp
+	Type         int32                    // Event type (MessageEventType as int32 for gomobile compatibility)
+	ClientAddr   string                   // Client address that sent/received the message
+	SubClientID  int32                    // Sub-client ID (-1 for Client, >= 0 for MultiClient)
+	Destinations *nkngomobile.StringArray // Destination addresses (for send events, nil if not applicable)
+	Src          string                   // Source address (for receive events)
+	MessageID    []byte                   // Message ID
+	MessageType  int32                    // Message type (BinaryType, TextType, etc.)
+	Encrypted    bool                     // Whether message is encrypted
+	DataSize     int                      // Data size in bytes
+	NoReply      bool                     // Whether message has NoReply flag
+	Error        error                    // Error if operation failed (for send events)
+	Timestamp    int64                    // Event timestamp in milliseconds since epoch (for gomobile compatibility)
 }
 
 // OnMessageEventFunc is a wrapper type for gomobile compatibility.

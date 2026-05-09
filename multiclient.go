@@ -46,7 +46,7 @@ type SubClientConnEvent struct {
 	BaseAddress string
 	SubAddress  string
 	Index       int
-	State       ConnState
+	State       int32
 	Err         error
 
 	NodeAddr string
@@ -287,19 +287,19 @@ func NewMultiClient(account *Account, baseIdentifier string, numSubClients int, 
 
 						// Emit receive event
 						// Create a local copy of i to avoid closure issues with pointer
-						subClientID := i
+						subClientID := int32(i)
 						if m.OnMessageEvent != nil {
 							m.OnMessageEvent.receive(&MessageEvent{
-								Type:        MessageEventTypeReceive,
+								Type:        int32(MessageEventTypeReceive),
 								ClientAddr:  m.Address(),
-								SubClientID: &subClientID,
+								SubClientID: subClientID,
 								Src:         msg.Src,
 								MessageID:   msg.MessageID,
 								MessageType: msg.Type,
 								Encrypted:   msg.Encrypted,
 								DataSize:    dataSize,
 								NoReply:     msg.NoReply,
-								Timestamp:   time.Now(),
+								Timestamp:   time.Now().UnixMilli(),
 							})
 						}
 
@@ -463,19 +463,23 @@ func (m *MultiClient) SendWithClient(clientID int, dests *nkngomobile.StringArra
 
 	// Emit message send event with subclient info
 	destList := destArr.Elems()
-	// Create a local copy of clientID to avoid closure issues with pointer
-	subClientID := clientID
+	// Create a local copy of clientID to avoid closure issues
+	subClientID := int32(clientID)
+	var destArray *nkngomobile.StringArray
+	if len(destList) > 0 {
+		destArray = nkngomobile.NewStringArray(destList...)
+	}
 	if m.OnMessageEvent != nil {
 		m.OnMessageEvent.receive(&MessageEvent{
-			Type:         MessageEventTypeSend,
+			Type:         int32(MessageEventTypeSend),
 			ClientAddr:   m.Address(),
-			SubClientID:  &subClientID,
-			Destinations: destList,
+			SubClientID:  subClientID,
+			Destinations: destArray,
 			MessageID:    payload.MessageId,
 			MessageType:  int32(payload.Type),
 			Encrypted:    !config.Unencrypted,
 			NoReply:      config.NoReply,
-			Timestamp:    time.Now(),
+			Timestamp:    time.Now().UnixMilli(),
 		})
 	}
 
@@ -483,16 +487,16 @@ func (m *MultiClient) SendWithClient(clientID int, dests *nkngomobile.StringArra
 		// Emit send failed event
 		if m.OnMessageEvent != nil {
 			m.OnMessageEvent.receive(&MessageEvent{
-				Type:         MessageEventTypeSendFailed,
+				Type:         int32(MessageEventTypeSendFailed),
 				ClientAddr:   m.Address(),
-				SubClientID:  &subClientID,
-				Destinations: destList,
+				SubClientID:  subClientID,
+				Destinations: destArray,
 				MessageID:    payload.MessageId,
 				MessageType:  int32(payload.Type),
 				Encrypted:    !config.Unencrypted,
 				NoReply:      config.NoReply,
 				Error:        err,
-				Timestamp:    time.Now(),
+				Timestamp:    time.Now().UnixMilli(),
 			})
 		}
 		return nil, err
@@ -501,15 +505,15 @@ func (m *MultiClient) SendWithClient(clientID int, dests *nkngomobile.StringArra
 	// Emit send success event
 	if m.OnMessageEvent != nil {
 		m.OnMessageEvent.receive(&MessageEvent{
-			Type:         MessageEventTypeSendSuccess,
+			Type:         int32(MessageEventTypeSendSuccess),
 			ClientAddr:   m.Address(),
-			SubClientID:  &subClientID,
-			Destinations: destList,
+			SubClientID:  subClientID,
+			Destinations: destArray,
 			MessageID:    payload.MessageId,
 			MessageType:  int32(payload.Type),
 			Encrypted:    !config.Unencrypted,
 			NoReply:      config.NoReply,
-			Timestamp:    time.Now(),
+			Timestamp:    time.Now().UnixMilli(),
 		})
 	}
 
@@ -611,16 +615,21 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 		destList := destArr.Elems()
 
 		// Emit send event with all client IDs
+		var destArray *nkngomobile.StringArray
+		if len(destList) > 0 {
+			destArray = nkngomobile.NewStringArray(destList...)
+		}
 		if m.OnMessageEvent != nil {
 			m.OnMessageEvent.receive(&MessageEvent{
-				Type:         MessageEventTypeSend,
+				Type:         int32(MessageEventTypeSend),
 				ClientAddr:   m.Address(),
-				Destinations: destList,
+				SubClientID:  -1, // Not applicable for multi-client send
+				Destinations: destArray,
 				MessageID:    payload.MessageId,
 				MessageType:  int32(payload.Type),
 				Encrypted:    !config.Unencrypted,
 				NoReply:      config.NoReply,
-				Timestamp:    time.Now(),
+				Timestamp:    time.Now().UnixMilli(),
 			})
 		}
 
@@ -644,21 +653,21 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 				client.responseChannels.Add(string(payload.MessageId), onRawReply, cache.DefaultExpiration)
 			}
 			err := m.sendWithClient(clientID, destArr.Elems(), payload, !config.Unencrypted, config.MaxHoldingSeconds)
-			// Create a local copy of clientID to avoid closure issues with pointer
-			subClientID := clientID
+			// Create a local copy of clientID to avoid closure issues
+			subClientID := int32(clientID)
 			if err == nil {
 				// Emit send success event for this subclient
 				if m.OnMessageEvent != nil {
 					m.OnMessageEvent.receive(&MessageEvent{
-						Type:         MessageEventTypeSendSuccess,
+						Type:         int32(MessageEventTypeSendSuccess),
 						ClientAddr:   m.Address(),
-						SubClientID:  &subClientID,
-						Destinations: destList,
+						SubClientID:  subClientID,
+						Destinations: destArray,
 						MessageID:    payload.MessageId,
 						MessageType:  int32(payload.Type),
 						Encrypted:    !config.Unencrypted,
 						NoReply:      config.NoReply,
-						Timestamp:    time.Now(),
+						Timestamp:    time.Now().UnixMilli(),
 					})
 				}
 				select {
@@ -670,16 +679,16 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 				// Emit send failed event for this subclient
 				if m.OnMessageEvent != nil {
 					m.OnMessageEvent.receive(&MessageEvent{
-						Type:         MessageEventTypeSendFailed,
+						Type:         int32(MessageEventTypeSendFailed),
 						ClientAddr:   m.Address(),
-						SubClientID:  &subClientID,
-						Destinations: destList,
+						SubClientID:  subClientID,
+						Destinations: destArray,
 						MessageID:    payload.MessageId,
 						MessageType:  int32(payload.Type),
 						Encrypted:    !config.Unencrypted,
 						NoReply:      config.NoReply,
 						Error:        err,
-						Timestamp:    time.Now(),
+						Timestamp:    time.Now().UnixMilli(),
 					})
 				}
 				lock.Lock()
@@ -704,15 +713,16 @@ func (m *MultiClient) Send(dests *nkngomobile.StringArray, data interface{}, con
 					dataSize = 0
 				}
 				m.OnMessageEvent.receive(&MessageEvent{
-					Type:        MessageEventTypeReceiveReply,
+					Type:        int32(MessageEventTypeReceiveReply),
 					ClientAddr:  m.Address(),
+					SubClientID: -1, // Not applicable for receive events
 					Src:         msg.Src,
 					MessageID:   payload.MessageId,
 					MessageType: msg.Type,
 					Encrypted:   msg.Encrypted,
 					DataSize:    dataSize,
 					NoReply:     msg.NoReply,
-					Timestamp:   time.Now(),
+					Timestamp:   time.Now().UnixMilli(),
 				})
 			}
 			onReply.receive(msg, false)
@@ -772,11 +782,11 @@ func (m *MultiClient) CalculateClientScore(client *Client, now time.Time) float6
 	stats := client.Stats
 	client.lock.RUnlock()
 
-	if stats != nil {
+	if stats != nil && stats.ConnectTime > 0 {
 		// Connection duration score (0-0.4 points)
 		// Longer connection = higher score
 		// Max score at 1 hour of connection
-		connectionDuration := now.Sub(stats.ConnectTime)
+		connectionDuration := time.Duration(now.UnixMilli()-stats.ConnectTime) * time.Millisecond
 		if connectionDuration > 0 {
 			// Normalize to 0-0.4, with 1 hour = 0.4
 			durationScore := float64(connectionDuration) / float64(time.Hour)
@@ -1528,7 +1538,7 @@ func (m *MultiClient) GetAllSubConnStates() []SubClientConnEvent {
 	// Process all expected clients
 	for index := range expectedIndices {
 		client, exists := m.clients[index]
-		var state ConnState
+		var state int32
 		var subAddr string
 		var nodeAddr, nodeID string
 		var connErr error

@@ -28,13 +28,11 @@ var DefaultStunServerAddr = []string{
 	"stun:stunserver.stunprotocol.org:3478",
 }
 
-type CrossSendPolicy int
-
 const (
-	CrossSendPolicyNone         CrossSendPolicy = iota // No cross send
-	CrossSendPolicyAnyConnected                        // Any connected line sends (cross)
-	CrossSendPolicyAllConnected                        // All connected lines (redundant sending)
-	CrossSendPolicyPreferStable                        // Select the most stable/low latency line
+	CrossSendPolicyNone         int32 = iota // No cross send
+	CrossSendPolicyAnyConnected              // Any connected line sends (cross)
+	CrossSendPolicyAllConnected              // All connected lines (redundant sending)
+	CrossSendPolicyPreferStable              // Select the most stable/low latency line
 )
 
 // ClientConfig is the client configuration.
@@ -67,7 +65,7 @@ type ClientConfig struct {
 
 	MultiClientNumClients     int  // Number of sub clients to create (MultiClient only)
 	MultiClientOriginalClient bool // Whether to create original client without identifier prefix (MultiClient only)
-	CrossSendPolicy           CrossSendPolicy
+	CrossSendPolicy           int32
 }
 
 // DefaultClientConfig is the default client config.

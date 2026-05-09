@@ -53,33 +53,27 @@ func main() {
 		// Demo: Monitor message events for fromClient (sender)
 		go func() {
 			for event := range fromClient.OnMessageEvent.C {
-				switch event.Type {
+				subClientInfo := ""
+				if event.SubClientID >= 0 {
+					subClientInfo = fmt.Sprintf(" (subclient[%d])", event.SubClientID)
+				}
+				destList := []string{}
+				if event.Destinations != nil {
+					for i := 0; i < event.Destinations.Len(); i++ {
+						destList = append(destList, event.Destinations.Get(i))
+					}
+				}
+				switch nkn.MessageEventType(event.Type) {
 				case nkn.MessageEventTypeSend:
-					subClientInfo := ""
-					if event.SubClientID != nil {
-						subClientInfo = fmt.Sprintf(" (subclient[%d])", *event.SubClientID)
-					}
 					log.Printf("[Event] Send attempt: client=%s%s, destinations=%v, messageID=%x, encrypted=%v",
-						event.ClientAddr, subClientInfo, event.Destinations, event.MessageID, event.Encrypted)
+						event.ClientAddr, subClientInfo, destList, event.MessageID, event.Encrypted)
 				case nkn.MessageEventTypeSendSuccess:
-					subClientInfo := ""
-					if event.SubClientID != nil {
-						subClientInfo = fmt.Sprintf(" (subclient[%d])", *event.SubClientID)
-					}
 					log.Printf("[Event] Send success: client=%s%s, messageID=%x",
 						event.ClientAddr, subClientInfo, event.MessageID)
 				case nkn.MessageEventTypeSendFailed:
-					subClientInfo := ""
-					if event.SubClientID != nil {
-						subClientInfo = fmt.Sprintf(" (subclient[%d])", *event.SubClientID)
-					}
 					log.Printf("[Event] Send failed: client=%s%s, messageID=%x, error=%v",
 						event.ClientAddr, subClientInfo, event.MessageID, event.Error)
 				case nkn.MessageEventTypeReceiveReply:
-					subClientInfo := ""
-					if event.SubClientID != nil {
-						subClientInfo = fmt.Sprintf(" (subclient[%d])", *event.SubClientID)
-					}
 					log.Printf("[Event] Receive reply: client=%s%s, from=%s, messageID=%x",
 						event.ClientAddr, subClientInfo, event.Src, event.MessageID)
 				}
@@ -89,19 +83,15 @@ func main() {
 		// Demo: Monitor message events for toClient (receiver)
 		go func() {
 			for event := range toClient.OnMessageEvent.C {
-				switch event.Type {
+				subClientInfo := ""
+				if event.SubClientID >= 0 {
+					subClientInfo = fmt.Sprintf(" (subclient[%d])", event.SubClientID)
+				}
+				switch nkn.MessageEventType(event.Type) {
 				case nkn.MessageEventTypeReceive:
-					subClientInfo := ""
-					if event.SubClientID != nil {
-						subClientInfo = fmt.Sprintf(" (subclient[%d])", *event.SubClientID)
-					}
 					log.Printf("[Event] Receive: client=%s%s, from=%s, messageID=%x, type=%d, encrypted=%v, dataSize=%d",
 						event.ClientAddr, subClientInfo, event.Src, event.MessageID, event.MessageType, event.Encrypted, event.DataSize)
 				case nkn.MessageEventTypeReceiveReply:
-					subClientInfo := ""
-					if event.SubClientID != nil {
-						subClientInfo = fmt.Sprintf(" (subclient[%d])", *event.SubClientID)
-					}
 					log.Printf("[Event] Receive reply: client=%s%s, from=%s, messageID=%x",
 						event.ClientAddr, subClientInfo, event.Src, event.MessageID)
 				}

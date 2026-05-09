@@ -275,7 +275,7 @@ func main() {
 	}
 }
 
-func getStateString(state nkn.ConnState) string {
+func getStateString(state int32) string {
 	switch state {
 	case nkn.ConnConnecting:
 		return "Connecting"
@@ -288,7 +288,7 @@ func getStateString(state nkn.ConnState) string {
 	}
 }
 
-func getPolicyString(policy nkn.CrossSendPolicy) string {
+func getPolicyString(policy int32) string {
 	switch policy {
 	case nkn.CrossSendPolicyNone:
 		return "Default (No cross send)"
